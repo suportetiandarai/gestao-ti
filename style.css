@@ -1,0 +1,653 @@
+/* =========================================================
+   1. GERAL E TIPOGRAFIA (SaaS Moderno e Delicado)
+   ========================================================= */
+* { 
+    box-sizing: border-box; 
+    font-family: 'Inter', 'Segoe UI', system-ui, -apple-system, sans-serif; 
+    -webkit-font-smoothing: antialiased;
+}
+
+/* =========================================================
+   2. TELA DE LOGIN (BLINDADA - Mantém formato original)
+   ========================================================= */
+body.login-bg {
+    background: url("fundo.png") no-repeat center center fixed;
+    background-size: cover;
+    display: flex;
+    justify-content: flex-end; 
+    align-items: center;
+    height: 100vh;
+    margin: 0;
+    padding-right: 24%; 
+    z-index: 1; 
+}
+
+@media (max-width: 768px) {
+    body.login-bg {
+        justify-content: center;
+        padding-right: 0;
+    }
+}
+
+#login-container {
+    background: rgba(255, 255, 255, 0.60); 
+    backdrop-filter: blur(10px); 
+    padding: 90px 30px; 
+    border-radius: 16px; 
+    box-shadow: 0 15px 35px rgba(0, 0, 0, 0.4); 
+    width: 100%;
+    max-width: 330px; 
+    text-align: center;
+    position: relative; 
+    z-index: 10; 
+    border: 1px solid rgba(255, 255, 255, 0.4); 
+}
+
+.logo-area h2 { color: #2c3e50; font-size: 26px; font-weight: 700; margin-bottom: 8px; }
+.logo-area p { color: #7f8c8d; margin-bottom: 35px; font-size: 15px; }
+
+/* Proteção para garantir que os campos de login não fiquem pequenos */
+#login-container input {
+    padding: 14px 16px !important;
+    font-size: 15px !important;
+    border-radius: 10px !important;
+}
+
+#login-container button {
+    width: 100% !important;
+    padding: 14px !important;
+    font-size: 16px !important;
+    border-radius: 10px !important;
+}
+
+/* =========================================================
+   3. BACKGROUND DO APP E INPUTS (Refinados e Delicados)
+   ========================================================= */
+body.app-bg { 
+    background-color: #f8fafc; 
+    margin: 0; 
+    color: #334155;
+}
+
+input[type="email"], input[type="password"], input[type="text"], select, textarea {
+    width: 100%; 
+    max-width: 600px; /* Impede que o campo ocupe 100% de um monitor largo */
+    padding: 9px 14px; /* Mais fino, elegante */
+    margin-bottom: 12px; 
+    border: 1px solid #cbd5e1; 
+    border-radius: 6px; /* Arredondamento menor, mais profissional */
+    font-size: 13px; /* Fonte reduzida para padrão SaaS */
+    background-color: #ffffff;
+    color: #1e293b;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: 0 1px 2px rgba(0,0,0,0.02); /* Sombra mais sutil */
+    outline: none;
+    display: block;
+}
+
+input:focus, select:focus, textarea:focus {
+    border-color: #42B9EB; 
+    box-shadow: 0 0 0 3px rgba(66, 185, 235, 0.15); 
+    background-color: #fbfdff;
+}
+
+/* =========================================================
+   4. BOTÕES (Proporcionais e Elegantes)
+   ========================================================= */
+button { 
+    padding: 9px 18px; /* Menos alto */
+    border: none; 
+    border-radius: 6px; /* Borda alinhada com os inputs */
+    cursor: pointer; 
+    font-weight: 600; 
+    font-size: 13px;
+    width: auto; /* Deixa de ser um bloco gigante na tela inteira */
+    min-width: 130px; /* Mantém um tamanho mínimo agradável */
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); 
+    letter-spacing: 0.3px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+}
+
+.btn-primary { 
+    background: linear-gradient(135deg, #42B9EB, #2a8db5); 
+    color: white; 
+    box-shadow: 0 4px 8px rgba(66, 185, 235, 0.2);
+}
+.btn-primary:hover { 
+    background: linear-gradient(135deg, #5fcbf5, #42B9EB); 
+    transform: translateY(-1px); /* Pulo mais sutil */
+    box-shadow: 0 6px 12px rgba(66, 185, 235, 0.3);
+}
+
+.btn-success { 
+    background: linear-gradient(135deg, #10b981, #059669); 
+    color: white; 
+    box-shadow: 0 4px 8px rgba(16, 185, 129, 0.2);
+}
+.btn-success:hover { 
+    background: linear-gradient(135deg, #34d399, #10b981); 
+    transform: translateY(-1px);
+    box-shadow: 0 6px 12px rgba(16, 185, 129, 0.3);
+}
+
+.btn-danger { 
+    background: linear-gradient(135deg, #ef4444, #dc2626); 
+    color: white; 
+    box-shadow: 0 4px 8px rgba(239, 68, 68, 0.2);
+}
+.btn-danger:hover { 
+    background: linear-gradient(135deg, #f87171, #ef4444); 
+    transform: translateY(-1px);
+    box-shadow: 0 6px 12px rgba(239, 68, 68, 0.3);
+}
+
+.btn-sm { 
+    min-width: auto; /* Remove a largura mínima para botões de tabela */
+    padding: 6px 12px; 
+    font-size: 12px; 
+    margin-right: 6px; 
+    margin-bottom: 6px; 
+    border-radius: 6px;
+}
+
+/* =========================================================
+   5. LAYOUT PRINCIPAL E SIDEBAR AZUL TECH (#42B9EB)
+   ========================================================= */
+#app-wrapper { display: flex; height: 100vh; width: 100vw; overflow: hidden; }
+
+.sidebar {
+    width: 260px; /* Sidebar levemente mais fina */
+    background: linear-gradient(180deg, #42B9EB 0%, #2a8db5 100%);
+    border-right: 1px solid rgba(255, 255, 255, 0.1);
+    box-shadow: 4px 0 20px rgba(0,0,0,0.1); /* Sombra mais delicada */
+    color: white;
+    display: flex;
+    flex-direction: column;
+    padding: 30px 0 0 0; 
+    z-index: 20;
+    position: relative;
+    overflow: hidden;
+}
+
+.sidebar::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background-image: 
+        linear-gradient(rgba(255, 255, 255, 0.1) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255, 255, 255, 0.1) 1px, transparent 1px);
+    background-size: 25px 25px;
+    pointer-events: none;
+    z-index: 0;
+}
+
+.sidebar h2 { 
+    position: relative;
+    z-index: 1;
+    text-align: center; 
+    margin-bottom: 35px; 
+    font-size: 20px; 
+    font-weight: 800;
+    letter-spacing: 3px;
+    color: #ffffff;
+    text-transform: uppercase;
+    text-shadow: 2px 2px 4px rgba(0,0,0,0.15);
+    border-bottom: none; 
+    padding-bottom: 0;
+}
+
+.sidebar h2::after {
+    content: '';
+    display: block;
+    width: 40%;
+    height: 2px;
+    background: #ffffff;
+    margin: 12px auto 0;
+    border-radius: 10px;
+    box-shadow: 0 0 8px rgba(255,255,255,0.4);
+}
+
+.tabs {
+    display: flex;
+    flex-direction: column;
+    gap: 8px; /* Menos espaço entre botões */
+    padding: 0 15px;
+    position: relative;
+    z-index: 1;
+}
+
+.tab-btn {
+    background: rgba(255, 255, 255, 0.10); 
+    color: #ffffff; 
+    text-align: left; 
+    padding: 12px 18px; /* Menos robusto */
+    border-radius: 8px; /* Mais delicado */
+    border: 1px solid rgba(255, 255, 255, 0.15); 
+    width: 100%; /* Botões da sidebar PRECISAM de 100% */
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: 0.3px;
+    transition: all 0.2s ease;
+    position: relative;
+    overflow: hidden;
+}
+
+.tab-btn:hover { 
+    background: rgba(255, 255, 255, 0.25); 
+    transform: translateX(4px); /* Pulo reduzido */
+    border-color: #ffffff;
+}
+
+.tab-btn.active { 
+    background: #ffffff; 
+    color: #42B9EB; 
+    border-color: #ffffff;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+}
+
+.tab-btn.active::before { display: none; }
+
+.version-tag {
+    margin-top: auto; 
+    text-align: center;
+    font-size: 10px; /* Mais delicada */
+    font-weight: 600;
+    color: rgba(255, 255, 255, 0.7); 
+    letter-spacing: 1px;
+    padding: 15px 0;
+    text-transform: uppercase;
+    border-top: 1px solid rgba(255, 255, 255, 0.15); 
+    position: relative;
+    z-index: 1;
+    background: rgba(0,0,0,0.03); 
+}
+
+.main-content {
+    flex: 1; padding: 35px; overflow-y: auto;
+}
+
+header { 
+    display: flex; justify-content: space-between; align-items: center; 
+    border-bottom: 1px solid #e2e8f0; padding-bottom: 12px; margin-bottom: 25px; 
+}
+header h1 { font-size: 22px; font-weight: 700; color: #1e293b; margin: 0; letter-spacing: -0.5px;}
+
+/* Alinhamento perfeito do Nome e Badge (Selo) no Header */
+header > div:first-child {
+    display: flex;
+    align-items: center;
+    gap: 15px; 
+    flex-wrap: wrap; 
+}
+
+.badge { 
+    background: #f1c40f; color: #333; padding: 4px 8px; border-radius: 4px; 
+    font-size: 11px; font-weight: 700; margin-left: 10px; 
+}
+
+/* Remove a margem antiga para deixar o 'gap' fazer o alinhamento 100% perfeito */
+header .badge {
+    margin-left: 0;
+    margin-top: 2px;
+}
+
+.hidden { display: none !important; }
+
+/* =========================================================
+   6. CARDS DO DASHBOARD E PAINÉIS
+   ========================================================= */
+.dashboard-grid { 
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); 
+    gap: 20px; margin-bottom: 20px; 
+}
+
+.dash-card { 
+    background: white; padding: 20px; border-radius: 12px; 
+    box-shadow: 0 2px 8px rgba(0,0,0,0.03); text-align: center; border-top: 3px solid #42B9EB; /* Borda superior mais fina */
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.dash-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 8px 24px rgba(0,0,0,0.06);
+}
+
+.dash-card h4 { margin: 0 0 8px 0; color: #64748b; font-size: 13px; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 700;}
+.dash-card .number { 
+    font-size: 32px; font-weight: 800; color: #1e293b; 
+    background: linear-gradient(135deg, #1e293b, #42B9EB);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+}
+
+.admin-card { 
+    background: white; padding: 25px; border-radius: 12px; 
+    box-shadow: 0 2px 8px rgba(0,0,0,0.03); margin-bottom: 20px; 
+    border: 1px solid #f1f5f9;
+}
+
+/* Títulos dentro dos cartões */
+.admin-card h3, .admin-card h4 {
+    color: #1e293b;
+    font-weight: 600;
+    margin-top: 0;
+}
+
+.sig-canvas { 
+    border: 2px dashed #cbd5e1; border-radius: 8px; background: #f8fafc; 
+    cursor: crosshair; touch-action: none; width: 100%; max-width: 600px;
+    transition: border-color 0.3s, background 0.3s;
+}
+
+.sig-canvas:hover { border-color: #94a3b8; background: #ffffff; }
+
+.mt-20 { margin-top: 20px; }
+.mt-10 { margin-top: 10px; }
+
+/* =========================================================
+   7. DATAS, HORAS, E AGRUPAMENTOS
+   ========================================================= */
+.button-group {
+    display: flex;
+    flex-direction: column; 
+    gap: 12px; 
+    margin-top: 15px;
+}
+
+@media (min-width: 768px) {
+    .button-group {
+        flex-direction: row; 
+    }
+    .button-group button {
+        flex: 1; 
+        margin-bottom: 0;
+    }
+}
+
+.date-group {
+    display: flex; align-items: center; gap: 10px; margin-bottom: 15px; flex-wrap: wrap; 
+}
+.date-group input { margin-bottom: 0; }
+
+input[type="date"], 
+input[type="datetime-local"] {
+    background-color: #f8fafc; 
+    border: 1px solid #cbd5e1;
+    color: #0f172a;
+    font-family: 'Inter', monospace; 
+    font-weight: 500;
+    position: relative;
+    cursor: text;
+    transition: all 0.3s ease;
+    width: 100%; 
+    max-width: 250px; /* Campos de data não precisam ser imensos */
+    padding: 9px 14px; 
+    border-radius: 6px; 
+    font-size: 13px;
+    display: block;
+}
+
+input[type="date"]:hover, 
+input[type="datetime-local"]:hover {
+    background-color: #f1f5f9;
+    border-color: #94a3b8;
+}
+
+input[type="date"]:focus, 
+input[type="datetime-local"]:focus {
+    background-color: #ffffff;
+    border-color: #42B9EB;
+    box-shadow: 0 0 0 3px rgba(66, 185, 235, 0.15);
+}
+
+::-webkit-calendar-picker-indicator {
+    background-color: #eff6ff; 
+    padding: 4px 6px;
+    cursor: pointer;
+    border-radius: 4px;
+    border: 1px solid #bfdbfe;
+    filter: invert(56%) sepia(85%) saturate(388%) hue-rotate(160deg) brightness(97%) contrast(93%);
+    transition: all 0.2s ease;
+}
+
+::-webkit-calendar-picker-indicator:hover {
+    background-color: #dbeafe;
+    border-color: #93c5fd;
+}
+
+.form-group label, .date-group label {
+    display: block; font-size: 12px; font-weight: 600; color: #475569;
+    margin-bottom: 4px; /* Mais colado no input, mais elegante */
+}
+
+/* =========================================================
+   8. CHECKBOXES TECH E LEGENDA
+   ========================================================= */
+.checkbox-group {
+    display: flex; align-items: center; gap: 10px; margin-bottom: 12px;
+    padding: 10px 14px; background: #ffffff; border: 1px solid #e2e8f0;
+    border-radius: 6px; transition: all 0.2s ease;
+    max-width: 600px;
+}
+.checkbox-group:hover { border-color: #42B9EB; background: #fbfdff; }
+.checkbox-group input[type="checkbox"] { width: 16px; height: 16px; cursor: pointer; accent-color: #42B9EB; margin: 0; }
+.checkbox-group label { margin: 0; font-weight: 500; font-size: 13px; color: #334155; cursor: pointer; }
+
+.checkbox-legend {
+    display: inline-flex; align-items: center; justify-content: center; gap: 20px;
+    background: #f8fafc; padding: 10px 16px; border-radius: 8px;
+    margin-bottom: 20px; border: 1px solid #e2e8f0;
+}
+.legend-badge { display: flex; align-items: center; gap: 8px; font-size: 12px; color: #475569; font-weight: 500; }
+.legend-icon { width: 16px; height: 16px; border-radius: 4px; display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: bold; }
+.legend-icon.check { background: #42B9EB; color: white; }
+.legend-icon.uncheck { background: #ffffff; border: 1px solid #cbd5e1; }
+
+/* =========================================================
+   9. MODAIS (JANELAS FLUTUANTES)
+   ========================================================= */
+.modal { 
+    display: none; 
+    position: fixed; z-index: 1000; left: 0; top: 0; width: 100vw; height: 100vh; 
+    background-color: rgba(15, 23, 42, 0.5); /* Fundo um pouco mais suave */
+    backdrop-filter: blur(4px); 
+    align-items: center; justify-content: center; 
+    opacity: 0;
+    transition: opacity 0.2s ease;
+}
+.modal.flex { 
+    display: flex !important; 
+    opacity: 1; 
+    animation: fadeIn 0.2s forwards;
+}
+
+@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+.modal-content { 
+    background-color: #ffffff; 
+    padding: 30px; 
+    border-radius: 12px; 
+    width: 90%; max-width: 480px; max-height: 90vh; overflow-y: auto; 
+    position: relative; 
+    box-shadow: 0 20px 40px -10px rgba(0,0,0,0.2);
+    transform: scale(0.97);
+    animation: scaleUp 0.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes scaleUp { from { transform: scale(0.97); } to { transform: scale(1); } }
+
+.modal-content.large { max-width: 800px; }
+
+.modal-content h3 { margin-top: 0; color: #1e293b; font-size: 18px; margin-bottom: 20px;}
+
+.close-modal { 
+    position: absolute; right: 15px; top: 15px; font-size: 20px; 
+    font-weight: bold; cursor: pointer; color: #94a3b8; line-height: 1;
+    width: 32px; height: 32px; display: flex; align-items: center; justify-content: center;
+    background: #f1f5f9; border-radius: 50%; transition: all 0.2s;
+}
+.close-modal:hover { color: #ef4444; background: #fee2e2; transform: rotate(90deg); }
+
+/* =========================================================
+   10. TABELAS (DATAGRID AVANÇADO)
+   ========================================================= */
+.table-responsive { 
+    overflow-x: auto; 
+    margin-top: 15px; 
+    border-radius: 8px;
+    box-shadow: 0 0 0 1px #e2e8f0; 
+}
+
+table { 
+    width: 100%; 
+    border-collapse: separate; 
+    border-spacing: 0;
+    font-size: 13px; /* Tabela não precisa de fonte enorme */
+    background: #ffffff;
+}
+
+th, td { 
+    border-bottom: 1px solid #f1f5f9; 
+    padding: 12px 16px; /* Mais achatado */
+    text-align: left; 
+    color: #475569;
+}
+
+th { 
+    background-color: #f8fafc; 
+    color: #334155; 
+    font-weight: 600;
+    text-transform: uppercase;
+    font-size: 11px;
+    letter-spacing: 0.5px;
+    border-bottom: 1px solid #e2e8f0;
+}
+
+tr:last-child td { border-bottom: none; }
+
+tr:hover td { background-color: #fbfdff; color: #0f172a; }
+
+/* =========================================================
+   11. BADGES DE TÉCNICOS NO PLANTÃO
+   ========================================================= */
+.tecnico-badge {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: #f1f5f9;
+    padding: 8px 12px;
+    border-radius: 8px;
+    border: 1px solid #e2e8f0;
+    font-size: 13px;
+    color: #1e293b;
+    font-weight: 600;
+    animation: fadeIn 0.2s ease;
+}
+
+.tecnico-badge button {
+    background: transparent;
+    color: #ef4444;
+    border: none;
+    padding: 0;
+    font-size: 14px;
+    font-weight: bold;
+    cursor: pointer;
+    box-shadow: none;
+    width: auto;
+    min-width: auto;
+    margin: 0;
+}
+
+.tecnico-badge button:hover {
+    background: transparent;
+    transform: scale(1.2);
+    box-shadow: none;
+    color: #dc2626;
+}
+
+/* =========================================================
+   12. RESPONSIVIDADE (MOBILE FIRST) - AJUSTE CELULAR
+   ========================================================= */
+@media (max-width: 768px) {
+    /* 1. Ajuste do Wrapper e Sidebar */
+    #app-wrapper {
+        flex-direction: column; /* Sidebar vai pra cima */
+        overflow-y: auto; /* Permite rolar a página toda */
+        height: auto;
+    }
+
+    .sidebar {
+        width: 100%;
+        height: auto;
+        padding: 15px 0 0 0;
+        border-right: none;
+        border-bottom: 1px solid rgba(255,255,255,0.1);
+    }
+
+    .sidebar h2 { font-size: 16px; margin-bottom: 15px; }
+    .sidebar h2::after { width: 20%; margin: 8px auto 0; }
+
+    /* 2. Menu Horizontal e Rolável no Celular */
+    .tabs {
+        flex-direction: row; /* Botões um do lado do outro */
+        overflow-x: auto; /* Scroll horizontal se tiver muitos botões */
+        padding: 0 10px 15px 10px;
+        gap: 10px;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    .tab-btn {
+        width: auto; /* Botão não ocupa mais 100% */
+        white-space: nowrap; /* Não quebra o texto do botão */
+        padding: 8px 15px;
+        font-size: 12px;
+        flex-shrink: 0; /* Impede os botões de esmagarem */
+    }
+
+    .version-tag { display: none; } /* Esconde versão no mobile para economizar espaço */
+
+    /* 3. Ajuste do Conteúdo Principal */
+    .main-content {
+        padding: 20px 15px;
+        width: 100%;
+    }
+
+    header { flex-direction: column; gap: 15px; align-items: flex-start; }
+    header button { width: 100%; } /* Botão Sair grande no celular */
+
+    /* 4. Formulários e Inputs */
+    .form-row { flex-direction: column !important; gap: 10px !important; }
+    .form-group, input, select, textarea { 
+        max-width: 100% !important; /* Força ocupar a largura toda do celular */
+        width: 100% !important; 
+    }
+
+    /* 5. Colunas de Plantão (Equipe) */
+    #aba-plantao > form > div[style*="display: flex"] {
+        flex-direction: column !important;
+    }
+
+    /* 6. Assinaturas (Canvas) */
+    .sig-canvas {
+        height: 150px; /* Reduz altura para caber na tela */
+    }
+
+    /* 7. Modais */
+    .modal-content {
+        width: 95%;
+        padding: 20px;
+    }
+
+    .modal-content.large {
+        width: 95%;
+    }
+
+    /* 8. Tabelas - Scroll mais suave */
+    .table-responsive {
+        border: none;
+        box-shadow: none;
+    }
+}
