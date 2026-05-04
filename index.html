@@ -550,6 +550,53 @@
                 </div>
             </section>
 
+            <!-- NOVA ABA: SOLICITAÇÕES DE LOGIN AD -->
+            <section id="aba-solicitacoes-ad" class="tab-content hidden">
+                <h3>Gestão de Criação de Logins (AD)</h3>
+                
+                <div class="admin-card">
+                    <h4>🔍 Filtrar Solicitações</h4>
+                    <div class="form-row" style="display: flex; gap: 15px; flex-wrap: wrap; align-items: flex-end;">
+                        <div class="form-group" style="flex: 1; min-width: 150px;">
+                            <label>Status:</label>
+                            <select id="filtro_ad_status" style="margin-bottom: 0;">
+                                <option value="Pendente">⏳ Pendentes</option>
+                                <option value="Realizado">✅ Realizados</option>
+                                <option value="">Todos</option>
+                            </select>
+                        </div>
+                        <div class="form-group" style="flex: 2; min-width: 200px;">
+                            <label>Nome do Colaborador:</label>
+                            <input type="text" id="filtro_ad_nome" placeholder="Buscar por nome..." style="margin-bottom: 0;" onkeyup="verificarEnterAD(event)">
+                        </div>
+                        <div style="display: flex; gap: 10px;">
+                            <button class="btn-primary" onclick="carregarSolicitacoesAD()">Buscar</button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="admin-card mt-20">
+                    <h4>📋 Lista de Solicitações</h4>
+                    <div class="table-responsive">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Data / Hora</th>
+                                    <th>Nome Completo</th>
+                                    <th>CPF</th>
+                                    <th>Status</th>
+                                    <th>Ações</th>
+                                    <th>Realizado Por</th>
+                                </tr>
+                            </thead>
+                            <tbody id="lista-ad-aba">
+                                <tr><td colspan="6" style="text-align: center;">Carregando...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
             <section id="aba-inventario" class="tab-content hidden">
                 <h3>Gestão de Inventário Geral</h3>
                 
