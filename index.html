@@ -1,0 +1,1085 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gestão em T.I - T.I Andaraí</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="icon" href="logo-aba.png" type="image/png">
+    
+    <link rel="stylesheet" href="styles.css">
+    <link rel="icon" href="data:,">
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body class="login-bg"> 
+    
+    <div id="login-container" class="hidden">
+        <div class="logo-area">
+            <h2>Suporte TI</h2>
+            <p>Acesso ao Sistema</p>
+        </div>
+        <input type="email" id="login-email" placeholder="E-mail Corporativo" required>
+        <input type="password" id="login-senha" placeholder="Senha" required onkeypress="verificarEnter(event)">
+        <button onclick="realizarLogin()" class="btn-primary">Entrar</button>
+    </div>
+
+    <div id="app-wrapper" class="hidden">
+        
+        <aside class="sidebar">
+            <h2>MENU</h2>
+            <nav class="tabs">
+                <button class="tab-btn active" onclick="abrirAba('aba-inicio')">🏠 Início</button>
+                <button class="tab-btn" onclick="abrirAba('aba-plantao')">📋 Passagem de Plantão</button>
+                <button class="tab-btn" onclick="abrirAba('aba-chaves')">🔑 Chaves</button>
+                <button class="tab-btn" onclick="abrirAba('aba-ocorrencias')">⚠️ Ocorrências</button>
+                <button class="tab-btn" onclick="abrirAba('aba-toner')">🖨️ Toner/Chamados</button>
+                <button class="tab-btn" onclick="abrirAba('aba-treinamentos')">📚 Treinamentos Agendados</button>
+                <button class="tab-btn" onclick="abrirAba('aba-solicita-treinamento')">🎓 Solicitações Treinamento</button>
+                <button class="tab-btn" onclick="abrirAba('aba-inventario')">📦 Inventário</button>
+                <button class="tab-btn" onclick="abrirAba('aba-cadastros')">📝 Cadastros Solicitados</button>
+                <button id="btn-config" class="tab-btn hidden" onclick="abrirAba('aba-config')">⚙️ Configurações</button>
+                <button id="btn-admin" class="tab-btn hidden" onclick="abrirAba('aba-admin')">⚙️ Admin</button>
+            </nav>
+
+            <div class="version-tag">Versão 1.0.0</div>
+        </aside>
+
+        <main class="main-content">
+            <header>
+                <div>
+                    <h1 id="user-name">Carregando...</h1>
+                    <span id="user-role" class="badge">Operacional</span>
+                </div>
+                <button onclick="fazerLogout()" class="btn-danger">Sair</button>
+            </header>
+
+            <section id="aba-inicio" class="tab-content">
+                <h3>Visão Geral (Dashboard)</h3>
+                
+                <div class="dashboard-grid">
+                    <div class="admin-card">
+                        <h4>🔑 Chaves Pendentes</h4>
+                        <ul id="dash-chaves" style="list-style: none; padding: 0; margin-top: 10px; line-height: 1.8;"></ul>
+                    </div>
+
+                    <div class="admin-card">
+                        <h4>🖨️ Chamados Abertos (Simpress)</h4>
+                        <ul id="dash-chamados" style="list-style: none; padding: 0; margin-top: 10px; line-height: 1.8;"></ul>
+                    </div>
+
+                    <div class="admin-card">
+                        <h4>📦 Estoque de Toners</h4>
+                        <ul id="dash-toners" style="list-style: none; padding: 0; margin-top: 10px; line-height: 1.8;"></ul>
+                    </div>
+
+                    <div class="admin-card">
+                        <h4>⚠️ Ocorrências Pendentes</h4>
+                        <ul id="dash-ocorrencias" style="list-style: none; padding: 0; margin-top: 10px; line-height: 1.8;"></ul>
+                    </div>
+                </div>
+
+                <div class="admin-card mt-20">
+                    <h4>📋 Plantões Aguardando Visto (Supervisão)</h4>
+                    <div class="table-responsive">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Data</th>
+                                    <th>Turno (Assumiu - Largou)</th>
+                                    <th>Status</th>
+                                </tr>
+                            </thead>
+                            <tbody id="dash-plantoes"></tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div class="admin-card mt-20">
+                    <h4>📚 Próximos Treinamentos Agendados</h4>
+                    <div class="table-responsive">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Data/Hora</th>
+                                    <th>Colaborador</th>
+                                    <th>Tema</th>
+                                    <th>Local (Prédio/Setor/Andar)</th>
+                                    <th>Contato</th>
+                                </tr>
+                            </thead>
+                            <tbody id="dash-treinamentos">
+                                <tr><td colspan="5" style="text-align: center;">Carregando...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
+            <section id="aba-plantao" class="tab-content hidden">
+                <h3>Registro de Plantão</h3>
+                <form id="form-plantao">
+                    <div class="form-row" style="display: flex; gap: 20px; margin-bottom: 25px; flex-wrap: wrap; justify-content: flex-start;">
+                        <div class="form-group" style="width: 280px;">
+                            <label>Qual hora assumiu o plantão?</label>
+                            <input type="datetime-local" id="p_hora_assumiu" required>
+                        </div>
+                        <div class="form-group" style="width: 280px;">
+                            <label>Qual hora está largando o plantão?</label>
+                            <input type="datetime-local" id="p_hora_largou" required>
+                        </div>
+                    </div>
+
+                    <div style="display: flex; gap: 25px; align-items: flex-start; flex-wrap: wrap;">
+                        <div style="flex: 2; min-width: 300px;">
+                            <div class="admin-card" style="margin-bottom: 0;">
+                                
+                                <div class="checkbox-legend">
+                                    <div class="legend-badge">
+                                        <span class="legend-icon check">✓</span>
+                                        <span>Caixa Selecionada = <strong>Sim</strong></span>
+                                    </div>
+                                    <div class="legend-badge">
+                                        <span class="legend-icon uncheck"></span>
+                                        <span>Caixa Vazia = <strong>Não</strong></span>
+                                    </div>
+                                </div>
+                                
+                                <div class="checkbox-group">
+                                    <input type="checkbox" id="p_emails" checked onchange="toggleCondicionalCheckbox(this, 'div_m_emails', false)">
+                                    <label for="p_emails">Todos os e-mails foram respondidos?</label>
+                                </div>
+                                <div id="div_m_emails" class="condicional hidden">
+                                    <label>Quais e quantos são? Motivo de não ter respondido:</label>
+                                    <textarea id="p_motivo_emails"></textarea>
+                                </div>
+
+                                <div class="checkbox-group mt-10">
+                                    <input type="checkbox" id="p_chamados" onchange="toggleCondicionalCheckbox(this, 'div_m_chamados', true)">
+                                    <label for="p_chamados">Ficou algum chamado pendente?</label>
+                                </div>
+                                <div id="div_m_chamados" class="condicional hidden">
+                                    <label>Quais e quantos são? Motivo da pendência:</label>
+                                    <textarea id="p_motivo_chamados"></textarea>
+                                </div>
+
+                                <div class="checkbox-group mt-10">
+                                    <input type="checkbox" id="p_forms" checked onchange="toggleCondicionalCheckbox(this, 'div_m_forms', false)">
+                                    <label for="p_forms">Forms de cadastro está zerado?</label>
+                                </div>
+                                <div id="div_m_forms" class="condicional hidden">
+                                    <label>Quais e quantos são? Motivo de não ter zerado:</label>
+                                    <textarea id="p_motivo_forms"></textarea>
+                                </div>
+
+                                <div class="checkbox-group mt-10">
+                                    <input type="checkbox" id="p_forms_treinamento" checked onchange="toggleCondicionalCheckbox(this, 'div_m_treinamento', false)">
+                                    <label for="p_forms_treinamento">Forms de Treinamentos zerado?</label>
+                                </div>
+                                <div id="div_m_treinamento" class="condicional hidden">
+                                    <label>Motivo de não ter zerado os treinamentos:</label>
+                                    <textarea id="p_motivo_treinamento"></textarea>
+                                </div>
+
+                                <div class="checkbox-group mt-10">
+                                    <input type="checkbox" id="p_maquinas" checked onchange="toggleCondicionalCheckbox(this, 'div_m_maquinas', false)">
+                                    <label for="p_maquinas">Todas as máquinas do setor T.I funcionando?</label>
+                                </div>
+                                <div id="div_m_maquinas" class="condicional hidden">
+                                    <label>Motivo de não estarem funcionando:</label>
+                                    <textarea id="p_motivo_maquinas"></textarea>
+                                </div>
+
+                                <div class="checkbox-group mt-10">
+                                    <input type="checkbox" id="p_cadeiras" checked onchange="toggleCondicionalCheckbox(this, 'div_m_cadeiras', false)">
+                                    <label for="p_cadeiras">Todas as cadeiras do setor no lugar?</label>
+                                </div>
+                                <div id="div_m_cadeiras" class="condicional hidden">
+                                    <label>Motivo de não estarem no lugar:</label>
+                                    <textarea id="p_motivo_cadeiras"></textarea>
+                                </div>
+
+                                <div class="checkbox-group mt-10">
+                                    <input type="checkbox" id="p_tv" checked onchange="toggleCondicionalCheckbox(this, 'div_m_tv', false)">
+                                    <label for="p_tv">Painel de chamados aberto na TV?</label>
+                                </div>
+                                <div id="div_m_tv" class="condicional hidden">
+                                    <label>Motivo de não estar aberto na TV:</label>
+                                    <textarea id="p_motivo_tv"></textarea>
+                                </div>
+
+                                <div class="checkbox-group mt-10">
+                                    <input type="checkbox" id="p_ocorrencias" onchange="toggleCondicionalCheckbox(this, 'div_m_ocorrencias', true)">
+                                    <label for="p_ocorrencias">Alguma ocorrência extra durante o plantão?</label>
+                                </div>
+                                <div id="div_m_ocorrencias" class="condicional hidden">
+                                    <label>Quais foram as ocorrências?</label>
+                                    <textarea id="p_motivo_ocorrencias"></textarea>
+                                </div>
+                            </div> 
+
+                            <div class="signature-section admin-card mt-20">
+                                <label>Assinatura Digital (Obrigatória):</label>
+                                <canvas id="canvas-plantao" class="sig-canvas" width="400" height="200"></canvas>
+                                <div class="sig-buttons mt-10">
+                                    <button type="button" class="btn-danger btn-sm" onclick="limparCanvas('canvas-plantao')">Limpar Assinatura</button>
+                                </div>
+                            </div>
+
+                            <button type="button" class="btn-success mt-20" onclick="salvarPlantao()">Salvar Plantão e Assinar</button>
+                        </div>
+
+                        <div class="admin-card" style="flex: 1; min-width: 250px; position: sticky; top: 0; margin-bottom: 0;">
+                            <h4>👥 Técnicos no Plantão</h4>
+                            <p style="font-size: 12px; color: #64748b; margin-bottom: 15px;">Adicione os colegas que trabalharam com você:</p>
+                            
+                            <div style="display: flex; gap: 8px; margin-bottom: 15px;">
+                                <select id="select-tecnicos-plantao" style="margin-bottom: 0; flex: 1;">
+                                    <option value="">Carregando...</option>
+                                </select>
+                                <button type="button" class="btn-primary" style="width: auto; min-width: 45px; padding: 0; font-size: 18px;" onclick="adicionarTecnico()">+</button>
+                            </div>
+                            
+                            <div id="lista-tecnicos-plantao" style="display: flex; flex-direction: column; gap: 8px;">
+                                <span style="font-size: 12px; color: #94a3b8; text-align: center;">Você está sozinho no plantão?</span>
+                            </div>
+                        </div>
+
+                    </div>
+                </form>
+            </section>
+
+            <section id="aba-chaves" class="tab-content hidden">
+                <h3>Controle de Retirada e Devolução</h3>
+                
+                <div class="dashboard-grid">
+                    <div class="admin-card">
+                        <h4>🔑 Retirar Chave</h4>
+                        <form id="form-retirada-chave">
+                            <label>Selecione a Chave Disponível:</label>
+                            <select id="select-chaves-disponiveis" required>
+                                <option value="">Carregando chaves...</option>
+                            </select>
+                            
+                            <label class="mt-10">Data e Hora da Retirada:</label>
+                            <input type="datetime-local" id="hora-retirada" required>
+                            
+                            <label class="mt-10">Responsável pela Retirada:</label>
+                            <input type="text" id="responsavel-retirada" placeholder="Nome de quem vai levar a chave" required>
+                            
+                            <div class="signature-section mt-10">
+                                <label>Assinatura (Responsável):</label>
+                                <canvas id="canvas-retirada" class="sig-canvas" width="400" height="150"></canvas>
+                                <button type="button" class="btn-danger btn-sm mt-10" onclick="limparCanvas('canvas-retirada')">Limpar Assinatura</button>
+                            </div>
+
+                            <button type="button" class="btn-success mt-20" onclick="registrarChave('retirada')">Retirar Chave</button>
+                        </form>
+                    </div>
+
+                    <div class="admin-card">
+                        <h4>↩️ Devolver Chave</h4>
+                        <form id="form-devolucao-chave">
+                            <label>Selecione a Chave em Uso:</label>
+                            <select id="select-chaves-retiradas" required>
+                                <option value="">Carregando chaves...</option>
+                            </select>
+                            
+                            <label class="mt-10">Data e Hora da Devolução:</label>
+                            <input type="datetime-local" id="hora-devolucao" required>
+                            
+                            <label class="mt-10">Responsável pela Devolução:</label>
+                            <input type="text" id="responsavel-devolucao" placeholder="Nome de quem está devolvendo" required>
+                            
+                            <label class="mt-10" style="display: block; font-weight: 600; color: #475569; margin-bottom: 4px;">Foto da Chave / Local:</label>
+                            <input type="file" id="foto-devolucao" accept="image/*" required style="padding: 6px; background: #ffffff;">
+                            
+                            <div class="signature-section mt-10">
+                                <label>Assinatura (Responsável):</label>
+                                <canvas id="canvas-devolucao" class="sig-canvas" width="400" height="150"></canvas>
+                                <button type="button" class="btn-danger btn-sm mt-10" onclick="limparCanvas('canvas-devolucao')">Limpar Assinatura</button>
+                            </div>
+
+                            <button type="button" class="btn-success mt-20" onclick="registrarChave('devolucao')">Devolver Chave</button>
+                        </form>
+                    </div>
+                </div>
+            </section>
+
+            <section id="aba-ocorrencias" class="tab-content hidden">
+                <h3>Gestão de Ocorrências</h3>
+                
+                <div class="admin-card">
+                    <h4>➕ Nova Ocorrência</h4>
+                    <form id="form-nova-ocorrencia">
+                        <input type="text" id="o_descricao" placeholder="Qual a ocorrência?" required>
+                        <input type="text" id="o_proposta" placeholder="Solução proposta?" required>
+                        
+                        <div class="form-row" style="display: flex; gap: 15px; margin-bottom: 15px; flex-wrap: wrap;">
+                            <div class="form-group" style="flex: 1; min-width: 250px;">
+                                <label>Prazo para solução:</label>
+                                <input type="date" id="o_prazo" required>
+                            </div>
+                            <div class="form-group" style="flex: 1; min-width: 250px;">
+                                <label>Responsável por acompanhar:</label>
+                                <input type="text" id="o_responsavel" placeholder="Nome do Técnico Responsável" required>
+                            </div>
+                        </div>
+
+                        <textarea id="o_observacao" placeholder="Alguma observação? (Opcional)"></textarea>
+
+                        <div class="signature-section mt-10">
+                            <label>Assinatura de quem abriu a ocorrência:</label>
+                            <canvas id="canvas-nova-ocorrencia" class="sig-canvas" width="400" height="200"></canvas>
+                            <button type="button" class="btn-danger btn-sm mt-10" onclick="limparCanvas('canvas-nova-ocorrencia')">Limpar Assinatura</button>
+                        </div>
+
+                        <button type="button" class="btn-success mt-20" onclick="salvarOcorrencia()">Salvar Ocorrência</button>
+                    </form>
+                </div>
+
+                <div class="admin-card mt-20">
+                    <h4>📋 Ocorrências Registradas</h4>
+                    <div class="table-responsive">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Ocorrência</th>
+                                    <th>Prazo</th>
+                                    <th>Responsável</th>
+                                    <th>Status</th>
+                                    <th>Ações</th>
+                                </tr>
+                            </thead>
+                            <tbody id="lista-ocorrencias-aba"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
+            <section id="aba-toner" class="tab-content hidden">
+                <h3>Controle de Toner e Impressoras</h3>
+        
+                <div class="admin-card">
+                    <h4>📦 Estoque de Toners</h4>
+                    <div class="table-responsive">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Modelo do Toner</th>
+                                    <th>Qtd Disponível</th>
+                                    <th>Ação</th>
+                                </tr>
+                            </thead>
+                            <tbody id="lista-toners-aba"></tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div class="admin-card">
+                    <h4>🖨️ Chamados Simpress (Abertos)</h4>
+                    <div class="table-responsive">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Nº Chamado</th>
+                                    <th>Modelo / Série</th>
+                                    <th>Setor</th>
+                                    <th>Ação</th>
+                                </tr>
+                            </thead>
+                            <tbody id="lista-chamados-aba"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
+            <section id="aba-treinamentos" class="tab-content hidden">
+                <h3>Agendamento de Treinamentos</h3>
+                
+                <div class="admin-card">
+                    <h4>➕ Agendar Novo Treinamento</h4>
+                    <form id="form-novo-treinamento">
+                        <div class="form-row" style="display: flex; gap: 15px; margin-bottom: 15px; flex-wrap: wrap;">
+                            <div class="form-group" style="flex: 1; min-width: 200px;">
+                                <label>Colaborador:</label>
+                                <input type="text" id="tr_colaborador" placeholder="Nome de quem vai receber o treinamento" required>
+                            </div>
+                            <div class="form-group" style="flex: 1; min-width: 200px;">
+                                <label>Telefone p/ Contato:</label>
+                                <input type="text" id="tr_telefone" placeholder="(21) 99999-9999" maxlength="15" oninput="mascaraTelefone(this)" required>
+                            </div>
+                        </div>
+                        
+                        <label>Tema do Treinamento:</label>
+                        <input type="text" id="tr_tema" placeholder="Ex: Uso do novo sistema de PEP, Configuração da Impressora..." required>
+
+                        <div class="form-row" style="display: flex; gap: 15px; margin-bottom: 15px; flex-wrap: wrap;">
+                            <div class="form-group" style="flex: 1; min-width: 150px;">
+                                <label>Prédio:</label>
+                                <input type="text" id="tr_predio" placeholder="Ex: Principal, Anexo..." required>
+                            </div>
+                            <div class="form-group" style="flex: 1; min-width: 150px;">
+                                <label>Setor:</label>
+                                <input type="text" id="tr_setor" placeholder="Ex: CTI, Faturamento..." required>
+                            </div>
+                            <div class="form-group" style="flex: 1; min-width: 100px;">
+                                <label>Andar:</label>
+                                <input type="text" id="tr_andar" placeholder="Ex: 3º Andar" required>
+                            </div>
+                        </div>
+
+                        <label>Data e Horário Marcado:</label>
+                        <input type="datetime-local" id="tr_data_hora" required>
+
+                        <button type="button" class="btn-success mt-20" onclick="salvarTreinamento()">Agendar Treinamento</button>
+                    </form>
+                </div>
+
+                <div class="admin-card mt-20">
+                    <h4>📋 Treinamentos na Agenda</h4>
+                    <div class="table-responsive">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Data/Hora</th>
+                                    <th>Colaborador</th>
+                                    <th>Tema</th>
+                                    <th>Local</th>
+                                    <th>Ações</th>
+                                </tr>
+                            </thead>
+                            <tbody id="lista-treinamentos-aba"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
+            <!-- NOVA ABA: SOLICITAÇÕES DE TREINAMENTO EXTERNAS -->
+            <section id="aba-solicita-treinamento" class="tab-content hidden">
+                <h3>Solicitações de Treinamento (Via Site Externo)</h3>
+                
+                <div class="admin-card">
+                    <h4>🔍 Filtrar Solicitações</h4>
+                    <div class="form-row" style="display: flex; gap: 15px; flex-wrap: wrap; align-items: flex-end;">
+                        <div class="form-group" style="flex: 1; min-width: 150px;">
+                            <label>Status:</label>
+                            <select id="filtro_sol_tr_status" style="margin-bottom: 0;">
+                                <option value="Pendente">⏳ Pendentes</option>
+                                <option value="Agendado">📅 Agendados</option>
+                                <option value="Cancelado">❌ Baixa / Cancelado</option>
+                                <option value="">Todos</option>
+                            </select>
+                        </div>
+                        <div style="display: flex; gap: 10px;">
+                            <button class="btn-primary" onclick="carregarSolicitacoesTreinamento()">Buscar</button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="admin-card mt-20">
+                    <h4>📋 Lista de Solicitações</h4>
+                    <div class="table-responsive">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Data Solicitação</th>
+                                    <th>Solicitante / Contato</th>
+                                    <th>Cargo / Setor</th>
+                                    <th>Tema / Data Desejada</th>
+                                    <th>Status</th>
+                                    <th>Ações</th>
+                                </tr>
+                            </thead>
+                            <tbody id="lista-solicita-treinamento-aba">
+                                <tr><td colspan="6" style="text-align: center;">Carregando...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
+            <!-- NOVA ABA: CADASTROS PENDENTES -->
+            <section id="aba-cadastros" class="tab-content hidden">
+                <h3>Gestão de Cadastros Solicitados</h3>
+                
+                <div class="admin-card">
+                    <h4>🔍 Filtrar Solicitações</h4>
+                    <div class="form-row" style="display: flex; gap: 15px; flex-wrap: wrap; align-items: flex-end;">
+                        <div class="form-group" style="flex: 1; min-width: 150px;">
+                            <label>Status:</label>
+                            <select id="filtro_cad_status" style="margin-bottom: 0;">
+                                <option value="Pendente">⏳ Pendentes</option>
+                                <option value="Aguardando">⚠️ Aguardando (Falta Foto)</option>
+                                <option value="Realizado">✅ Realizados</option>
+                                <option value="">Todos</option>
+                            </select>
+                        </div>
+                        <div class="form-group" style="flex: 2; min-width: 200px;">
+                            <label>Nome do Profissional:</label>
+                            <input type="text" id="filtro_cad_nome" placeholder="Buscar por nome..." style="margin-bottom: 0;" onkeyup="verificarEnterCadastro(event)">
+                        </div>
+                        <div style="display: flex; gap: 10px;">
+                            <button class="btn-primary" onclick="carregarCadastros()">Buscar</button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="admin-card mt-20">
+                    <h4>📋 Lista de Solicitações</h4>
+                    <div class="table-responsive">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Data</th>
+                                    <th>Dados Pessoais</th>
+                                    <th>Atuação Profissional</th>
+                                    <th>Contato</th>
+                                    <th>Conselho e Anexos</th>
+                                    <th>Status e Ações</th>
+                                    <th>Realizado Por</th>
+                                </tr>
+                            </thead>
+                            <tbody id="lista-cadastros-aba">
+                                <tr><td colspan="6" style="text-align: center;">Carregando...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
+            <section id="aba-inventario" class="tab-content hidden">
+                <h3>Gestão de Inventário Geral</h3>
+                
+                <div class="admin-card">
+                    <h4>Ações Rápidas</h4>
+                    <div class="button-group">
+                        <button class="btn-success" onclick="abrirModalNovoEquipamento()">➕ Cadastrar Equipamento</button>
+                        <button class="btn-primary" style="background: #8e44ad;" onclick="abrirModal('modal-novo-tipo')">➕ Novo Tipo de Equipamento</button>
+                    </div>
+                </div>
+
+                <div class="admin-card mt-20">
+                    <h4>🔍 Filtrar Equipamentos</h4>
+                    <div class="form-row" style="display: flex; gap: 15px; flex-wrap: wrap; align-items: flex-end;">
+                        <div class="form-group" style="flex: 1; min-width: 150px;">
+                            <label>Categoria / Tipo:</label>
+                            <select id="filtro_inv_tipo" style="margin-bottom: 0;">
+                                <option value="">Todos</option>
+                            </select>
+                        </div>
+                        <div class="form-group" style="flex: 1; min-width: 150px;">
+                            <label>Status:</label>
+                            <select id="filtro_inv_status" style="margin-bottom: 0;">
+                                <option value="">Todos</option>
+                                <option value="Em uso">🟢 Em uso</option>
+                                <option value="Em estoque">📦 Em estoque</option>
+                                <option value="Danificado">🔴 Danificado</option>
+                            </select>
+                        </div>
+                        <div class="form-group" style="flex: 2; min-width: 200px;">
+                            <label>Número de Série:</label>
+                            <input type="text" id="filtro_inv_serie" placeholder="Digite S/N para buscar..." style="margin-bottom: 0;" onkeyup="verificarEnterFiltro(event)">
+                        </div>
+                        <div style="display: flex; gap: 10px;">
+                            <button class="btn-primary" onclick="carregarInventario()">Buscar</button>
+                            <button class="btn-danger" onclick="limparFiltrosInventario()">Limpar</button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="admin-card mt-20">
+                    <h4>📋 Equipamentos na Base</h4>
+                    <div class="table-responsive">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Tipo</th>
+                                    <th>Marca / Modelo</th>
+                                    <th>Nº Série</th>
+                                    <th>Localização</th>
+                                    <th>Status</th>
+                                    <th>Ações</th>
+                                </tr>
+                            </thead>
+                            <tbody id="lista-inventario-aba"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
+            <section id="aba-config" class="tab-content hidden">
+                <h3>Minhas Configurações</h3>
+                
+                <div class="dashboard-grid">
+                    <div class="admin-card">
+                        <h4>👤 Alterar Meus Dados</h4>
+                        <form id="form-meus-dados">
+                            <label class="mt-10" style="display: block; font-weight: 600; color: #475569; margin-bottom: 4px;">E-mail Corporativo:</label>
+                            <input type="email" id="meu_email" required>
+
+                            <label class="mt-10" style="display: block; font-weight: 600; color: #475569; margin-bottom: 4px;">Nome Completo:</label>
+                            <input type="text" id="meu_nome" required>
+                            
+                            <label class="mt-10" style="display: block; font-weight: 600; color: #475569; margin-bottom: 4px;">Celular (WhatsApp):</label>
+                            <input type="text" id="meu_celular" maxlength="15" oninput="mascaraTelefone(this)">
+                            
+                            <label class="mt-10" style="display: block; font-weight: 600; color: #475569; margin-bottom: 4px;">CPF:</label>
+                            <input type="text" id="meu_cpf" maxlength="14" oninput="mascaraCPF(this)">
+                            
+                            <button type="button" class="btn-primary mt-20" onclick="salvarMeusDados()">Salvar Alterações</button>
+                        </form>
+                    </div>
+
+                    <div class="admin-card">
+                        <h4>🔒 Alterar Minha Senha</h4>
+                        <form id="form-minha-senha">
+                            <label class="mt-10" style="display: block; font-weight: 600; color: #475569; margin-bottom: 4px;">Nova Senha:</label>
+                            <input type="password" id="minha_nova_senha" required>
+                            
+                            <label class="mt-10" style="display: block; font-weight: 600; color: #475569; margin-bottom: 4px;">Confirmar Nova Senha:</label>
+                            <input type="password" id="minha_nova_senha_conf" required>
+                            
+                            <button type="button" class="btn-danger mt-20" onclick="salvarMinhaSenha()">Atualizar Senha</button>
+                        </form>
+                    </div>
+                </div>
+            </section>
+            
+            <section id="aba-admin" class="tab-content hidden">
+                <h3>Painel de Gestão (Admin)</h3>
+                
+                <div class="admin-card">
+                    <h4>1. Gestão de Usuários (Acesso e Senhas)</h4>
+                    <div class="button-group">
+                        <button class="btn-primary" onclick="abrirModal('modal-usuario')">Cadastrar Novo Usuário</button>
+                        <button class="btn-primary" onclick="abrirModal('modal-permissoes')">Gerenciar Permissões</button>
+                    </div>
+                </div>
+
+                <div class="admin-card">
+                    <h4>Exportação de Logs e Auditoria</h4>
+                    <div class="date-group">
+                        <label>De:</label>
+                        <input type="date" id="data-inicio-relatorio"> 
+                        <label>Até:</label>
+                        <input type="date" id="data-fim-relatorio">
+                    </div>
+                    <button class="btn-success" onclick="exportarPDF()">Exportar Relatório (PDF/CSV)</button>
+                </div>
+
+                <div class="admin-card">
+                    <h4>Cadastros Base e Chamados</h4>
+                    <div class="button-group">
+                        <button class="btn-primary" onclick="abrirModal('modal-chave')">Cadastrar Tipo de Chave</button>
+                        <button class="btn-primary" onclick="abrirModal('modal-toner')">Cadastrar Modelo de Toner</button>
+                        <button class="btn-primary" onclick="abrirModal('modal-simpress')">Chamado com a Simpress</button>
+                    </div>
+                </div>
+
+                <div class="admin-card mt-20">
+                    <h4>Plantões Pendentes de Visto</h4>
+                    <div class="table-responsive">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Data</th>
+                                    <th>Turno</th>
+                                    <th>Ação</th>
+                                </tr>
+                            </thead>
+                            <tbody id="admin-plantoes-lista"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
+        </main>
+    </div>
+
+    <div id="modal-usuario" class="modal">
+        <div class="modal-content">
+            <span class="close-modal" onclick="fecharModal('modal-usuario')">&times;</span>
+            <h3>Cadastrar Novo Usuário</h3>
+            <form id="form-novo-usuario">
+                <input type="text" id="cad_nome" placeholder="Nome Completo" required>
+                <select id="cad_turno" required>
+                    <option value="">Selecione o Turno</option>
+                    <option value="Seg a Sex">Diarista</option>
+                    <option value="Manhã">Diurno</option>
+                    <option value="Noite">Noturno</option>
+                </select>
+                <input type="text" id="cad_celular" placeholder="Celular (WhatsApp) Ex: (21) 99999-9999" maxlength="15" oninput="mascaraTelefone(this)">
+                <input type="text" id="cad_cpf" placeholder="CPF Ex: 111.111.111-11" maxlength="14" oninput="mascaraCPF(this)">
+                <input type="email" id="cad_email" placeholder="E-mail" required>
+                <input type="password" id="cad_senha" placeholder="Senha Provisória" required>
+                <button type="button" class="btn-success mt-20" onclick="adminCriarUsuario()">Criar Usuário</button>
+            </form>
+        </div>
+    </div>
+
+    <div id="modal-editar-usuario" class="modal">
+        <div class="modal-content">
+            <span class="close-modal" onclick="fecharModal('modal-editar-usuario')">&times;</span>
+            <h3>Alterar Dados do Usuário</h3>
+            <form id="form-editar-usuario">
+                <input type="hidden" id="edit_id">
+                <input type="text" id="edit_nome" placeholder="Nome Completo" required>
+                <select id="edit_turno" required>
+                    <option value="Seg a Sex">Diarista</option>
+                    <option value="Manhã">Diurno</option>
+                    <option value="Noite">Noturno</option>
+                </select>
+                <input type="text" id="edit_celular" placeholder="Celular (WhatsApp)" maxlength="15" oninput="mascaraTelefone(this)">
+                <input type="text" id="edit_cpf" placeholder="CPF" maxlength="14" oninput="mascaraCPF(this)">
+                <input type="email" id="edit_email" placeholder="E-mail Corporativo" required>
+                <button type="button" class="btn-success mt-20" onclick="salvarEdicaoUsuario()">Salvar Alterações</button>
+            </form>
+        </div>
+    </div>
+
+    <div id="modal-permissoes" class="modal">
+        <div class="modal-content large">
+            <span class="close-modal" onclick="fecharModal('modal-permissoes')">&times;</span>
+            <h3>Gerenciar Permissões</h3>
+            <div class="table-responsive">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Nome</th>
+                            <th>Usuário/E-mail</th>
+                            <th>Nível</th>
+                            <th>Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tabela-usuarios-admin"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <div id="modal-chave" class="modal">
+        <div class="modal-content">
+            <span class="close-modal" onclick="fecharModal('modal-chave')">&times;</span>
+            <h3>Cadastrar Tipo de Chave</h3>
+            <form>
+                <input type="text" id="cad_chave_nome" placeholder="Nomenclatura (Ex: CPD, Sala Servidor)" required>
+                <input type="text" id="cad_chave_cor" placeholder="Cor do Chaveiro" required>
+                <input type="text" id="cad_chave_local" placeholder="Localização / Prédio" required>
+                <button type="button" class="btn-success mt-20" onclick="adminCadastrarChave()">Salvar Chave</button>
+            </form>
+        </div>
+    </div>
+
+    <div id="modal-toner" class="modal">
+        <div class="modal-content">
+            <span class="close-modal" onclick="fecharModal('modal-toner')">&times;</span>
+            <h3>Cadastrar Modelo de Toner</h3>
+            <form>
+                <input type="text" id="cad_toner_modelo" placeholder="Modelo do Toner" required>
+                <input type="text" id="cad_toner_imp" placeholder="Impressoras Compatíveis (Ex: Lexmark MS431)" required>
+                <input type="number" id="cad_toner_qtd" placeholder="Quantidade Atual em Estoque" required>
+                <button type="button" class="btn-success mt-20" onclick="adminCadastrarToner()">Salvar Cadastro</button>
+            </form>
+        </div>
+    </div>
+
+    <div id="modal-simpress" class="modal">
+        <div class="modal-content">
+            <span class="close-modal" onclick="fecharModal('modal-simpress')">&times;</span>
+            <h3>Registrar Chamado Simpress</h3>
+            <form>
+                <input type="text" id="cad_sim_numero" placeholder="Número do Chamado" required>
+                <input type="text" id="cad_sim_modelo" placeholder="Modelo da Impressora" required>
+                <input type="text" id="cad_sim_serie" placeholder="Número de Série" required>
+                <input type="text" id="cad_sim_local" placeholder="Localização da Impressora (Setor)" required>
+                <button type="button" class="btn-success mt-20" onclick="adminCadastrarSimpress()">Abrir Chamado</button>
+            </form>
+        </div>
+    </div>
+
+    <div id="modal-troca-toner" class="modal">
+        <div class="modal-content">
+            <span class="close-modal" onclick="fecharModal('modal-troca-toner')">&times;</span>
+            <h3>Registrar Troca de Toner</h3>
+            <form id="form-troca-toner">
+                <input type="hidden" id="tt_toner_id">
+                
+                <label style="display: block; margin-bottom: 5px; font-weight: bold; font-size: 14px;">Foto da Página de Teste (Assinada):</label>
+                <input type="file" id="tt_foto" accept="image/*" required>
+                
+                <input type="text" id="tt_setor" placeholder="Setor (Ex: Recepção, CTI)" required>
+                <input type="text" id="tt_andar" placeholder="Andar" required>
+                <input type="text" id="tt_predio" placeholder="Prédio" required>
+                
+                <div class="signature-section mt-10">
+                    <label>Sua Assinatura:</label>
+                    <canvas id="canvas-troca-toner" class="sig-canvas" width="400" height="200"></canvas>
+                    <button type="button" class="btn-danger btn-sm mt-10" onclick="limparCanvas('canvas-troca-toner')">Limpar Assinatura</button>
+                </div>
+
+                <button type="button" class="btn-success mt-20" onclick="salvarTrocaToner()">Salvar Troca</button>
+            </form>
+        </div>
+    </div>
+
+    <div id="modal-atender-chamado" class="modal">
+        <div class="modal-content">
+            <span class="close-modal" onclick="fecharModal('modal-atender-chamado')">&times;</span>
+            <h3>Atender Chamado Simpress</h3>
+            <form id="form-atender-chamado">
+                <input type="hidden" id="ac_chamado_id">
+                
+                <input type="text" id="ac_solucao" placeholder="Solução da Simpress" required>
+                
+                <div class="checkbox-group mt-10">
+                    <input type="checkbox" id="ac_tem_obs" onchange="toggleCondicionalCheckbox(this, 'div_ac_obs', true)">
+                    <label for="ac_tem_obs">Adicionar observação?</label>
+                </div>
+                <div id="div_ac_obs" class="condicional hidden mt-10">
+                    <textarea id="ac_obs_texto" placeholder="Descreva a observação..."></textarea>
+                </div>
+
+                <input type="text" id="ac_tecnico" placeholder="Técnico que acompanhou a Simpress" class="mt-10" required>
+                
+                <div class="signature-section mt-10">
+                    <label>Sua Assinatura:</label>
+                    <canvas id="canvas-atender-chamado" class="sig-canvas" width="400" height="200"></canvas>
+                    <button type="button" class="btn-danger btn-sm mt-10" onclick="limparCanvas('canvas-atender-chamado')">Limpar Assinatura</button>
+                </div>
+
+                <button type="button" class="btn-success mt-20" onclick="salvarAtendimentoChamado()">Salvar Atendimento</button>
+            </form>
+        </div>
+    </div>
+
+    <div id="modal-ver-ocorrencia" class="modal">
+        <div class="modal-content">
+            <span class="close-modal" onclick="fecharModal('modal-ver-ocorrencia')">&times;</span>
+            <h3 style="margin-bottom: 10px; border-bottom: 2px solid #e2e8f0; padding-bottom: 10px;">🔍 Detalhes da Ocorrência</h3>
+            <div id="detalhes-ocorrencia-conteudo" style="line-height: 1.8; margin-top: 15px; font-size: 14px;"></div>
+        </div>
+    </div>
+
+    <div id="modal-editar-ocorrencia" class="modal">
+        <div class="modal-content">
+            <span class="close-modal" onclick="fecharModal('modal-editar-ocorrencia')">&times;</span>
+            <h3>Editar Ocorrência</h3>
+            <form id="form-editar-ocorrencia">
+                <input type="hidden" id="edit_o_id">
+                
+                <input type="text" id="edit_o_descricao" placeholder="Qual a ocorrência?" required>
+                <input type="text" id="edit_o_proposta" placeholder="Solução proposta?" required>
+                
+                <div class="form-row" style="display: flex; gap: 15px; margin-bottom: 15px; flex-wrap: wrap;">
+                    <div class="form-group" style="flex: 1; min-width: 250px;">
+                        <label>Prazo para solução:</label>
+                        <input type="date" id="edit_o_prazo" required>
+                    </div>
+                    <div class="form-group" style="flex: 1; min-width: 250px;">
+                        <label>Responsável por acompanhar:</label>
+                        <input type="text" id="edit_o_responsavel" placeholder="Nome do Técnico" required>
+                    </div>
+                </div>
+
+                <textarea id="edit_o_observacao" placeholder="Alguma observação? (Opcional)"></textarea>
+
+                <button type="button" class="btn-success mt-20" onclick="salvarEdicaoOcorrencia()">Salvar Alterações</button>
+            </form>
+        </div>
+    </div>
+   
+    <div id="modal-finalizar-ocorrencia" class="modal">
+        <div class="modal-content">
+            <span class="close-modal" onclick="fecharModal('modal-finalizar-ocorrencia')">&times;</span>
+            <h3>Finalizar Ocorrência</h3>
+            <form id="form-finalizar-ocorrencia">
+                <input type="hidden" id="f_ocorrencia_id">
+                
+                <label>Descreva a solução aplicada:</label>
+                <textarea id="f_solucao" placeholder="Como isso foi resolvido?" required></textarea>
+                
+                <input type="text" id="f_quem_solucionou" placeholder="Quem solucionou?" required>
+                <input type="text" id="f_quem_acompanhou" placeholder="Quem acompanhou? (Técnico T.I)" required>
+                
+                <div class="signature-section mt-10">
+                    <label>Assinatura (De quem resolveu ou acompanhou):</label>
+                    <canvas id="canvas-finalizar-ocorrencia" class="sig-canvas" width="400" height="200"></canvas>
+                    <button type="button" class="btn-danger btn-sm mt-10" onclick="limparCanvas('canvas-finalizar-ocorrencia')">Limpar Assinatura</button>
+                </div>
+
+                <button type="button" class="btn-success mt-20" onclick="finalizarOcorrencia()">Finalizar Ocorrência</button>
+            </form>
+        </div>
+    </div>
+
+    <div id="modal-ver-plantao" class="modal">
+        <div class="modal-content large">
+            <span class="close-modal" onclick="fecharModal('modal-ver-plantao')">&times;</span>
+            <h3 style="margin-bottom: 10px; border-bottom: 2px solid #e2e8f0; padding-bottom: 10px;">📋 Detalhes da Passagem de Plantão</h3>
+            
+            <div id="detalhes-plantao-conteudo" style="line-height: 1.8; margin-top: 15px; font-size: 14px;"></div>
+
+            <div style="margin-top: 25px; text-align: center; border-top: 2px solid #e2e8f0; padding-top: 15px;">
+                <input type="hidden" id="visto_plantao_id">
+                <button class="btn-success" onclick="confirmarVistoPlantao()" style="width: 100%; font-size: 16px;">Assinar Visto da Supervisão ✔️</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="modal-editar-treinamento" class="modal">
+        <div class="modal-content">
+            <span class="close-modal" onclick="fecharModal('modal-editar-treinamento')">&times;</span>
+            <h3>Editar Treinamento</h3>
+            <form id="form-editar-treinamento">
+                <input type="hidden" id="edit_tr_id">
+                
+                <div class="form-row" style="display: flex; gap: 15px; margin-bottom: 15px; flex-wrap: wrap;">
+                    <div class="form-group" style="flex: 1; min-width: 200px;">
+                        <label>Colaborador:</label>
+                        <input type="text" id="edit_tr_colaborador" required>
+                    </div>
+                    <div class="form-group" style="flex: 1; min-width: 200px;">
+                        <label>Telefone p/ Contato:</label>
+                        <input type="text" id="edit_tr_telefone" maxlength="15" oninput="mascaraTelefone(this)" required>
+                    </div>
+                </div>
+                
+                <label>Tema do Treinamento:</label>
+                <input type="text" id="edit_tr_tema" required>
+
+                <div class="form-row" style="display: flex; gap: 15px; margin-bottom: 15px; flex-wrap: wrap;">
+                    <div class="form-group" style="flex: 1; min-width: 150px;">
+                        <label>Prédio:</label>
+                        <input type="text" id="edit_tr_predio" required>
+                    </div>
+                    <div class="form-group" style="flex: 1; min-width: 150px;">
+                        <label>Setor:</label>
+                        <input type="text" id="edit_tr_setor" required>
+                    </div>
+                    <div class="form-group" style="flex: 1; min-width: 100px;">
+                        <label>Andar:</label>
+                        <input type="text" id="edit_tr_andar" required>
+                    </div>
+                </div>
+
+                <label>Data e Horário Marcado:</label>
+                <input type="datetime-local" id="edit_tr_data_hora" required>
+
+                <button type="button" class="btn-success mt-20" onclick="salvarEdicaoTreinamento()">Salvar Alterações</button>
+            </form>
+        </div>
+    </div>
+
+    <div id="modal-finalizar-treinamento" class="modal">
+        <div class="modal-content">
+            <span class="close-modal" onclick="fecharModal('modal-finalizar-treinamento')">&times;</span>
+            <h3>Finalizar Treinamento</h3>
+            <form id="form-finalizar-treinamento">
+                <input type="hidden" id="ft_treinamento_id">
+                
+                <label>Técnico Responsável por Ministrar:</label>
+                <select id="ft_tecnico" required>
+                    <option value="">Carregando...</option>
+                </select>
+                
+                <div class="signature-section mt-10">
+                    <label>Assinatura do Técnico:</label>
+                    <canvas id="canvas-finalizar-treinamento" class="sig-canvas" width="400" height="200"></canvas>
+                    <button type="button" class="btn-danger btn-sm mt-10" onclick="limparCanvas('canvas-finalizar-treinamento')">Limpar Assinatura</button>
+                </div>
+
+                <button type="button" class="btn-success mt-20" onclick="salvarTreinamentoConcluido()">Concluir Treinamento</button>
+            </form>
+        </div>
+    </div>
+
+    <div id="modal-novo-tipo" class="modal">
+        <div class="modal-content">
+            <span class="close-modal" onclick="fecharModal('modal-novo-tipo')">&times;</span>
+            <h3>Cadastrar Novo Tipo</h3>
+            <input type="text" id="cad_tipo_nome" placeholder="Ex: NOBREAK, ROTEADOR, SWITCH" required>
+            <button type="button" class="btn-success mt-20" onclick="salvarNovoTipoEquipamento()">Salvar Tipo</button>
+        </div>
+    </div>
+
+    <div id="modal-novo-equipamento" class="modal">
+        <div class="modal-content">
+            <span class="close-modal" onclick="fecharModal('modal-novo-equipamento')">&times;</span>
+            <h3>Cadastrar Equipamento</h3>
+            <form id="form-novo-equipamento">
+                <label>Tipo de Equipamento:</label>
+                <select id="inv_tipo" required>
+                    <option value="">Carregando...</option>
+                </select>
+
+                <div class="form-row" style="display: flex; gap: 15px; margin-bottom: 15px; flex-wrap: wrap;">
+                    <div class="form-group" style="flex: 1; min-width: 150px;">
+                        <label>Marca:</label>
+                        <input type="text" id="inv_marca" placeholder="Ex: Dell, Samsung" required>
+                    </div>
+                    <div class="form-group" style="flex: 1; min-width: 150px;">
+                        <label>Modelo:</label>
+                        <input type="text" id="inv_modelo" placeholder="Ex: Optiplex 3020" required>
+                    </div>
+                </div>
+
+                <label>Número de Série (S/N):</label>
+                <input type="text" id="inv_serie" required>
+
+                <label>Status Atual:</label>
+                <select id="inv_status" required>
+                    <option value="Em uso">🟢 Em uso</option>
+                    <option value="Em estoque">📦 Em estoque</option>
+                    <option value="Danificado">🔴 Danificado</option>
+                </select>
+
+                <div class="form-row" style="display: flex; gap: 15px; margin-bottom: 15px; flex-wrap: wrap; margin-top: 15px;">
+                    <div class="form-group" style="flex: 1; min-width: 100px;">
+                        <label>Prédio:</label>
+                        <input type="text" id="inv_predio" placeholder="Ex: Principal">
+                    </div>
+                    <div class="form-group" style="flex: 1; min-width: 100px;">
+                        <label>Andar:</label>
+                        <input type="text" id="inv_andar" placeholder="Ex: 3º Andar">
+                    </div>
+                    <div class="form-group" style="flex: 1; min-width: 150px;">
+                        <label>Setor:</label>
+                        <input type="text" id="inv_setor" placeholder="Ex: CTI">
+                    </div>
+                </div>
+
+                <button type="button" class="btn-success mt-20" onclick="salvarEquipamento()">Salvar Equipamento</button>
+            </form>
+        </div>
+    </div>
+
+    <div id="modal-obs-cadastro" class="modal">
+        <div class="modal-content">
+            <span class="close-modal" onclick="fecharModal('modal-obs-cadastro')">&times;</span>
+            <h3>Adicionar Observação</h3>
+            <p style="font-size: 12px; color: #64748b; margin-bottom: 15px;">Use este espaço caso o usuário não tenha enviado a foto ou se o documento estiver ilegível.</p>
+            <input type="hidden" id="obs_cad_id">
+            <textarea id="obs_cad_texto" placeholder="Digite a observação..." required></textarea>
+            <button class="btn-success mt-20" onclick="salvarObsCadastro()">Salvar Observação</button>
+        </div>
+    </div>
+
+    <!-- MODAL: DAR BAIXA TREINAMENTO -->
+    <div id="modal-obs-sol-treinamento" class="modal">
+        <div class="modal-content">
+            <span class="close-modal" onclick="fecharModal('modal-obs-sol-treinamento')">&times;</span>
+            <h3>Dar Baixa na Solicitação</h3>
+            <p style="font-size: 12px; color: #64748b; margin-bottom: 15px;">Informe o motivo pelo qual este treinamento não será realizado (Ex: Solicitado errado, colaborador de férias, etc).</p>
+            <input type="hidden" id="obs_sol_tr_id">
+            <textarea id="obs_sol_tr_texto" placeholder="Digite o motivo da baixa..." required></textarea>
+            <button class="btn-danger mt-20" onclick="salvarObsSolicitacaoTreinamento()">Confirmar Baixa</button>
+        </div>
+    </div>
+
+    <script src="auth.js"></script>
+    <script src="signature.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>
