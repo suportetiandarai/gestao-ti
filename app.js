@@ -1750,12 +1750,10 @@ async function carregarCadastros() {
                 if (c.status === 'Realizado') corStatus = '#2ecc71'; 
                 if (c.status === 'Aguardando') corStatus = '#e74c3c'; 
 
-                // Lógica dos Anexos (Documento e Conselho)
                 const linkDoc = c.foto_documento_url 
                     ? `<a href="${c.foto_documento_url}" target="_blank" style="color: #3498db; text-decoration: none; font-weight: bold; display: block; margin-bottom: 3px;">📄 Ver Documento</a>` 
                     : '<span style="color: #e74c3c; font-size: 11px; display: block;">Sem Doc.</span>';
                 
-                // Lógica inteligente para o Conselho (Se tem ou se é isento)
                 let linkConselho = '';
                 if (c.numero_conselho && c.numero_conselho.toUpperCase() !== 'ISENTO' && c.numero_conselho.toUpperCase() !== 'NÃO POSSUI') {
                     linkConselho = c.foto_conselho_url 
@@ -1765,12 +1763,10 @@ async function carregarCadastros() {
                     linkConselho = '<span style="color: #7f8c8d; font-size: 11px; font-weight: bold; display: block;">(Isento de Conselho)</span>';
                 }
 
-                // Quem realizou
                 const realizadoPor = c.realizado_por_nome 
                     ? `<span style="font-size: 11px;"><strong>${c.realizado_por_nome}</strong><br><span style="color: #64748b;">${c.realizado_por_email}</span></span>`
                     : '-';
 
-                // Formatando a Data de Nascimento para o padrão BR se existir
                 let dataNascFormatada = c.data_nascimento;
                 if (c.data_nascimento && c.data_nascimento.includes('-')) {
                     dataNascFormatada = c.data_nascimento.split('-').reverse().join('/');
@@ -1808,32 +1804,36 @@ async function carregarCadastros() {
                             </div>
                         </td>
 
-                        <td style="min-width: 140px;">
+                        <td style="min-width: 160px;"> <!-- Aumentei levemente a largura para caber os 3 botões -->
                             <div style="margin-bottom: 8px;">
                                 <span style="background-color: ${corStatus}; color: white; padding: 4px 8px; border-radius: 4px; font-size: 11px; font-weight: bold; display: inline-block; width: 100%; text-align: center;">${c.status}</span>
                             </div>
-                            <div style="display: flex; gap: 4px; flex-wrap: wrap; justify-content: center;">
+                            
+                            <!-- 🟢 VOLTOU PARA O FORMATO LADO A LADO (FLEX ORIGINAL) -->
+                            <div style="display: flex; gap: 4px; justify-content: center;">
                                 ${c.status === 'Pendente' ? `
-                                    <button class="btn-success btn-sm" style="flex: 1; padding: 4px; font-size: 11px;" onclick="alterarStatusCadastro('${c.id}', 'Realizado')">✔️ Finalizar</button>
-                                    <button class="btn-primary btn-sm" style="background: #e74c3c; flex: 1; padding: 4px; font-size: 11px;" onclick="alterarStatusCadastro('${c.id}', 'Aguardando')">⏳ Pausar</button>
+                                    <button class="btn-success btn-sm" style="flex: 1; padding: 4px; font-size: 10px; white-space: nowrap;" onclick="alterarStatusCadastro('${c.id}', 'Realizado')">✔️ Finalizar</button>
+                                    <button class="btn-primary btn-sm" style="background: #e74c3c; flex: 1; padding: 4px; font-size: 10px; white-space: nowrap;" onclick="alterarStatusCadastro('${c.id}', 'Aguardando')">⏳ Pausar</button>
                                 ` : ''}
+                                
                                 ${c.status === 'Aguardando' ? `
-                                    <button class="btn-success btn-sm" style="flex: 1; padding: 4px; font-size: 11px;" onclick="alterarStatusCadastro('${c.id}', 'Realizado')">✔️ Finalizar</button>
-                                    <button class="btn-primary btn-sm" style="background: #3498db; flex: 1; padding: 4px; font-size: 11px;" onclick="alterarStatusCadastro('${c.id}', 'Pendente')">▶️ Retornar</button>
+                                    <button class="btn-success btn-sm" style="flex: 1; padding: 4px; font-size: 10px; white-space: nowrap;" onclick="alterarStatusCadastro('${c.id}', 'Realizado')">✔️ Finalizar</button>
+                                    <button class="btn-primary btn-sm" style="background: #3498db; flex: 1; padding: 4px; font-size: 10px; white-space: nowrap;" onclick="alterarStatusCadastro('${c.id}', 'Pendente')">▶️ Retornar</button>
                                 ` : ''}
-                                <button class="btn-primary btn-sm" style="background: #95a5a6; flex: 1; padding: 4px; font-size: 11px;" onclick="abrirModalObsCadastro('${c.id}', \`${c.observacao || ''}\`)">📝 Obs</button>
+                                
+                                <button class="btn-primary btn-sm" style="background: #95a5a6; flex: 1; padding: 4px; font-size: 10px; white-space: nowrap;" onclick="abrirModalObsCadastro('${c.id}', \`${c.observacao || ''}\`)">📝 Obs</button>
                             </div>
+                            
                             ${c.observacao ? `<div style="margin-top: 8px; font-size: 10px; color: #475569; background: #f1f5f9; padding: 4px; border-radius: 4px; line-height: 1.4;"><strong>Obs:</strong> ${c.observacao}</div>` : ''}
                         </td>
 
                         <td>${realizadoPor}</td>
                     </tr>
                 `;
-            }).join('') : '<tr><td colspan="7" style="text-align: center; color: #7f8c8d; padding: 20px;">Nenhuma solicitação pendente encontrada.</td></tr>';
+            }).join('') : '<tr><td colspan="7" style="text-align: center; color: #7f8c8d; padding: 20px;">Nenhuma solicitação encontrada.</td></tr>';
         }
     } catch (err) { console.error("Erro ao carregar cadastros:", err); }
 }
-
 // ==========================================
 // NOVA ABA: SOLICITAÇÕES DE LOGIN AD
 // ==========================================
