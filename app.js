@@ -1941,33 +1941,47 @@ async function carregarSolicitacoesAD() {
             tbody.innerHTML = data.length > 0 ? data.map(c => {
                 let corStatus = '#f39c12'; // Pendente
                 if (c.status === 'Realizado') corStatus = '#2ecc71'; 
-                if (c.status === 'Cancelado' || c.status === 'Pausado') corStatus = '#e74c3c'; 
+                if (c.status === 'Cancelado') corStatus = '#e74c3c'; 
 
                 const realizadoPor = c.realizado_por_nome 
                     ? `<span style="font-size: 11px;"><strong>${c.realizado_por_nome}</strong></span>`
                     : '-';
 
+                // 🟢 Lógica de Botões unificada com a coluna de Status
+                let botoesAcao = '';
+                if (c.status !== 'Realizado' && c.status !== 'Cancelado') {
+                    botoesAcao = `
+                        <button class="btn-success btn-sm" style="flex: 1; margin: 0; padding: 6px 4px;" onclick="alterarStatusAD('${c.id}', 'Realizado')">✔️ Finalizar</button>
+                        <button class="btn-danger btn-sm" style="flex: 1; margin: 0; padding: 6px 4px;" onclick="darBaixaAD('${c.id}')">❌ Baixa</button>
+                    `;
+                } else {
+                    botoesAcao = `
+                        <button class="btn-primary btn-sm" style="background: #e67e22; flex: 1; margin: 0; padding: 6px 4px;" onclick="alterarStatusAD('${c.id}', 'Pendente')">↩️ Desfazer</button>
+                    `;
+                }
+
                 return `
                     <tr>
-                        <td style="font-size: 12px;">${new Date(c.created_at).toLocaleDateString('pt-BR')} <br><small>${new Date(c.created_at).toLocaleTimeString('pt-BR')}</small></td>
+                        <td style="font-size: 12px; min-width: 80px;">${new Date(c.created_at).toLocaleDateString('pt-BR')} <br><small style="color:#64748b;">${new Date(c.created_at).toLocaleTimeString('pt-BR')}</small></td>
                         <td style="font-size: 12px;"><strong>${c.nome_completo}</strong></td>
                         <td style="font-size: 12px;">${c.cpf || '-'}</td>
-                        <td>
-                            <span style="background-color: ${corStatus}; color: white; padding: 4px 8px; border-radius: 4px; font-size: 11px; font-weight: bold; display: block; text-align: center;">${c.status || 'Pendente'}</span>
-                        </td>
-                        <td>
-                            <div style="display: flex; gap: 4px; flex-wrap: nowrap; width: max-content; justify-content: center;">
-                                ${c.status !== 'Realizado' ? `
-                                    <button class="btn-success btn-sm" style="margin: 0; padding: 6px 10px;" onclick="alterarStatusAD('${c.id}', 'Realizado')">✔️ Finalizar</button>
-                                ` : `
-                                    <button class="btn-primary btn-sm" style="background: #e67e22; margin: 0; padding: 6px 10px;" onclick="alterarStatusAD('${c.id}', 'Pendente')">↩️ Desfazer</button>
-                                `}
+                        
+                        <td style="min-width: 160px;">
+                            <div style="margin-bottom: 8px;">
+                                <span style="background-color: ${corStatus}; color: white; padding: 4px 8px; border-radius: 4px; font-size: 11px; font-weight: bold; display: block; width: 100%; text-align: center;">${c.status || 'Pendente'}</span>
                             </div>
+                            
+                            <div style="display: flex; gap: 4px; flex-wrap: nowrap; justify-content: center;">
+                                ${botoesAcao}
+                            </div>
+                            
+                            ${c.status === 'Cancelado' && c.motivo_cancelamento ? `<div style="margin-top: 8px; font-size: 10px; color: #475569; background: #f1f5f9; padding: 4px; border-radius: 4px; line-height: 1.4;"><strong>Motivo:</strong> ${c.motivo_cancelamento}</div>` : ''}
                         </td>
-                        <td>${realizadoPor}</td>
+                        
+                        <td style="font-size: 11px;">${realizadoPor}</td>
                     </tr>
                 `;
-            }).join('') : '<tr><td colspan="6" style="text-align: center; color: #7f8c8d; padding: 20px;">Nenhuma solicitação de AD encontrada.</td></tr>';
+            }).join('') : '<tr><td colspan="5" style="text-align: center; color: #7f8c8d; padding: 20px;">Nenhuma solicitação de AD encontrada.</td></tr>';
         }
     } catch (err) { console.error("Erro ao carregar AD:", err); }
 }
@@ -1978,11 +1992,12 @@ async function alterarStatusAD(id, novoStatus) {
     try {
         let updateData = { status: novoStatus };
 
-        // Se finalizou, pega o nome de quem está logado no sistema para auditar
+        // Se finalizou, pega o nome de quem está logado. Se desfez, limpa tudo.
         if (novoStatus === 'Realizado' && typeof window.usuarioAtual !== 'undefined' && window.usuarioAtual) {
             updateData.realizado_por_nome = window.usuarioAtual.nome;
         } else if (novoStatus === 'Pendente') {
             updateData.realizado_por_nome = null;
+            updateData.motivo_cancelamento = null; // Limpa o motivo se voltar a ficar pendente
         }
 
         const { error } = await supabase.from('solicitacoes_ad').update(updateData).eq('id', id);
@@ -1992,6 +2007,31 @@ async function alterarStatusAD(id, novoStatus) {
     } catch (err) { alert("Erro ao atualizar AD: " + err.message); }
 }
 
+// 🟢 NOVA FUNÇÃO: Pede o motivo e dá baixa
+async function darBaixaAD(id) {
+    const motivo = prompt("⚠️ Atenção: Por favor, digite o motivo da baixa (cancelamento) desta criação de AD:");
+    
+    if (motivo === null) return; // Se apertar cancelar
+    if (motivo.trim() === "") return alert("O motivo é obrigatório para dar baixa!");
+
+    try {
+        let updateData = { 
+            status: 'Cancelado',
+            motivo_cancelamento: motivo
+        };
+
+        // Salva quem deu a baixa
+        if (typeof window.usuarioAtual !== 'undefined' && window.usuarioAtual) {
+            updateData.realizado_por_nome = window.usuarioAtual.nome;
+        }
+
+        const { error } = await supabase.from('solicitacoes_ad').update(updateData).eq('id', id);
+        if (error) throw error;
+
+        alert("Solicitação baixada com sucesso!");
+        carregarSolicitacoesAD();
+    } catch (err) { alert("Erro ao dar baixa: " + err.message); }
+}
 // --- 2. GESTÃO DE SOLICITAÇÕES DE TREINAMENTO (VINDAS DO SITE) ---
 async function carregarSolicitacoesTreinamento() {
     const status = document.getElementById('filtro_sol_tr_status').value;
