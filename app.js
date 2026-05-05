@@ -1776,6 +1776,28 @@ async function carregarCadastros() {
                     dataNascFormatada = c.data_nascimento.split('-').reverse().join('/');
                 }
 
+                // 🟢 SOLUÇÃO: Lógica separada para os botões dependendo do Status
+                let botoesAcao = '';
+                
+                if (c.status === 'Pendente') {
+                    // Mostra Finalizar e Pausar
+                    botoesAcao = `
+                        <button class="btn-success btn-sm" style="flex: 1; padding: 4px; font-size: 11px;" onclick="alterarStatusCadastro('${c.id}', 'Realizado')">✔️ Finalizar</button>
+                        <button class="btn-primary btn-sm" style="background: #e74c3c; flex: 1; padding: 4px; font-size: 11px;" onclick="alterarStatusCadastro('${c.id}', 'Aguardando')">⏳ Pausar</button>
+                    `;
+                } else if (c.status === 'Aguardando') {
+                    // Mostra Finalizar e Retomar para Pendente
+                    botoesAcao = `
+                        <button class="btn-success btn-sm" style="flex: 1; padding: 4px; font-size: 11px;" onclick="alterarStatusCadastro('${c.id}', 'Realizado')">✔️ Finalizar</button>
+                        <button class="btn-primary btn-sm" style="background: #3498db; flex: 1; padding: 4px; font-size: 11px;" onclick="alterarStatusCadastro('${c.id}', 'Pendente')">▶️ Retomar</button>
+                    `;
+                } else if (c.status === 'Realizado') {
+                    // Mostra apenas o Desfazer (Opcional, mas muito útil caso clique errado)
+                    botoesAcao = `
+                        <button class="btn-primary btn-sm" style="background: #e67e22; flex: 1; padding: 4px; font-size: 11px;" onclick="alterarStatusCadastro('${c.id}', 'Pendente')">↩️ Desfazer</button>
+                    `;
+                }
+
                 return `
                     <tr>
                         <td style="font-size: 12px; min-width: 80px;">${new Date(c.created_at).toLocaleDateString('pt-BR')} <br><small style="color:#64748b;">${new Date(c.created_at).toLocaleTimeString('pt-BR')}</small></td>
@@ -1812,12 +1834,12 @@ async function carregarCadastros() {
                             <div style="margin-bottom: 8px;">
                                 <span style="background-color: ${corStatus}; color: white; padding: 4px 8px; border-radius: 4px; font-size: 11px; font-weight: bold; display: inline-block; width: 100%; text-align: center;">${c.status}</span>
                             </div>
+                            
                             <div style="display: flex; gap: 4px; flex-wrap: wrap; justify-content: center;">
-                                ${c.status !== 'Realizado' ? `
-                                    <button class="btn-success btn-sm" style="flex: 1; padding: 4px; font-size: 11px;" onclick="alterarStatusCadastro('${c.id}', 'Realizado')">✔️ Finalizar</button>
-                                    <button class="btn-primary btn-sm" style="background: #e74c3c; flex: 1; padding: 4px; font-size: 11px;" onclick="alterarStatusCadastro('${c.id}', 'Aguardando')">⏳ Pausar</button>
-                                ` : ''}
-                                <button class="btn-primary btn-sm" style="background: #95a5a6; flex: 1; padding: 4px; font-size: 11px;" onclick="abrirModalObsCadastro('${c.id}', \`${c.observacao || ''}\`)">📝 Obs</button>
+                                <!-- Aqui entra a variável com a lógica que criamos acima -->
+                                ${botoesAcao}
+                                
+                                <button class="btn-primary btn-sm" style="background: #95a5a6; flex: 1; min-width: 100%; padding: 4px; font-size: 11px; margin-top: 2px;" onclick="abrirModalObsCadastro('${c.id}', \`${c.observacao || ''}\`)">📝 Obs</button>
                             </div>
                             ${c.observacao ? `<div style="margin-top: 8px; font-size: 10px; color: #475569; background: #f1f5f9; padding: 4px; border-radius: 4px; line-height: 1.4;"><strong>Obs:</strong> ${c.observacao}</div>` : ''}
                         </td>
@@ -1825,57 +1847,10 @@ async function carregarCadastros() {
                         <td>${realizadoPor}</td>
                     </tr>
                 `;
-            }).join('') : '<tr><td colspan="7" style="text-align: center; color: #7f8c8d; padding: 20px;">Nenhuma solicitação pendente encontrada.</td></tr>';
+            }).join('') : '<tr><td colspan="7" style="text-align: center; color: #7f8c8d; padding: 20px;">Nenhuma solicitação encontrada.</td></tr>';
         }
     } catch (err) { console.error("Erro ao carregar cadastros:", err); }
 }
-
-async function alterarStatusCadastro(id, novoStatus) {
-    if(!confirm(`Confirma a mudança de status para "${novoStatus}"?`)) return;
-
-    try {
-        let updateData = { status: novoStatus };
-
-        // Se marcou como "Realizado", o sistema "rouba" o nome e e-mail da sua sessão ativa para gravar lá
-        if (novoStatus === 'Realizado') {
-            if (typeof window.usuarioAtual !== 'undefined' && window.usuarioAtual) {
-                updateData.realizado_por_nome = window.usuarioAtual.nome;
-                updateData.realizado_por_email = window.usuarioAtual.email;
-                updateData.data_realizado = new Date().toISOString();
-            }
-        } else {
-            // Se voltou para Aguardando ou Pendente, apaga a assinatura de quem realizou
-            updateData.realizado_por_nome = null;
-            updateData.realizado_por_email = null;
-            updateData.data_realizado = null;
-        }
-
-        const { error } = await supabase.from('solicitacoes_cadastro').update(updateData).eq('id', id);
-        if (error) throw error;
-        
-        carregarCadastros();
-    } catch (err) { alert("Erro ao atualizar status: " + err.message); }
-}
-
-function abrirModalObsCadastro(id, obsAtual) {
-    document.getElementById('obs_cad_id').value = id;
-    document.getElementById('obs_cad_texto').value = obsAtual && obsAtual !== 'undefined' ? obsAtual : '';
-    abrirModal('modal-obs-cadastro');
-}
-
-async function salvarObsCadastro() {
-    const id = document.getElementById('obs_cad_id').value;
-    const obs = document.getElementById('obs_cad_texto').value;
-
-    try {
-        const { error } = await supabase.from('solicitacoes_cadastro').update({ observacao: obs }).eq('id', id);
-        if (error) throw error;
-        
-        fecharModal('modal-obs-cadastro');
-        carregarCadastros();
-    } catch (err) { alert("Erro ao salvar observação: " + err.message); }
-}
-
 // ==========================================
 // NOVA ABA: SOLICITAÇÕES DE TREINAMENTO
 // ==========================================
