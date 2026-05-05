@@ -1880,3 +1880,140 @@ async function salvarObsCadastro() {
         carregarCadastros();
     } catch (err) { alert("Erro ao salvar observação: " + err.message); }
 }
+// ==========================================
+// FUNÇÕES FALTANTES: SOLICITAÇÕES AD E TREINAMENTOS (EXTERNOS)
+// ==========================================
+
+// --- 1. GESTÃO DE SOLICITAÇÕES DE LOGIN AD ---
+function verificarEnterAD(event) {
+    if (event.key === 'Enter') carregarSolicitacoesAD();
+}
+
+async function carregarSolicitacoesAD() {
+    const status = document.getElementById('filtro_ad_status').value;
+    const nome = document.getElementById('filtro_ad_nome').value.trim();
+
+    try {
+        let query = supabase.from('solicitacoes_ad').select('*').order('created_at', { ascending: false });
+
+        if (status) query = query.eq('status', status);
+        if (nome) query = query.ilike('nome_completo', `%${nome}%`);
+
+        const { data, error } = await query;
+        if (error) throw error;
+
+        const tbody = document.getElementById('lista-ad-aba');
+        if (tbody) {
+            tbody.innerHTML = data.length > 0 ? data.map(c => {
+                let corStatus = '#f39c12'; // Pendente
+                if (c.status === 'Realizado') corStatus = '#2ecc71'; 
+                if (c.status === 'Cancelado' || c.status === 'Pausado') corStatus = '#e74c3c'; 
+
+                const realizadoPor = c.realizado_por_nome 
+                    ? `<span style="font-size: 11px;"><strong>${c.realizado_por_nome}</strong></span>`
+                    : '-';
+
+                return `
+                    <tr>
+                        <td style="font-size: 12px;">${new Date(c.created_at).toLocaleDateString('pt-BR')} <br><small>${new Date(c.created_at).toLocaleTimeString('pt-BR')}</small></td>
+                        <td style="font-size: 12px;"><strong>${c.nome_completo}</strong></td>
+                        <td style="font-size: 12px;">${c.cpf || '-'}</td>
+                        <td>
+                            <span style="background-color: ${corStatus}; color: white; padding: 4px 8px; border-radius: 4px; font-size: 11px; font-weight: bold; display: block; text-align: center;">${c.status || 'Pendente'}</span>
+                        </td>
+                        <td>
+                            <div style="display: flex; gap: 4px; flex-wrap: nowrap; width: max-content; justify-content: center;">
+                                ${c.status !== 'Realizado' ? `
+                                    <button class="btn-success btn-sm" style="margin: 0; padding: 6px 10px;" onclick="alterarStatusAD('${c.id}', 'Realizado')">✔️ Finalizar</button>
+                                ` : `
+                                    <button class="btn-primary btn-sm" style="background: #e67e22; margin: 0; padding: 6px 10px;" onclick="alterarStatusAD('${c.id}', 'Pendente')">↩️ Desfazer</button>
+                                `}
+                            </div>
+                        </td>
+                        <td>${realizadoPor}</td>
+                    </tr>
+                `;
+            }).join('') : '<tr><td colspan="6" style="text-align: center; color: #7f8c8d; padding: 20px;">Nenhuma solicitação de AD encontrada.</td></tr>';
+        }
+    } catch (err) { console.error("Erro ao carregar AD:", err); }
+}
+
+async function alterarStatusAD(id, novoStatus) {
+    if(!confirm(`Confirma a mudança de status para "${novoStatus}"?`)) return;
+
+    try {
+        let updateData = { status: novoStatus };
+
+        // Se finalizou, pega o nome de quem está logado no sistema para auditar
+        if (novoStatus === 'Realizado' && typeof window.usuarioAtual !== 'undefined' && window.usuarioAtual) {
+            updateData.realizado_por_nome = window.usuarioAtual.nome;
+        } else if (novoStatus === 'Pendente') {
+            updateData.realizado_por_nome = null;
+        }
+
+        const { error } = await supabase.from('solicitacoes_ad').update(updateData).eq('id', id);
+        if (error) throw error;
+        
+        carregarSolicitacoesAD();
+    } catch (err) { alert("Erro ao atualizar AD: " + err.message); }
+}
+
+// --- 2. GESTÃO DE SOLICITAÇÕES DE TREINAMENTO (VINDAS DO SITE) ---
+async function carregarSolicitacoesTreinamento() {
+    const status = document.getElementById('filtro_sol_tr_status').value;
+
+    try {
+        let query = supabase.from('solicitacoes_treinamento').select('*').order('created_at', { ascending: false });
+
+        if (status) query = query.eq('status', status);
+
+        const { data, error } = await query;
+        if (error) throw error;
+
+        const tbody = document.getElementById('lista-solicita-treinamento-aba');
+        if (tbody) {
+            tbody.innerHTML = data.length > 0 ? data.map(t => {
+                let corStatus = '#f39c12'; // Pendente
+                if (t.status === 'Agendado' || t.status === 'Realizado') corStatus = '#2ecc71'; 
+                if (t.status === 'Cancelado') corStatus = '#e74c3c'; 
+
+                // Ajuste para não quebrar caso a coluna venha vazia do banco
+                const setorFormatado = t.setor || t.cargo || '-';
+                const contatoFormatado = t.telefone || t.celular || '-';
+
+                return `
+                    <tr>
+                        <td style="font-size: 12px;">${new Date(t.created_at).toLocaleDateString('pt-BR')} <br><small>${new Date(t.created_at).toLocaleTimeString('pt-BR')}</small></td>
+                        <td style="font-size: 12px;"><strong>${t.nome_solicitante || t.nome || '-'}</strong><br><small>${contatoFormatado}</small></td>
+                        <td style="font-size: 12px;">${setorFormatado}</td>
+                        <td style="font-size: 12px;"><strong>${t.tema || '-'}</strong></td>
+                        <td>
+                            <span style="background-color: ${corStatus}; color: white; padding: 4px 8px; border-radius: 4px; font-size: 11px; font-weight: bold; display: block; text-align: center;">${t.status || 'Pendente'}</span>
+                        </td>
+                        <td>
+                            <div style="display: flex; gap: 4px; flex-wrap: nowrap; width: max-content; justify-content: center;">
+                                ${t.status === 'Pendente' || !t.status ? `
+                                    <button class="btn-success btn-sm" style="margin: 0; padding: 6px 10px;" onclick="alterarStatusTreinamentoExt('${t.id}', 'Agendado')">📅 Agendar</button>
+                                    <button class="btn-danger btn-sm" style="margin: 0; padding: 6px 10px;" onclick="alterarStatusTreinamentoExt('${t.id}', 'Cancelado')">❌ Baixa</button>
+                                ` : `
+                                    <button class="btn-primary btn-sm" style="background: #e67e22; margin: 0; padding: 6px 10px;" onclick="alterarStatusTreinamentoExt('${t.id}', 'Pendente')">↩️ Desfazer</button>
+                                `}
+                            </div>
+                        </td>
+                    </tr>
+                `;
+            }).join('') : '<tr><td colspan="6" style="text-align: center; color: #7f8c8d; padding: 20px;">Nenhuma solicitação encontrada.</td></tr>';
+        }
+    } catch (err) { console.error("Erro ao carregar solicitações de treinamento:", err); }
+}
+
+async function alterarStatusTreinamentoExt(id, novoStatus) {
+    if(!confirm(`Confirma a mudança de status para "${novoStatus}"?`)) return;
+
+    try {
+        const { error } = await supabase.from('solicitacoes_treinamento').update({ status: novoStatus }).eq('id', id);
+        if (error) throw error;
+        
+        carregarSolicitacoesTreinamento();
+    } catch (err) { alert("Erro ao atualizar Treinamento: " + err.message); }
+}
