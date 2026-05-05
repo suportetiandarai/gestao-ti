@@ -2015,6 +2015,19 @@ async function carregarSolicitacoesTreinamento() {
                 const setorFormatado = t.setor || t.cargo || '-';
                 const contatoFormatado = t.telefone || t.celular || '-';
 
+                // 🟢 LÓGICA BLINDADA: Só mostra "Desfazer" se estiver Agendado ou Cancelado. Realizado some tudo.
+                let botoesAcao = '';
+                if (t.status === 'Pendente' || !t.status) {
+                    botoesAcao = `
+                        <button class="btn-success btn-sm" style="margin: 0; padding: 6px 10px;" onclick="prepararAgendamento('${t.id}', '${t.nome_solicitante || t.nome || ''}', '${t.telefone || t.celular || ''}', '${t.tema || ''}')">📅 Agendar</button>
+                        <button class="btn-danger btn-sm" style="margin: 0; padding: 6px 10px;" onclick="alterarStatusTreinamentoExt('${t.id}', 'Cancelado')">❌ Baixa</button>
+                    `;
+                } else if (t.status === 'Agendado' || t.status === 'Cancelado') {
+                    botoesAcao = `
+                        <button class="btn-primary btn-sm" style="background: #e67e22; margin: 0; padding: 6px 10px;" onclick="alterarStatusTreinamentoExt('${t.id}', 'Pendente')">↩️ Desfazer</button>
+                    `;
+                }
+
                 return `
                     <tr>
                         <td style="font-size: 12px;">${new Date(t.created_at).toLocaleDateString('pt-BR')} <br><small>${new Date(t.created_at).toLocaleTimeString('pt-BR')}</small></td>
@@ -2026,12 +2039,7 @@ async function carregarSolicitacoesTreinamento() {
                         </td>
                         <td>
                             <div style="display: flex; gap: 4px; flex-wrap: nowrap; width: max-content; justify-content: center;">
-                                ${t.status === 'Pendente' || !t.status ? `
-                                    <button class="btn-success btn-sm" style="margin: 0; padding: 6px 10px;" onclick="prepararAgendamento('${t.id}', '${t.nome_solicitante || t.nome}', '${t.telefone || t.celular}', '${t.tema}')">📅 Agendar</button>
-                                    <button class="btn-danger btn-sm" style="margin: 0; padding: 6px 10px;" onclick="alterarStatusTreinamentoExt('${t.id}', 'Cancelado')">❌ Baixa</button>
-                                ` : `
-                                    <button class="btn-primary btn-sm" style="background: #e67e22; margin: 0; padding: 6px 10px;" onclick="alterarStatusTreinamentoExt('${t.id}', 'Pendente')">↩️ Desfazer</button>
-                                `}
+                                ${botoesAcao}
                             </div>
                         </td>
                     </tr>
@@ -2040,7 +2048,6 @@ async function carregarSolicitacoesTreinamento() {
         }
     } catch (err) { console.error("Erro ao carregar solicitações de treinamento:", err); }
 }
-
 async function alterarStatusTreinamentoExt(id, novoStatus) {
     if(!confirm(`Confirma a mudança de status para "${novoStatus}"?`)) return;
 
