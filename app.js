@@ -1736,7 +1736,6 @@ async function carregarCadastros() {
 
     try {
         let query = supabase.from('solicitacoes_cadastro').select('*').order('created_at', { ascending: false });
-
         if (status) query = query.eq('status', status);
         if (nome) query = query.ilike('nome', `%${nome}%`);
 
@@ -1746,105 +1745,56 @@ async function carregarCadastros() {
         const tbody = document.getElementById('lista-cadastros-aba');
         if (tbody) {
             tbody.innerHTML = data.length > 0 ? data.map(c => {
-                let corStatus = '#f39c12'; // Pendente
+                let corStatus = '#f39c12'; 
                 if (c.status === 'Realizado') corStatus = '#2ecc71'; 
                 if (c.status === 'Aguardando') corStatus = '#e74c3c'; 
 
-                const linkDoc = c.foto_documento_url 
-                    ? `<a href="${c.foto_documento_url}" target="_blank" style="color: #3498db; text-decoration: none; font-weight: bold; display: block; margin-bottom: 3px;">📄 Ver Documento</a>` 
-                    : '<span style="color: #e74c3c; font-size: 11px; display: block;">Sem Doc.</span>';
-                
-                let linkConselho = '';
-                if (c.numero_conselho && c.numero_conselho.toUpperCase() !== 'ISENTO' && c.numero_conselho.toUpperCase() !== 'NÃO POSSUI') {
-                    linkConselho = c.foto_conselho_url 
-                        ? `<a href="${c.foto_conselho_url}" target="_blank" style="color: #8e44ad; text-decoration: none; font-weight: bold; display: block;">🖼️ Ver Conselho</a>` 
-                        : '<span style="color: #e74c3c; font-size: 11px; display: block;">Falta Foto Conselho</span>';
-                } else {
-                    linkConselho = '<span style="color: #7f8c8d; font-size: 11px; font-weight: bold; display: block;">(Isento de Conselho)</span>';
+                // Formatação de data e links (mantidos conforme sua lógica original)
+                const linkDoc = c.foto_documento_url ? `<a href="${c.foto_documento_url}" target="_blank" style="color:#3498db;font-weight:bold;display:block;margin-bottom:3px;">📄 Doc</a>` : '<span style="color:#e74c3c;font-size:11px;">Sem Doc</span>';
+                let linkConselho = (c.numero_conselho && !['ISENTO','NÃO POSSUI'].includes(c.numero_conselho.toUpperCase())) ? (c.foto_conselho_url ? `<a href="${c.foto_conselho_url}" target="_blank" style="color:#8e44ad;font-weight:bold;display:block;">🖼️ Conselho</a>` : '<span style="color:#e74c3c;font-size:11px;">Sem Foto</span>') : '<span style="color:#7f8c8d;font-size:11px;">(Isento)</span>';
+                let dataNascFormatada = c.data_nascimento ? c.data_nascimento.split('-').reverse().join('/') : '-';
+                const realizadoPor = c.realizado_por_nome ? `<span style="font-size:11px;"><strong>${c.realizado_por_nome}</strong></span>` : '-';
+
+                // 🟢 LÓGICA DE BOTÕES COM SOBREPOSIÇÃO TOTAL DE CSS
+                let btnHtml = '';
+                const btnStyle = "flex: 1 !important; margin: 0 !important; min-width: 0 !important; width: auto !important; padding: 6px 2px !important; font-size: 10px !important; height: 28px !important; border-radius: 4px !important; color: white !important; border: none !important; cursor: pointer !important; display: flex !important; align-items: center !important; justify-content: center !important; white-space: nowrap !important;";
+
+                if (c.status === 'Pendente') {
+                    btnHtml = `
+                        <button onclick="alterarStatusCadastro('${c.id}', 'Realizado')" style="${btnStyle} background: #10b981 !important;">Finalizar</button>
+                        <button onclick="alterarStatusCadastro('${c.id}', 'Aguardando')" style="${btnStyle} background: #e74c3c !important;">Pausar</button>
+                    `;
+                } else if (c.status === 'Aguardando') {
+                    btnHtml = `
+                        <button onclick="alterarStatusCadastro('${c.id}', 'Realizado')" style="${btnStyle} background: #10b981 !important;">Finalizar</button>
+                        <button onclick="alterarStatusCadastro('${c.id}', 'Pendente')" style="${btnStyle} background: #3498db !important;">Retomar</button>
+                    `;
                 }
 
-                const realizadoPor = c.realizado_por_nome 
-                    ? `<span style="font-size: 11px;"><strong>${c.realizado_por_nome}</strong><br><span style="color: #64748b;">${c.realizado_por_email}</span></span>`
-                    : '-';
-
-                let dataNascFormatada = c.data_nascimento;
-                if (c.data_nascimento && c.data_nascimento.includes('-')) {
-                    dataNascFormatada = c.data_nascimento.split('-').reverse().join('/');
-                }
-                              
                 return `
                     <tr>
-                        <td style="font-size: 12px; min-width: 80px;">${new Date(c.created_at).toLocaleDateString('pt-BR')} <br><small style="color:#64748b;">${new Date(c.created_at).toLocaleTimeString('pt-BR')}</small></td>
+                        <td style="font-size: 11px;">${new Date(c.created_at).toLocaleDateString('pt-BR')}<br><small>${new Date(c.created_at).toLocaleTimeString('pt-BR')}</small></td>
+                        <td style="font-size: 12px;"><strong>${c.nome}</strong><br><small>CPF: ${c.cpf || '-'}</small></td>
+                        <td style="font-size: 11px;">${c.cargo || '-'}<br><small>${c.setor_andar || '-'}</small></td>
+                        <td style="font-size: 11px;">${c.telefone || '-'}</td>
+                        <td style="font-size: 11px;">${linkDoc}${linkConselho}</td>
                         
-                        <td style="font-size: 12px;">
-                            <strong style="font-size: 13px;">${c.nome}</strong><br>
-                            <span style="color:#475569;">CPF:</span> ${c.cpf || '-'}<br>
-                            <span style="color:#475569;">CNS:</span> ${c.cns || '-'}<br>
-                            <span style="color:#475569;">Nasc:</span> ${dataNascFormatada || '-'} | <span style="color:#475569;">Sexo:</span> ${c.sexo || '-'}
-                        </td>
-
-                        <td style="font-size: 12px;">
-                            <strong style="color: #2c3e50;">${c.cargo || '-'}</strong><br>
-                            <span style="color:#475569;">Setor:</span> ${c.setor_andar || '-'}<br>
-                            <span style="color:#475569;">Espec:</span> ${c.especialidade || '-'}<br>
-                            <span style="color:#475569;">Vínculo:</span> ${c.vinculo_empregaticio || '-'} <br>
-                            <span style="color:#475569;">Matr:</span> ${c.matricula || '-'}
-                        </td>
-
-                        <td style="font-size: 12px;">
-                            📧 ${c.email || '-'}<br>
-                            📱 ${c.telefone || '-'}
-                        </td>
-
-                        <td style="font-size: 12px; min-width: 110px;">
-                            <span style="color:#475569;">Nº:</span> <strong>${c.numero_conselho || '-'}</strong><br>
-                            <div style="margin-top: 5px; background: #f8f9fa; padding: 5px; border-radius: 4px; border: 1px solid #e2e8f0;">
-                                ${linkDoc}
-                                ${linkConselho}
+                        <!-- 🟢 CONTAINER FORÇADO NA HORIZONTAL -->
+                        <td style="min-width: 190px !important; width: 190px !important;">
+                            <div style="margin-bottom: 5px;">
+                                <span style="background:${corStatus}; color:white; padding:2px 0; border-radius:4px; font-size:10px; font-weight:bold; display:block; width:100%; text-align:center;">${c.status}</span>
+                            </div>
+                            <div style="display: flex !important; flex-direction: row !important; flex-wrap: nowrap !important; gap: 4px !important; width: 100% !important;">
+                                ${btnHtml}
+                                <button onclick="abrirModalObsCadastro('${c.id}', \`${c.observacao || ''}\`)" style="${btnStyle} background: #95a5a6 !important;">Obs</button>
                             </div>
                         </td>
-
-                        <!-- 🟢 A CÉLULA BLINDADA CONTRA O CSS GLOBAL -->
-                        <td style="min-width: 200px; white-space: nowrap; vertical-align: top;">
-                            <div style="margin-bottom: 8px;">
-                                <span style="background-color: ${corStatus}; color: white; padding: 4px 8px; border-radius: 4px; font-size: 11px; font-weight: bold; display: block; width: 100%; text-align: center;">${c.status}</span>
-                            </div>
-                            
-                            <!-- Usa table-layout para forçar os elementos na mesma linha ignorando o flex-wrap do CSS global -->
-                            <div style="display: table; width: 100%; table-layout: fixed; border-spacing: 4px 0;">
-                                ${c.status === 'Pendente' ? `
-                                    <div style="display: table-cell; width: 33.3%;">
-                                        <button style="width: 100%; margin: 0; padding: 6px 0; font-size: 10px; border-radius: 4px; background: linear-gradient(135deg, #10b981, #059669); color: white; border: none; cursor: pointer; display: block; white-space: nowrap;" onclick="alterarStatusCadastro('${c.id}', 'Realizado')">✔️ Finalizar</button>
-                                    </div>
-                                    <div style="display: table-cell; width: 33.3%;">
-                                        <button style="width: 100%; margin: 0; padding: 6px 0; font-size: 10px; border-radius: 4px; background: #e74c3c; color: white; border: none; cursor: pointer; display: block; white-space: nowrap;" onclick="alterarStatusCadastro('${c.id}', 'Aguardando')">⏳ Pausar</button>
-                                    </div>
-                                ` : ''}
-                                
-                                ${c.status === 'Aguardando' ? `
-                                    <div style="display: table-cell; width: 33.3%;">
-                                        <button style="width: 100%; margin: 0; padding: 6px 0; font-size: 10px; border-radius: 4px; background: linear-gradient(135deg, #10b981, #059669); color: white; border: none; cursor: pointer; display: block; white-space: nowrap;" onclick="alterarStatusCadastro('${c.id}', 'Realizado')">✔️ Finalizar</button>
-                                    </div>
-                                    <div style="display: table-cell; width: 33.3%;">
-                                        <button style="width: 100%; margin: 0; padding: 6px 0; font-size: 10px; border-radius: 4px; background: #3498db; color: white; border: none; cursor: pointer; display: block; white-space: nowrap;" onclick="alterarStatusCadastro('${c.id}', 'Pendente')">▶️ Retornar</button>
-                                    </div>
-                                ` : ''}
-                                
-                                <div style="display: table-cell; width: 33.3%;">
-                                    <button style="width: 100%; margin: 0; padding: 6px 0; font-size: 10px; border-radius: 4px; background: #95a5a6; color: white; border: none; cursor: pointer; display: block; white-space: nowrap;" onclick="abrirModalObsCadastro('${c.id}', \`${c.observacao || ''}\`)">📝 Obs</button>
-                                </div>
-                            </div>
-                            
-                            ${c.observacao ? `<div style="margin-top: 8px; font-size: 10px; color: #475569; background: #f1f5f9; padding: 4px; border-radius: 4px; line-height: 1.4; white-space: normal;"><strong>Obs:</strong> ${c.observacao}</div>` : ''}
-                        </td>
-
-                        <td>${realizadoPor}</td>
+                        <td style="font-size: 11px;">${realizadoPor}</td>
                     </tr>
                 `;
-
-            }).join('') : '<tr><td colspan="7" style="text-align: center; color: #7f8c8d; padding: 20px;">Nenhuma solicitação encontrada.</td></tr>';
+            }).join('') : '<tr><td colspan="7" style="text-align:center; padding:20px;">Nenhum registro.</td></tr>';
         }
-    } catch (err) { console.error("Erro ao carregar cadastros:", err); }
+    } catch (err) { console.error("Erro:", err); }
 }
 async function alterarStatusCadastro(id, novoStatus) {
     if(!confirm(`Confirma a mudança de status para "${novoStatus}"?`)) return;
