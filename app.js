@@ -1966,6 +1966,12 @@ async function carregarSolicitacoesAD() {
                         <td style="font-size: 12px;"><strong>${c.nome_completo}</strong></td>
                         <td style="font-size: 12px;">${c.cpf || '-'}</td>
                         
+                        <!-- 🟢 NOVA COLUNA DE CONTATO -->
+                        <td style="font-size: 12px;">
+                            📧 ${c.email || '-'}<br>
+                            📱 ${c.telefone || '-'}
+                        </td>
+                        
                         <td style="min-width: 160px;">
                             <div style="margin-bottom: 8px;">
                                 <span style="background-color: ${corStatus}; color: white; padding: 4px 8px; border-radius: 4px; font-size: 11px; font-weight: bold; display: block; width: 100%; text-align: center;">${c.status || 'Pendente'}</span>
@@ -1981,7 +1987,7 @@ async function carregarSolicitacoesAD() {
                         <td style="font-size: 11px;">${realizadoPor}</td>
                     </tr>
                 `;
-            }).join('') : '<tr><td colspan="5" style="text-align: center; color: #7f8c8d; padding: 20px;">Nenhuma solicitação de AD encontrada.</td></tr>';
+            }).join('') : '<tr><td colspan="6" style="text-align: center; color: #7f8c8d; padding: 20px;">Nenhuma solicitação de AD encontrada.</td></tr>';
         }
     } catch (err) { console.error("Erro ao carregar AD:", err); }
 }
