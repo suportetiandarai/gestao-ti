@@ -2043,6 +2043,7 @@ async function darBaixaAD(id) {
     } catch (err) { alert("Erro ao dar baixa: " + err.message); }
 }
 // --- 2. GESTÃO DE SOLICITAÇÕES DE TREINAMENTO (VINDAS DO SITE) ---
+// --- 2. GESTÃO DE SOLICITAÇÕES DE TREINAMENTO (VINDAS DO SITE) ---
 async function carregarSolicitacoesTreinamento() {
     const status = document.getElementById('filtro_sol_tr_status').value;
 
@@ -2065,36 +2066,45 @@ async function carregarSolicitacoesTreinamento() {
                 const setorFormatado = t.setor || t.cargo || '-';
                 const contatoFormatado = t.telefone || t.celular || '-';
 
-                // 🟢 LÓGICA BLINDADA: Só mostra "Desfazer" se estiver Agendado ou Cancelado. Realizado some tudo.
+                // 🟢 VERIFICA SE QUEM ESTÁ LOGADO É ADMIN
+                const isAdmin = typeof window.usuarioAtual !== 'undefined' && window.usuarioAtual && window.usuarioAtual.role === 'admin';
+
+                // 🟢 LÓGICA DE BOTÕES UNIFICADA E BLINDADA
                 let botoesAcao = '';
                 if (t.status === 'Pendente' || !t.status) {
                     botoesAcao = `
-                        <button class="btn-success btn-sm" style="margin: 0; padding: 6px 10px;" onclick="prepararAgendamento('${t.id}', '${t.nome_solicitante || t.nome || ''}', '${t.telefone || t.celular || ''}', '${t.tema || ''}')">📅 Agendar</button>
-                        <button class="btn-danger btn-sm" style="margin: 0; padding: 6px 10px;" onclick="alterarStatusTreinamentoExt('${t.id}', 'Cancelado')">❌ Baixa</button>
+                        <button class="btn-success btn-sm" style="flex: 1; margin: 0; padding: 6px 4px;" onclick="prepararAgendamento('${t.id}', '${t.nome_solicitante || t.nome || ''}', '${t.telefone || t.celular || ''}', '${t.tema || ''}')">📅 Agendar</button>
+                        <button class="btn-danger btn-sm" style="flex: 1; margin: 0; padding: 6px 4px;" onclick="alterarStatusTreinamentoExt('${t.id}', 'Cancelado')">❌ Baixa</button>
                     `;
-                } else if (t.status === 'Agendado' || t.status === 'Cancelado') {
-                    botoesAcao = `
-                        <button class="btn-primary btn-sm" style="background: #e67e22; margin: 0; padding: 6px 10px;" onclick="alterarStatusTreinamentoExt('${t.id}', 'Pendente')">↩️ Desfazer</button>
-                    `;
+                } else {
+                    // Se estiver Agendado, Cancelado ou Realizado, SÓ mostra o Desfazer se for Admin
+                    if (isAdmin) {
+                        botoesAcao = `
+                            <button class="btn-primary btn-sm" style="background: #e67e22; flex: 1; margin: 0; padding: 6px 4px;" onclick="alterarStatusTreinamentoExt('${t.id}', 'Pendente')">↩️ Desfazer</button>
+                        `;
+                    }
                 }
 
                 return `
                     <tr>
-                        <td style="font-size: 12px;">${new Date(t.created_at).toLocaleDateString('pt-BR')} <br><small>${new Date(t.created_at).toLocaleTimeString('pt-BR')}</small></td>
+                        <td style="font-size: 12px; min-width: 80px;">${new Date(t.created_at).toLocaleDateString('pt-BR')} <br><small style="color:#64748b;">${new Date(t.created_at).toLocaleTimeString('pt-BR')}</small></td>
                         <td style="font-size: 12px;"><strong>${t.nome_solicitante || t.nome || '-'}</strong><br><small>${contatoFormatado}</small></td>
                         <td style="font-size: 12px;">${setorFormatado}</td>
                         <td style="font-size: 12px;"><strong>${t.tema || '-'}</strong></td>
-                        <td>
-                            <span style="background-color: ${corStatus}; color: white; padding: 4px 8px; border-radius: 4px; font-size: 11px; font-weight: bold; display: block; text-align: center;">${t.status || 'Pendente'}</span>
-                        </td>
-                        <td>
-                            <div style="display: flex; gap: 4px; flex-wrap: nowrap; width: max-content; justify-content: center;">
+                        
+                        <!-- 🟢 STATUS E AÇÕES NA MESMA COLUNA -->
+                        <td style="min-width: 160px;">
+                            <div style="margin-bottom: 8px;">
+                                <span style="background-color: ${corStatus}; color: white; padding: 4px 8px; border-radius: 4px; font-size: 11px; font-weight: bold; display: block; width: 100%; text-align: center;">${t.status || 'Pendente'}</span>
+                            </div>
+                            
+                            <div style="display: flex; gap: 4px; flex-wrap: nowrap; justify-content: center;">
                                 ${botoesAcao}
                             </div>
                         </td>
                     </tr>
                 `;
-            }).join('') : '<tr><td colspan="6" style="text-align: center; color: #7f8c8d; padding: 20px;">Nenhuma solicitação encontrada.</td></tr>';
+            }).join('') : '<tr><td colspan="5" style="text-align: center; color: #7f8c8d; padding: 20px;">Nenhuma solicitação encontrada.</td></tr>';
         }
     } catch (err) { console.error("Erro ao carregar solicitações de treinamento:", err); }
 }
