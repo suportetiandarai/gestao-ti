@@ -1776,22 +1776,18 @@ async function carregarCadastros() {
                     dataNascFormatada = c.data_nascimento.split('-').reverse().join('/');
                 }
 
-              // 🟢 LÓGICA DOS BOTÕES (Textos mais curtos e com margin-bottom para empilhar)
+                // 🟢 AQUI ESTÁ A LÓGICA NOVA DOS BOTÕES:
                 let botoesAcao = '';
-                
                 if (c.status === 'Pendente') {
                     botoesAcao = `
-                        <button class="btn-success btn-sm" style="width: 100%; padding: 6px; font-size: 11px; margin-bottom: 4px;" onclick="alterarStatusCadastro('${c.id}', 'Realizado')">✔️ Finalizar</button>
+                        <button class="btn-success btn-sm" style="width: 100%; padding: 6px; font-size: 11px;" onclick="alterarStatusCadastro('${c.id}', 'Realizado')">✔️ Finalizar</button>
                         <button class="btn-primary btn-sm" style="background: #e74c3c; width: 100%; padding: 6px; font-size: 11px;" onclick="alterarStatusCadastro('${c.id}', 'Aguardando')">⏳ Pausar</button>
                     `;
                 } else if (c.status === 'Aguardando') {
+                    // Quando cai no filtro aguardando, o botão de pausar some e o de retornar aparece
                     botoesAcao = `
-                        <button class="btn-primary btn-sm" style="background: #3498db; width: 100%; padding: 6px; font-size: 11px; margin-bottom: 4px;" onclick="alterarStatusCadastro('${c.id}', 'Pendente')">▶️ Retomar</button>
                         <button class="btn-success btn-sm" style="width: 100%; padding: 6px; font-size: 11px;" onclick="alterarStatusCadastro('${c.id}', 'Realizado')">✔️ Finalizar</button>
-                    `;
-                } else if (c.status === 'Realizado') {
-                    botoesAcao = `
-                        <button class="btn-primary btn-sm" style="background: #e67e22; width: 100%; padding: 6px; font-size: 11px;" onclick="alterarStatusCadastro('${c.id}', 'Pendente')">↩️ Desfazer</button>
+                        <button class="btn-primary btn-sm" style="background: #3498db; width: 100%; padding: 6px; font-size: 11px;" onclick="alterarStatusCadastro('${c.id}', 'Pendente')">▶️ Retornar</button>
                     `;
                 }
 
@@ -1827,13 +1823,12 @@ async function carregarCadastros() {
                             </div>
                         </td>
 
-                        <!-- 🟢 AJUSTE DE RESPONSIVIDADE NA CÉLULA DE AÇÕES -->
-                        <td style="min-width: 120px; vertical-align: top;">
+                        <td style="min-width: 140px;">
                             <div style="margin-bottom: 8px;">
-                                <span style="background-color: ${corStatus}; color: white; padding: 4px 0; border-radius: 4px; font-size: 11px; font-weight: bold; display: block; width: 100%; text-align: center;">${c.status}</span>
+                                <span style="background-color: ${corStatus}; color: white; padding: 4px 8px; border-radius: 4px; font-size: 11px; font-weight: bold; display: inline-block; width: 100%; text-align: center;">${c.status}</span>
                             </div>
                             
-                            <!-- Mudamos para flex-direction: column para empilhar direitinho -->
+                            <!-- 🟢 Coluna Responsiva (flex-direction: column) -->
                             <div style="display: flex; flex-direction: column; gap: 4px;">
                                 ${botoesAcao}
                                 <button class="btn-primary btn-sm" style="background: #95a5a6; width: 100%; padding: 6px; font-size: 11px;" onclick="abrirModalObsCadastro('${c.id}', \`${c.observacao || ''}\`)">📝 Obs</button>
@@ -1845,9 +1840,55 @@ async function carregarCadastros() {
                         <td>${realizadoPor}</td>
                     </tr>
                 `;
-            }).join('') : '<tr><td colspan="7" style="text-align: center; color: #7f8c8d; padding: 20px;">Nenhuma solicitação encontrada.</td></tr>';
+            }).join('') : '<tr><td colspan="7" style="text-align: center; color: #7f8c8d; padding: 20px;">Nenhuma solicitação pendente encontrada.</td></tr>';
         }
     } catch (err) { console.error("Erro ao carregar cadastros:", err); }
+}
+
+async function alterarStatusCadastro(id, novoStatus) {
+    if(!confirm(`Confirma a mudança de status para "${novoStatus}"?`)) return;
+
+    try {
+        let updateData = { status: novoStatus };
+
+        // Se marcou como "Realizado", o sistema "rouba" o nome e e-mail da sua sessão ativa para gravar lá
+        if (novoStatus === 'Realizado') {
+            if (typeof window.usuarioAtual !== 'undefined' && window.usuarioAtual) {
+                updateData.realizado_por_nome = window.usuarioAtual.nome;
+                updateData.realizado_por_email = window.usuarioAtual.email;
+                updateData.data_realizado = new Date().toISOString();
+            }
+        } else {
+            // Se voltou para Aguardando ou Pendente, apaga a assinatura de quem realizou
+            updateData.realizado_por_nome = null;
+            updateData.realizado_por_email = null;
+            updateData.data_realizado = null;
+        }
+
+        const { error } = await supabase.from('solicitacoes_cadastro').update(updateData).eq('id', id);
+        if (error) throw error;
+        
+        carregarCadastros();
+    } catch (err) { alert("Erro ao atualizar status: " + err.message); }
+}
+
+function abrirModalObsCadastro(id, obsAtual) {
+    document.getElementById('obs_cad_id').value = id;
+    document.getElementById('obs_cad_texto').value = obsAtual && obsAtual !== 'undefined' ? obsAtual : '';
+    abrirModal('modal-obs-cadastro');
+}
+
+async function salvarObsCadastro() {
+    const id = document.getElementById('obs_cad_id').value;
+    const obs = document.getElementById('obs_cad_texto').value;
+
+    try {
+        const { error } = await supabase.from('solicitacoes_cadastro').update({ observacao: obs }).eq('id', id);
+        if (error) throw error;
+        
+        fecharModal('modal-obs-cadastro');
+        carregarCadastros();
+    } catch (err) { alert("Erro ao salvar observação: " + err.message); }
 }
 // ==========================================
 // NOVA ABA: SOLICITAÇÕES DE TREINAMENTO
