@@ -1776,7 +1776,7 @@ async function carregarCadastros() {
                     dataNascFormatada = c.data_nascimento.split('-').reverse().join('/');
                 }
 
-                // 🟢 LÓGICA DOS BOTÕES (Usando flex: 1 para ficarem lado a lado)
+                // 🟢 A LÓGICA QUE TROCA O BOTÃO:
                 let botoesAcao = '';
                 if (c.status === 'Pendente') {
                     botoesAcao = `
@@ -1827,10 +1827,10 @@ async function carregarCadastros() {
                                 <span style="background-color: ${corStatus}; color: white; padding: 4px 8px; border-radius: 4px; font-size: 11px; font-weight: bold; display: inline-block; width: 100%; text-align: center;">${c.status}</span>
                             </div>
                             
-                            <!-- 🟢 VOLTAMOS AO FORMATO ORIGINAL: flex-wrap e lado a lado -->
+                            <!-- O layout flex original sem estilos intrusos -->
                             <div style="display: flex; gap: 4px; flex-wrap: wrap; justify-content: center;">
                                 ${botoesAcao}
-                                <button class="btn-primary btn-sm" style="background: #95a5a6; flex: 1; min-width: 100%; padding: 4px; font-size: 11px; margin-top: 2px;" onclick="abrirModalObsCadastro('${c.id}', \`${c.observacao || ''}\`)">📝 Obs</button>
+                                <button class="btn-primary btn-sm" style="background: #95a5a6; flex: 1; padding: 4px; font-size: 11px;" onclick="abrirModalObsCadastro('${c.id}', \`${c.observacao || ''}\`)">📝 Obs</button>
                             </div>
                             
                             ${c.observacao ? `<div style="margin-top: 8px; font-size: 10px; color: #475569; background: #f1f5f9; padding: 4px; border-radius: 4px; line-height: 1.4;"><strong>Obs:</strong> ${c.observacao}</div>` : ''}
