@@ -1753,7 +1753,7 @@ async function carregarCadastros() {
                 // Lógica dos Anexos (Documento e Conselho)
                 const linkDoc = c.foto_documento_url 
                     ? `<a href="${c.foto_documento_url}" target="_blank" style="color: #3498db; text-decoration: none; font-weight: bold; display: block; margin-bottom: 3px;">📄 Ver Documento</a>` 
-                    : '<span style="color: #e74c3c; font-size: 11px; display: block;">Sem Doc.</span>';
+                   : '';
                 
                 // Lógica inteligente para o Conselho (Se tem ou se é isento)
                 let linkConselho = '';
