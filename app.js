@@ -1776,25 +1776,22 @@ async function carregarCadastros() {
                     dataNascFormatada = c.data_nascimento.split('-').reverse().join('/');
                 }
 
-                // 🟢 SOLUÇÃO: Lógica separada para os botões dependendo do Status
+              // 🟢 LÓGICA DOS BOTÕES (Textos mais curtos e com margin-bottom para empilhar)
                 let botoesAcao = '';
                 
                 if (c.status === 'Pendente') {
-                    // Mostra Finalizar e Pausar
                     botoesAcao = `
-                        <button class="btn-success btn-sm" style="flex: 1; padding: 4px; font-size: 11px;" onclick="alterarStatusCadastro('${c.id}', 'Realizado')">✔️ Finalizar</button>
-                        <button class="btn-primary btn-sm" style="background: #e74c3c; flex: 1; padding: 4px; font-size: 11px;" onclick="alterarStatusCadastro('${c.id}', 'Aguardando')">⏳ Pausar</button>
+                        <button class="btn-success btn-sm" style="width: 100%; padding: 6px; font-size: 11px; margin-bottom: 4px;" onclick="alterarStatusCadastro('${c.id}', 'Realizado')">✔️ Finalizar</button>
+                        <button class="btn-primary btn-sm" style="background: #e74c3c; width: 100%; padding: 6px; font-size: 11px;" onclick="alterarStatusCadastro('${c.id}', 'Aguardando')">⏳ Pausar</button>
                     `;
                 } else if (c.status === 'Aguardando') {
-                    // Mostra Finalizar e Retomar para Pendente
                     botoesAcao = `
-                        <button class="btn-success btn-sm" style="flex: 1; padding: 4px; font-size: 11px;" onclick="alterarStatusCadastro('${c.id}', 'Realizado')">✔️ Finalizar</button>
-                        <button class="btn-primary btn-sm" style="background: #3498db; flex: 1; padding: 4px; font-size: 11px;" onclick="alterarStatusCadastro('${c.id}', 'Pendente')">▶️ Retomar</button>
+                        <button class="btn-primary btn-sm" style="background: #3498db; width: 100%; padding: 6px; font-size: 11px; margin-bottom: 4px;" onclick="alterarStatusCadastro('${c.id}', 'Pendente')">▶️ Retomar</button>
+                        <button class="btn-success btn-sm" style="width: 100%; padding: 6px; font-size: 11px;" onclick="alterarStatusCadastro('${c.id}', 'Realizado')">✔️ Finalizar</button>
                     `;
                 } else if (c.status === 'Realizado') {
-                    // Mostra apenas o Desfazer (Opcional, mas muito útil caso clique errado)
                     botoesAcao = `
-                        <button class="btn-primary btn-sm" style="background: #e67e22; flex: 1; padding: 4px; font-size: 11px;" onclick="alterarStatusCadastro('${c.id}', 'Pendente')">↩️ Desfazer</button>
+                        <button class="btn-primary btn-sm" style="background: #e67e22; width: 100%; padding: 6px; font-size: 11px;" onclick="alterarStatusCadastro('${c.id}', 'Pendente')">↩️ Desfazer</button>
                     `;
                 }
 
@@ -1830,17 +1827,18 @@ async function carregarCadastros() {
                             </div>
                         </td>
 
-                        <td style="min-width: 140px;">
+                        <!-- 🟢 AJUSTE DE RESPONSIVIDADE NA CÉLULA DE AÇÕES -->
+                        <td style="min-width: 120px; vertical-align: top;">
                             <div style="margin-bottom: 8px;">
-                                <span style="background-color: ${corStatus}; color: white; padding: 4px 8px; border-radius: 4px; font-size: 11px; font-weight: bold; display: inline-block; width: 100%; text-align: center;">${c.status}</span>
+                                <span style="background-color: ${corStatus}; color: white; padding: 4px 0; border-radius: 4px; font-size: 11px; font-weight: bold; display: block; width: 100%; text-align: center;">${c.status}</span>
                             </div>
                             
-                            <div style="display: flex; gap: 4px; flex-wrap: wrap; justify-content: center;">
-                                <!-- Aqui entra a variável com a lógica que criamos acima -->
+                            <!-- Mudamos para flex-direction: column para empilhar direitinho -->
+                            <div style="display: flex; flex-direction: column; gap: 4px;">
                                 ${botoesAcao}
-                                
-                                <button class="btn-primary btn-sm" style="background: #95a5a6; flex: 1; min-width: 100%; padding: 4px; font-size: 11px; margin-top: 2px;" onclick="abrirModalObsCadastro('${c.id}', \`${c.observacao || ''}\`)">📝 Obs</button>
+                                <button class="btn-primary btn-sm" style="background: #95a5a6; width: 100%; padding: 6px; font-size: 11px;" onclick="abrirModalObsCadastro('${c.id}', \`${c.observacao || ''}\`)">📝 Obs</button>
                             </div>
+                            
                             ${c.observacao ? `<div style="margin-top: 8px; font-size: 10px; color: #475569; background: #f1f5f9; padding: 4px; border-radius: 4px; line-height: 1.4;"><strong>Obs:</strong> ${c.observacao}</div>` : ''}
                         </td>
 
