@@ -148,6 +148,9 @@ function abrirAba(idAba) {
     if (idAba === 'aba-solicita-treinamento') {
         carregarSolicitacoesTreinamento();
     }
+    if (idAba === 'aba-solicitacoes-ad') {
+        carregarSolicitacoesAD();
+    }
 
     if (idAba === 'aba-inventario') {
         carregarTiposFiltro();
@@ -1978,4 +1981,84 @@ async function salvarObsSolicitacaoTreinamento() {
         fecharModal('modal-obs-sol-treinamento');
         carregarSolicitacoesTreinamento(); // Atualiza a tabela na hora
     } catch (err) { alert("Erro ao salvar baixa: " + err.message); }
+}
+
+// ==========================================
+// NOVA ABA: SOLICITAÇÕES DE LOGIN AD
+// ==========================================
+
+function verificarEnterAD(event) {
+    if (event.key === 'Enter') carregarSolicitacoesAD();
+}
+
+async function carregarSolicitacoesAD() {
+    const status = document.getElementById('filtro_ad_status').value;
+    const nome = document.getElementById('filtro_ad_nome').value.trim();
+
+    try {
+        let query = supabase.from('solicitacoes_ad').select('*').order('created_at', { ascending: false });
+
+        if (status) query = query.eq('status', status);
+        if (nome) query = query.ilike('nome_completo', `%${nome}%`);
+
+        const { data, error } = await query;
+        if (error) throw error;
+
+        const tbody = document.getElementById('lista-ad-aba');
+        if (tbody) {
+            tbody.innerHTML = data.length > 0 ? data.map(s => {
+                let corStatus = '#f39c12'; // Laranja: Pendente
+                if (s.status === 'Realizado') corStatus = '#2ecc71'; // Verde: Realizado
+
+                // Puxa quem fez a criação do login
+                const realizadoPor = s.realizado_por_nome 
+                    ? `<span style="font-size: 11px;"><strong>${s.realizado_por_nome}</strong><br><span style="color: #64748b;">${s.realizado_por_email}</span></span>`
+                    : '-';
+
+                return `
+                    <tr>
+                        <td style="font-size: 13px;">
+                            <strong>${s.nome_completo}</strong><br>
+                            <small>📧 ${s.email || 'Não informado'}<br>📱 ${s.telefone || 'Não informado'}</small>
+                        </td>
+                        <td style="font-size: 12px;">${s.cpf}</td>
+                        <td><span style="background-color: ${corStatus}; color: white; padding: 4px 8px; border-radius: 4px; font-size: 11px; font-weight: bold;">${s.status}</span></td>
+                        <td>
+                            ${s.status !== 'Realizado' ? `
+                                <button class="btn-success btn-sm" onclick="alterarStatusAD('${s.id}', 'Realizado')">✔️ Finalizar Criação</button>
+                            ` : `
+                                <button class="btn-primary btn-sm" style="background: #e74c3c;" onclick="alterarStatusAD('${s.id}', 'Pendente')">↩️ Desfazer</button>
+                            `}
+                        </td>
+                        <td>${realizadoPor}</td>
+                    </tr>
+                `;
+            }).join('') : '<tr><td colspan="6" style="text-align: center; color: #7f8c8d; padding: 20px;">Nenhuma solicitação encontrada nos filtros atuais.</td></tr>';
+        }
+    } catch (err) { console.error("Erro ao carregar solicitações AD:", err); }
+}
+
+async function alterarStatusAD(id, novoStatus) {
+    if(!confirm(`Confirma a mudança de status para "${novoStatus}"?`)) return;
+
+    try {
+        let updateData = { status: novoStatus };
+
+        // Se marcou como "Realizado", o sistema registra quem estava logado
+        if (novoStatus === 'Realizado') {
+            if (typeof window.usuarioAtual !== 'undefined' && window.usuarioAtual) {
+                updateData.realizado_por_nome = window.usuarioAtual.nome;
+                updateData.realizado_por_email = window.usuarioAtual.email;
+            }
+        } else {
+            // Se desfez para pendente, apaga quem tinha feito
+            updateData.realizado_por_nome = null;
+            updateData.realizado_por_email = null;
+        }
+
+        const { error } = await supabase.from('solicitacoes_ad').update(updateData).eq('id', id);
+        if (error) throw error;
+        
+        carregarSolicitacoesAD();
+    } catch (err) { alert("Erro ao atualizar status: " + err.message); }
 }
