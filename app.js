@@ -1727,112 +1727,301 @@ function mascaraTelefone(tel) {
 // ==========================================
 
 function verificarEnterCadastro(event) {
+
     if (event.key === 'Enter') carregarCadastros();
+
 }
 
+
+
 async function carregarCadastros() {
+
     const status = document.getElementById('filtro_cad_status').value;
+
     const nome = document.getElementById('filtro_cad_nome').value.trim();
 
+
+
     try {
+
         let query = supabase.from('solicitacoes_cadastro').select('*').order('created_at', { ascending: false });
 
+
+
         if (status) query = query.eq('status', status);
+
         if (nome) query = query.ilike('nome', `%${nome}%`);
 
+
+
         const { data, error } = await query;
+
         if (error) throw error;
 
+
+
         const tbody = document.getElementById('lista-cadastros-aba');
+
         if (tbody) {
+
             tbody.innerHTML = data.length > 0 ? data.map(c => {
+
                 let corStatus = '#f39c12'; // Pendente
+
                 if (c.status === 'Realizado') corStatus = '#2ecc71'; 
+
                 if (c.status === 'Aguardando') corStatus = '#e74c3c'; 
 
+
+
+                // Lógica dos Anexos (Documento e Conselho)
+
                 const linkDoc = c.foto_documento_url 
+
                     ? `<a href="${c.foto_documento_url}" target="_blank" style="color: #3498db; text-decoration: none; font-weight: bold; display: block; margin-bottom: 3px;">📄 Ver Documento</a>` 
+
                     : '<span style="color: #e74c3c; font-size: 11px; display: block;">Sem Doc.</span>';
+
                 
+
+                // Lógica inteligente para o Conselho (Se tem ou se é isento)
+
                 let linkConselho = '';
+
                 if (c.numero_conselho && c.numero_conselho.toUpperCase() !== 'ISENTO' && c.numero_conselho.toUpperCase() !== 'NÃO POSSUI') {
+
                     linkConselho = c.foto_conselho_url 
+
                         ? `<a href="${c.foto_conselho_url}" target="_blank" style="color: #8e44ad; text-decoration: none; font-weight: bold; display: block;">🖼️ Ver Conselho</a>` 
+
                         : '<span style="color: #e74c3c; font-size: 11px; display: block;">Falta Foto Conselho</span>';
+
                 } else {
+
                     linkConselho = '<span style="color: #7f8c8d; font-size: 11px; font-weight: bold; display: block;">(Isento de Conselho)</span>';
+
                 }
+
+
+
+                // Quem realizou
 
                 const realizadoPor = c.realizado_por_nome 
+
                     ? `<span style="font-size: 11px;"><strong>${c.realizado_por_nome}</strong><br><span style="color: #64748b;">${c.realizado_por_email}</span></span>`
+
                     : '-';
 
+
+
+                // Formatando a Data de Nascimento para o padrão BR se existir
+
                 let dataNascFormatada = c.data_nascimento;
+
                 if (c.data_nascimento && c.data_nascimento.includes('-')) {
+
                     dataNascFormatada = c.data_nascimento.split('-').reverse().join('/');
+
                 }
 
+
+
                 return `
+
                     <tr>
+
                         <td style="font-size: 12px; min-width: 80px;">${new Date(c.created_at).toLocaleDateString('pt-BR')} <br><small style="color:#64748b;">${new Date(c.created_at).toLocaleTimeString('pt-BR')}</small></td>
+
                         
+
                         <td style="font-size: 12px;">
+
                             <strong style="font-size: 13px;">${c.nome}</strong><br>
+
                             <span style="color:#475569;">CPF:</span> ${c.cpf || '-'}<br>
+
                             <span style="color:#475569;">CNS:</span> ${c.cns || '-'}<br>
+
                             <span style="color:#475569;">Nasc:</span> ${dataNascFormatada || '-'} | <span style="color:#475569;">Sexo:</span> ${c.sexo || '-'}
+
                         </td>
 
+
+
                         <td style="font-size: 12px;">
+
                             <strong style="color: #2c3e50;">${c.cargo || '-'}</strong><br>
+
                             <span style="color:#475569;">Setor:</span> ${c.setor_andar || '-'}<br>
+
                             <span style="color:#475569;">Espec:</span> ${c.especialidade || '-'}<br>
+
                             <span style="color:#475569;">Vínculo:</span> ${c.vinculo_empregaticio || '-'} <br>
+
                             <span style="color:#475569;">Matr:</span> ${c.matricula || '-'}
+
                         </td>
 
+
+
                         <td style="font-size: 12px;">
+
                             📧 ${c.email || '-'}<br>
+
                             📱 ${c.telefone || '-'}
+
                         </td>
+
+
 
                         <td style="font-size: 12px; min-width: 110px;">
+
                             <span style="color:#475569;">Nº:</span> <strong>${c.numero_conselho || '-'}</strong><br>
+
                             <div style="margin-top: 5px; background: #f8f9fa; padding: 5px; border-radius: 4px; border: 1px solid #e2e8f0;">
+
                                 ${linkDoc}
+
                                 ${linkConselho}
+
                             </div>
+
                         </td>
 
-                        <td style="min-width: 160px;"> <!-- Aumentei levemente a largura para caber os 3 botões -->
+
+
+                        <td style="min-width: 140px;">
+
                             <div style="margin-bottom: 8px;">
+
                                 <span style="background-color: ${corStatus}; color: white; padding: 4px 8px; border-radius: 4px; font-size: 11px; font-weight: bold; display: inline-block; width: 100%; text-align: center;">${c.status}</span>
+
                             </div>
-                            
-                            <!-- 🟢 VOLTOU PARA O FORMATO LADO A LADO (FLEX ORIGINAL) -->
-                            <div style="display: flex; gap: 4px; justify-content: center;">
-                                ${c.status === 'Pendente' ? `
-                                    <button class="btn-success btn-sm" style="flex: 1; padding: 4px; font-size: 10px; white-space: nowrap;" onclick="alterarStatusCadastro('${c.id}', 'Realizado')">✔️ Finalizar</button>
-                                    <button class="btn-primary btn-sm" style="background: #e74c3c; flex: 1; padding: 4px; font-size: 10px; white-space: nowrap;" onclick="alterarStatusCadastro('${c.id}', 'Aguardando')">⏳ Pausar</button>
+
+                            <div style="display: flex; gap: 4px; flex-wrap: wrap; justify-content: center;">
+
+                                ${c.status !== 'Realizado' ? `
+
+                                    <button class="btn-success btn-sm" style="flex: 1; padding: 4px; font-size: 11px;" onclick="alterarStatusCadastro('${c.id}', 'Realizado')">✔️ Finalizar</button>
+
+                                    <button class="btn-primary btn-sm" style="background: #e74c3c; flex: 1; padding: 4px; font-size: 11px;" onclick="alterarStatusCadastro('${c.id}', 'Aguardando')">⏳ Pausar</button>
+
                                 ` : ''}
-                                
-                                ${c.status === 'Aguardando' ? `
-                                    <button class="btn-success btn-sm" style="flex: 1; padding: 4px; font-size: 10px; white-space: nowrap;" onclick="alterarStatusCadastro('${c.id}', 'Realizado')">✔️ Finalizar</button>
-                                    <button class="btn-primary btn-sm" style="background: #3498db; flex: 1; padding: 4px; font-size: 10px; white-space: nowrap;" onclick="alterarStatusCadastro('${c.id}', 'Pendente')">▶️ Retornar</button>
-                                ` : ''}
-                                
-                                <button class="btn-primary btn-sm" style="background: #95a5a6; flex: 1; padding: 4px; font-size: 10px; white-space: nowrap;" onclick="abrirModalObsCadastro('${c.id}', \`${c.observacao || ''}\`)">📝 Obs</button>
+
+                                <button class="btn-primary btn-sm" style="background: #95a5a6; flex: 1; padding: 4px; font-size: 11px;" onclick="abrirModalObsCadastro('${c.id}', \`${c.observacao || ''}\`)">📝 Obs</button>
+
                             </div>
-                            
+
                             ${c.observacao ? `<div style="margin-top: 8px; font-size: 10px; color: #475569; background: #f1f5f9; padding: 4px; border-radius: 4px; line-height: 1.4;"><strong>Obs:</strong> ${c.observacao}</div>` : ''}
+
                         </td>
+
+
 
                         <td>${realizadoPor}</td>
+
                     </tr>
+
                 `;
-            }).join('') : '<tr><td colspan="7" style="text-align: center; color: #7f8c8d; padding: 20px;">Nenhuma solicitação encontrada.</td></tr>';
+
+            }).join('') : '<tr><td colspan="7" style="text-align: center; color: #7f8c8d; padding: 20px;">Nenhuma solicitação pendente encontrada.</td></tr>';
+
         }
+
     } catch (err) { console.error("Erro ao carregar cadastros:", err); }
+
+}
+
+
+
+async function alterarStatusCadastro(id, novoStatus) {
+
+    if(!confirm(`Confirma a mudança de status para "${novoStatus}"?`)) return;
+
+
+
+    try {
+
+        let updateData = { status: novoStatus };
+
+
+
+        // Se marcou como "Realizado", o sistema "rouba" o nome e e-mail da sua sessão ativa para gravar lá
+
+        if (novoStatus === 'Realizado') {
+
+            if (typeof window.usuarioAtual !== 'undefined' && window.usuarioAtual) {
+
+                updateData.realizado_por_nome = window.usuarioAtual.nome;
+
+                updateData.realizado_por_email = window.usuarioAtual.email;
+
+                updateData.data_realizado = new Date().toISOString();
+
+            }
+
+        } else {
+
+            // Se voltou para Aguardando ou Pendente, apaga a assinatura de quem realizou
+
+            updateData.realizado_por_nome = null;
+
+            updateData.realizado_por_email = null;
+
+            updateData.data_realizado = null;
+
+        }
+
+
+
+        const { error } = await supabase.from('solicitacoes_cadastro').update(updateData).eq('id', id);
+
+        if (error) throw error;
+
+        
+
+        carregarCadastros();
+
+    } catch (err) { alert("Erro ao atualizar status: " + err.message); }
+
+}
+
+
+
+function abrirModalObsCadastro(id, obsAtual) {
+
+    document.getElementById('obs_cad_id').value = id;
+
+    document.getElementById('obs_cad_texto').value = obsAtual && obsAtual !== 'undefined' ? obsAtual : '';
+
+    abrirModal('modal-obs-cadastro');
+
+}
+
+
+
+async function salvarObsCadastro() {
+
+    const id = document.getElementById('obs_cad_id').value;
+
+    const obs = document.getElementById('obs_cad_texto').value;
+
+
+
+    try {
+
+        const { error } = await supabase.from('solicitacoes_cadastro').update({ observacao: obs }).eq('id', id);
+
+        if (error) throw error;
+
+        
+
+        fecharModal('modal-obs-cadastro');
+
+        carregarCadastros();
+
+    } catch (err) { alert("Erro ao salvar observação: " + err.message); }
+
 }
 // ==========================================
 // NOVA ABA: SOLICITAÇÕES DE LOGIN AD
