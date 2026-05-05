@@ -1947,7 +1947,10 @@ async function carregarSolicitacoesAD() {
                     ? `<span style="font-size: 11px;"><strong>${c.realizado_por_nome}</strong></span>`
                     : '-';
 
-                // 🟢 Lógica de Botões unificada com a coluna de Status
+                // 🟢 VERIFICA SE QUEM ESTÁ LOGADO É ADMIN
+                const isAdmin = typeof window.usuarioAtual !== 'undefined' && window.usuarioAtual && window.usuarioAtual.role === 'admin';
+
+                // 🟢 LÓGICA DE BOTÕES COM TRAVA DE SEGURANÇA
                 let botoesAcao = '';
                 if (c.status !== 'Realizado' && c.status !== 'Cancelado') {
                     botoesAcao = `
@@ -1955,9 +1958,12 @@ async function carregarSolicitacoesAD() {
                         <button class="btn-danger btn-sm" style="flex: 1; margin: 0; padding: 6px 4px;" onclick="darBaixaAD('${c.id}')">❌ Baixa</button>
                     `;
                 } else {
-                    botoesAcao = `
-                        <button class="btn-primary btn-sm" style="background: #e67e22; flex: 1; margin: 0; padding: 6px 4px;" onclick="alterarStatusAD('${c.id}', 'Pendente')">↩️ Desfazer</button>
-                    `;
+                    // Se estiver finalizado ou cancelado, SÓ mostra o Desfazer se for Admin
+                    if (isAdmin) {
+                        botoesAcao = `
+                            <button class="btn-primary btn-sm" style="background: #e67e22; flex: 1; margin: 0; padding: 6px 4px;" onclick="alterarStatusAD('${c.id}', 'Pendente')">↩️ Desfazer</button>
+                        `;
+                    }
                 }
 
                 return `
@@ -1966,7 +1972,6 @@ async function carregarSolicitacoesAD() {
                         <td style="font-size: 12px;"><strong>${c.nome_completo}</strong></td>
                         <td style="font-size: 12px;">${c.cpf || '-'}</td>
                         
-                        <!-- 🟢 NOVA COLUNA DE CONTATO -->
                         <td style="font-size: 12px;">
                             📧 ${c.email || '-'}<br>
                             📱 ${c.telefone || '-'}
@@ -1991,7 +1996,6 @@ async function carregarSolicitacoesAD() {
         }
     } catch (err) { console.error("Erro ao carregar AD:", err); }
 }
-
 async function alterarStatusAD(id, novoStatus) {
     if(!confirm(`Confirma a mudança de status para "${novoStatus}"?`)) return;
 
