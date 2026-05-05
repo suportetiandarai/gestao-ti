@@ -791,7 +791,26 @@ async function salvarAtendimentoChamado() {
 // ==========================================
 // ABA: GESTÃO DE TREINAMENTOS
 // ==========================================
+
+let idSolicitacaoEmAndamento = null; // Guarda o ID da solicitação que estamos agendando
+
+window.prepararAgendamento = function(id, nome, telefone, tema) {
+    idSolicitacaoEmAndamento = id; // Armazena o ID
+    
+    // 1. Preenche os campos da tela de NOVO AGENDAMENTO
+    document.getElementById('tr_colaborador').value = nome;
+    document.getElementById('tr_telefone').value = telefone;
+    document.getElementById('tr_tema').value = tema;
+    
+    // 2. Troca para a aba de agendamentos
+    abrirAba('aba-treinamentos');
+    
+    // Dá um foco no próximo campo a ser preenchido para agilizar
+    document.getElementById('tr_predio').focus();
+};
+
 async function salvarTreinamento() {
+    // 1. Captura os dados da tela
     const colaborador = document.getElementById('tr_colaborador').value;
     const telefone = document.getElementById('tr_telefone').value;
     const tema = document.getElementById('tr_tema').value;
@@ -805,7 +824,8 @@ async function salvarTreinamento() {
     }
 
     try {
-        const { error } = await supabase.from('treinamentos').insert([{
+        // 2. Salva o agendamento normal (incluindo o ID da solicitação se houver)
+        const { error: errAgendamento } = await supabase.from('treinamentos').insert([{
             colaborador: colaborador,
             telefone: telefone,
             tema: tema,
@@ -813,19 +833,28 @@ async function salvarTreinamento() {
             setor: setor,
             andar: andar,
             data_hora: dataHora,
-            status: 'Agendado'
+            status: 'Agendado',
+            solicitacao_id: idSolicitacaoEmAndamento // Liga ao pedido original
         }]);
 
-        if (error) throw error;
+        if (errAgendamento) throw errAgendamento;
+
+        // 3. Se veio de uma solicitação, atualiza o status dela para "Agendado"
+        if (idSolicitacaoEmAndamento) {
+            await supabase.from('solicitacoes_treinamento')
+                .update({ status: 'Agendado' })
+                .eq('id', idSolicitacaoEmAndamento);
+        }
 
         alert("Treinamento agendado com sucesso!");
+        
+        // 4. Limpeza
+        idSolicitacaoEmAndamento = null; // Reseta a ponte
         document.getElementById('form-novo-treinamento').reset();
         carregarListaTreinamentos();
         if(typeof carregarResumoDashboard === 'function') carregarResumoDashboard(); 
 
-    } catch (err) {
-        alert("Erro ao agendar treinamento: " + err.message);
-    }
+    } catch (err) { alert("Erro ao agendar: " + err.message); }
 }
 
 // 🟢 ATUALIZADO: Mostra as ações e o status Cancelado/Concluído
@@ -973,26 +1002,31 @@ async function salvarTreinamentoConcluido() {
     if (!tecnico) return alert("Selecione o técnico responsável.");
 
     try {
+        // 1. Busca os dados desse treinamento antes de concluir para ver se tem solicitação ligada
+        const { data: treinamento } = await supabase.from('treinamentos').select('solicitacao_id').eq('id', id).single();
+
         const sigUrl = await uploadAssinatura(document.getElementById('canvas-finalizar-treinamento'), 'conclusao_treinamento');
 
-        const { error } = await supabase.from('treinamentos').update({
+        // 2. Conclui o treinamento na agenda
+        await supabase.from('treinamentos').update({
             status: 'Concluído',
             responsavel_conclusao: tecnico,
             assinatura_url: sigUrl
         }).eq('id', id);
 
-        if (error) throw error;
+        // 3. Se houver uma solicitação ligada, marca como REALIZADO
+        if (treinamento && treinamento.solicitacao_id) {
+            await supabase.from('solicitacoes_treinamento')
+                .update({ status: 'Realizado' })
+                .eq('id', treinamento.solicitacao_id);
+        }
 
-        alert("Treinamento finalizado com sucesso!");
+        alert("Treinamento finalizado!");
         fecharModal('modal-finalizar-treinamento');
         carregarListaTreinamentos();
         if(typeof carregarResumoDashboard === 'function') carregarResumoDashboard();
-
-    } catch (err) {
-        alert("Erro ao finalizar treinamento: " + err.message);
-    }
+    } catch (err) { alert("Erro: " + err.message); }
 }
-
 // ==========================================
 // ABA CONFIGURAÇÕES (SOMENTE OPERACIONAL)
 // ==========================================
@@ -1993,7 +2027,7 @@ async function carregarSolicitacoesTreinamento() {
                         <td>
                             <div style="display: flex; gap: 4px; flex-wrap: nowrap; width: max-content; justify-content: center;">
                                 ${t.status === 'Pendente' || !t.status ? `
-                                    <button class="btn-success btn-sm" style="margin: 0; padding: 6px 10px;" onclick="alterarStatusTreinamentoExt('${t.id}', 'Agendado')">📅 Agendar</button>
+                                    <button class="btn-success btn-sm" style="margin: 0; padding: 6px 10px;" onclick="prepararAgendamento('${t.id}', '${t.nome_solicitante || t.nome}', '${t.telefone || t.celular}', '${t.tema}')">📅 Agendar</button>
                                     <button class="btn-danger btn-sm" style="margin: 0; padding: 6px 10px;" onclick="alterarStatusTreinamentoExt('${t.id}', 'Cancelado')">❌ Baixa</button>
                                 ` : `
                                     <button class="btn-primary btn-sm" style="background: #e67e22; margin: 0; padding: 6px 10px;" onclick="alterarStatusTreinamentoExt('${t.id}', 'Pendente')">↩️ Desfazer</button>
