@@ -1776,18 +1776,17 @@ async function carregarCadastros() {
                     dataNascFormatada = c.data_nascimento.split('-').reverse().join('/');
                 }
 
-                // 🟢 AQUI ESTÁ A LÓGICA NOVA DOS BOTÕES:
+                // 🟢 LÓGICA DOS BOTÕES (Usando flex: 1 para ficarem lado a lado)
                 let botoesAcao = '';
                 if (c.status === 'Pendente') {
                     botoesAcao = `
-                        <button class="btn-success btn-sm" style="width: 100%; padding: 6px; font-size: 11px;" onclick="alterarStatusCadastro('${c.id}', 'Realizado')">✔️ Finalizar</button>
-                        <button class="btn-primary btn-sm" style="background: #e74c3c; width: 100%; padding: 6px; font-size: 11px;" onclick="alterarStatusCadastro('${c.id}', 'Aguardando')">⏳ Pausar</button>
+                        <button class="btn-success btn-sm" style="flex: 1; padding: 4px; font-size: 11px;" onclick="alterarStatusCadastro('${c.id}', 'Realizado')">✔️ Finalizar</button>
+                        <button class="btn-primary btn-sm" style="background: #e74c3c; flex: 1; padding: 4px; font-size: 11px;" onclick="alterarStatusCadastro('${c.id}', 'Aguardando')">⏳ Pausar</button>
                     `;
                 } else if (c.status === 'Aguardando') {
-                    // Quando cai no filtro aguardando, o botão de pausar some e o de retornar aparece
                     botoesAcao = `
-                        <button class="btn-success btn-sm" style="width: 100%; padding: 6px; font-size: 11px;" onclick="alterarStatusCadastro('${c.id}', 'Realizado')">✔️ Finalizar</button>
-                        <button class="btn-primary btn-sm" style="background: #3498db; width: 100%; padding: 6px; font-size: 11px;" onclick="alterarStatusCadastro('${c.id}', 'Pendente')">▶️ Retornar</button>
+                        <button class="btn-success btn-sm" style="flex: 1; padding: 4px; font-size: 11px;" onclick="alterarStatusCadastro('${c.id}', 'Realizado')">✔️ Finalizar</button>
+                        <button class="btn-primary btn-sm" style="background: #3498db; flex: 1; padding: 4px; font-size: 11px;" onclick="alterarStatusCadastro('${c.id}', 'Pendente')">▶️ Retornar</button>
                     `;
                 }
 
@@ -1828,10 +1827,10 @@ async function carregarCadastros() {
                                 <span style="background-color: ${corStatus}; color: white; padding: 4px 8px; border-radius: 4px; font-size: 11px; font-weight: bold; display: inline-block; width: 100%; text-align: center;">${c.status}</span>
                             </div>
                             
-                            <!-- 🟢 Coluna Responsiva (flex-direction: column) -->
-                            <div style="display: flex; flex-direction: column; gap: 4px;">
+                            <!-- 🟢 VOLTAMOS AO FORMATO ORIGINAL: flex-wrap e lado a lado -->
+                            <div style="display: flex; gap: 4px; flex-wrap: wrap; justify-content: center;">
                                 ${botoesAcao}
-                                <button class="btn-primary btn-sm" style="background: #95a5a6; width: 100%; padding: 6px; font-size: 11px;" onclick="abrirModalObsCadastro('${c.id}', \`${c.observacao || ''}\`)">📝 Obs</button>
+                                <button class="btn-primary btn-sm" style="background: #95a5a6; flex: 1; min-width: 100%; padding: 4px; font-size: 11px; margin-top: 2px;" onclick="abrirModalObsCadastro('${c.id}', \`${c.observacao || ''}\`)">📝 Obs</button>
                             </div>
                             
                             ${c.observacao ? `<div style="margin-top: 8px; font-size: 10px; color: #475569; background: #f1f5f9; padding: 4px; border-radius: 4px; line-height: 1.4;"><strong>Obs:</strong> ${c.observacao}</div>` : ''}
@@ -1851,7 +1850,6 @@ async function alterarStatusCadastro(id, novoStatus) {
     try {
         let updateData = { status: novoStatus };
 
-        // Se marcou como "Realizado", o sistema "rouba" o nome e e-mail da sua sessão ativa para gravar lá
         if (novoStatus === 'Realizado') {
             if (typeof window.usuarioAtual !== 'undefined' && window.usuarioAtual) {
                 updateData.realizado_por_nome = window.usuarioAtual.nome;
@@ -1859,7 +1857,6 @@ async function alterarStatusCadastro(id, novoStatus) {
                 updateData.data_realizado = new Date().toISOString();
             }
         } else {
-            // Se voltou para Aguardando ou Pendente, apaga a assinatura de quem realizou
             updateData.realizado_por_nome = null;
             updateData.realizado_por_email = null;
             updateData.data_realizado = null;
