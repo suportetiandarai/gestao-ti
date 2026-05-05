@@ -1771,8 +1771,7 @@ async function carregarCadastros() {
                 if (c.data_nascimento && c.data_nascimento.includes('-')) {
                     dataNascFormatada = c.data_nascimento.split('-').reverse().join('/');
                 }
-
-               
+                              
                 return `
                     <tr>
                         <td style="font-size: 12px; min-width: 80px;">${new Date(c.created_at).toLocaleDateString('pt-BR')} <br><small style="color:#64748b;">${new Date(c.created_at).toLocaleTimeString('pt-BR')}</small></td>
@@ -1805,29 +1804,38 @@ async function carregarCadastros() {
                             </div>
                         </td>
 
-                        <!-- 🟢 FIX DEFINITIVO: min-width de 210px e display GRID para 3 colunas -->
-                        <td style="min-width: 210px; vertical-align: top;">
+                        <!-- 🟢 A CÉLULA BLINDADA CONTRA O CSS GLOBAL -->
+                        <td style="min-width: 200px; white-space: nowrap; vertical-align: top;">
                             <div style="margin-bottom: 8px;">
-                                <span style="background-color: ${corStatus}; color: white; padding: 4px 8px; border-radius: 4px; font-size: 11px; font-weight: bold; display: inline-block; width: 100%; text-align: center;">${c.status}</span>
+                                <span style="background-color: ${corStatus}; color: white; padding: 4px 8px; border-radius: 4px; font-size: 11px; font-weight: bold; display: block; width: 100%; text-align: center;">${c.status}</span>
                             </div>
                             
-                            <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 4px;">
+                            <!-- Usa table-layout para forçar os elementos na mesma linha ignorando o flex-wrap do CSS global -->
+                            <div style="display: table; width: 100%; table-layout: fixed; border-spacing: 4px 0;">
                                 ${c.status === 'Pendente' ? `
-                                    <button class="btn-success btn-sm" style="padding: 6px 2px; font-size: 10px;" onclick="alterarStatusCadastro('${c.id}', 'Realizado')">✔️ Finalizar</button>
-                                    <button class="btn-primary btn-sm" style="background: #e74c3c; padding: 6px 2px; font-size: 10px;" onclick="alterarStatusCadastro('${c.id}', 'Aguardando')">⏳ Pausar</button>
+                                    <div style="display: table-cell; width: 33.3%;">
+                                        <button style="width: 100%; margin: 0; padding: 6px 0; font-size: 10px; border-radius: 4px; background: linear-gradient(135deg, #10b981, #059669); color: white; border: none; cursor: pointer; display: block; white-space: nowrap;" onclick="alterarStatusCadastro('${c.id}', 'Realizado')">✔️ Finalizar</button>
+                                    </div>
+                                    <div style="display: table-cell; width: 33.3%;">
+                                        <button style="width: 100%; margin: 0; padding: 6px 0; font-size: 10px; border-radius: 4px; background: #e74c3c; color: white; border: none; cursor: pointer; display: block; white-space: nowrap;" onclick="alterarStatusCadastro('${c.id}', 'Aguardando')">⏳ Pausar</button>
+                                    </div>
                                 ` : ''}
                                 
                                 ${c.status === 'Aguardando' ? `
-                                    <button class="btn-success btn-sm" style="padding: 6px 2px; font-size: 10px;" onclick="alterarStatusCadastro('${c.id}', 'Realizado')">✔️ Finalizar</button>
-                                    <button class="btn-primary btn-sm" style="background: #3498db; padding: 6px 2px; font-size: 10px;" onclick="alterarStatusCadastro('${c.id}', 'Pendente')">▶️ Retornar</button>
+                                    <div style="display: table-cell; width: 33.3%;">
+                                        <button style="width: 100%; margin: 0; padding: 6px 0; font-size: 10px; border-radius: 4px; background: linear-gradient(135deg, #10b981, #059669); color: white; border: none; cursor: pointer; display: block; white-space: nowrap;" onclick="alterarStatusCadastro('${c.id}', 'Realizado')">✔️ Finalizar</button>
+                                    </div>
+                                    <div style="display: table-cell; width: 33.3%;">
+                                        <button style="width: 100%; margin: 0; padding: 6px 0; font-size: 10px; border-radius: 4px; background: #3498db; color: white; border: none; cursor: pointer; display: block; white-space: nowrap;" onclick="alterarStatusCadastro('${c.id}', 'Pendente')">▶️ Retornar</button>
+                                    </div>
                                 ` : ''}
-
-                                ${c.status === 'Realizado' ? `<div></div><div></div>` : ''} <!-- Espaçadores vazios para o Obs ficar no canto se for Realizado -->
                                 
-                                <button class="btn-primary btn-sm" style="background: #95a5a6; padding: 6px 2px; font-size: 10px;" onclick="abrirModalObsCadastro('${c.id}', \`${c.observacao || ''}\`)">📝 Obs</button>
+                                <div style="display: table-cell; width: 33.3%;">
+                                    <button style="width: 100%; margin: 0; padding: 6px 0; font-size: 10px; border-radius: 4px; background: #95a5a6; color: white; border: none; cursor: pointer; display: block; white-space: nowrap;" onclick="abrirModalObsCadastro('${c.id}', \`${c.observacao || ''}\`)">📝 Obs</button>
+                                </div>
                             </div>
                             
-                            ${c.observacao ? `<div style="margin-top: 8px; font-size: 10px; color: #475569; background: #f1f5f9; padding: 4px; border-radius: 4px; line-height: 1.4;"><strong>Obs:</strong> ${c.observacao}</div>` : ''}
+                            ${c.observacao ? `<div style="margin-top: 8px; font-size: 10px; color: #475569; background: #f1f5f9; padding: 4px; border-radius: 4px; line-height: 1.4; white-space: normal;"><strong>Obs:</strong> ${c.observacao}</div>` : ''}
                         </td>
 
                         <td>${realizadoPor}</td>
