@@ -862,14 +862,19 @@ async function carregarListaTreinamentos() {
     try {
         const { data, error } = await supabase.from('treinamentos')
             .select('*')
-            .order('data_hora', { ascending: false }); // Lista do mais novo para o mais velho
+            .order('data_hora', { ascending: false }); 
 
         if (error) throw error;
 
         const tbody = document.getElementById('lista-treinamentos-aba');
         if (tbody) {
             tbody.innerHTML = data.length > 0 ? data.map(t => {
-                const dataFormatada = new Date(t.data_hora).toLocaleString('pt-BR').slice(0, 16);
+                
+                // 🟢 MÁGICA AQUI: O Javascript obriga a ter 2 dígitos, impedindo o erro do "21:2"
+                const dataFormatada = new Date(t.data_hora).toLocaleString('pt-BR', { 
+                    day: '2-digit', month: '2-digit', year: 'numeric', 
+                    hour: '2-digit', minute: '2-digit' 
+                }).replace(',', ' às'); // Troca a vírgula por "às" para ficar elegante
                 
                 return `
                     <tr>
@@ -1386,6 +1391,14 @@ async function adminCadastrarSimpress() {
 // TELA INICIAL E AUDITORIA DE PLANTÕES (ADMIN)
 // ==========================================
 
+// 🟢 FUNÇÃO AUXILIAR: Remove o "T" do banco e arruma o formato DD/MM/AAAA às HH:MM
+function formatarDataCrua(dataIso) {
+    if (!dataIso) return '-';
+    if (!dataIso.includes('T')) return dataIso;
+    const [data, hora] = dataIso.split('T');
+    return `${data.split('-').reverse().join('/')} às ${hora}`;
+}
+
 async function carregarResumoDashboard() {
     try {
         const { data: toners } = await supabase.from('cadastro_toner').select('*').order('modelo_toner');
@@ -1420,32 +1433,34 @@ async function carregarResumoDashboard() {
                 : '<li>✅ Nenhuma ocorrência pendente.</li>';
         }
 
+        // 🟢 Correção das Datas dos Plantões
         const { data: plantoes } = await supabase.from('plantoes').select('*').eq('visto_supervisao', false).order('created_at', { ascending: false });
         const dashPlantoes = document.getElementById('dash-plantoes');
         if (dashPlantoes) {
             dashPlantoes.innerHTML = plantoes && plantoes.length 
-                ? plantoes.map(p => `
+                ? plantoes.map(p => {
+                    const dataC = new Date(p.created_at).toLocaleDateString('pt-BR');
+                    const horaC = new Date(p.created_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+                    
+                    return `
                     <tr>
-                        <td>${new Date(p.created_at).toLocaleDateString('pt-BR')}</td>
-                        <td>Das ${p.hora_assumiu} às ${p.hora_largou}</td>
+                        <td>${dataC}<br><small style="color:#64748b;">${horaC}</small></td>
+                        <td>Das ${formatarDataCrua(p.hora_assumiu)} <br>às ${formatarDataCrua(p.hora_largou)}</td>
                         <td style="color: #f39c12; font-weight: bold;">⏳ Pendente</td>
                     </tr>
-                `).join('') 
+                `}).join('') 
                 : '<tr><td colspan="3" style="text-align: center;">✅ Todos os plantões estão com visto da supervisão.</td></tr>';
         }
 
-        // Puxando Treinamentos para o Dashboard
+        // 🟢 Correção das Datas dos Treinamentos no Dashboard (Tirando o slice)
         const { data: treinamentos } = await supabase.from('treinamentos')
-            .select('*')
-            .eq('status', 'Agendado')
-            .order('data_hora', { ascending: true })
-            .limit(5); // Puxa só os 5 próximos para não lotar a tela
+            .select('*').eq('status', 'Agendado').order('data_hora', { ascending: true }).limit(5);
 
         const dashTreinamentos = document.getElementById('dash-treinamentos');
         if (dashTreinamentos) {
             dashTreinamentos.innerHTML = treinamentos && treinamentos.length > 0
                 ? treinamentos.map(t => {
-                    const dataF = new Date(t.data_hora).toLocaleString('pt-BR').slice(0, 16);
+                    const dataF = new Date(t.data_hora).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }).replace(',', ' às');
                     return `
                         <tr>
                             <td style="color: #42B9EB; font-weight: bold;">${dataF}</td>
@@ -1459,9 +1474,82 @@ async function carregarResumoDashboard() {
                 : '<tr><td colspan="5" style="text-align: center;">✅ Agenda de treinamentos livre.</td></tr>';
         }
 
-    } catch (err) {
-        console.error("Erro ao carregar Dashboard:", err.message);
-    }
+    } catch (err) { console.error("Erro ao carregar Dashboard:", err.message); }
+}
+
+async function carregarPlantoesAdmin() {
+    try {
+        const { data: plantoes } = await supabase.from('plantoes').select('*').eq('visto_supervisao', false).order('created_at', { ascending: false });
+        const adminPlantoes = document.getElementById('admin-plantoes-lista');
+        if (adminPlantoes) {
+            adminPlantoes.innerHTML = plantoes && plantoes.length 
+                ? plantoes.map(p => {
+                    const dataC = new Date(p.created_at).toLocaleDateString('pt-BR');
+                    const horaC = new Date(p.created_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+                    
+                    return `
+                    <tr>
+                        <td>${dataC}<br><small style="color:#64748b;">${horaC}</small></td>
+                        <td>Das ${formatarDataCrua(p.hora_assumiu)} <br>às ${formatarDataCrua(p.hora_largou)}</td>
+                        <td><button class="btn-primary btn-sm" style="background: #3498db;" onclick="visualizarPlantao('${p.id}')">👁️ Abrir Ficha de Visto</button></td>
+                    </tr>
+                `}).join('') 
+                : '<tr><td colspan="3" style="text-align: center;">✅ Nada para auditar.</td></tr>';
+        }
+    } catch (err) { console.error("Erro ao carregar Plantões no Admin:", err.message); }
+}
+
+async function visualizarPlantao(idPlantao) {
+    try {
+        const { data: p, error } = await supabase.from('plantoes').select('*').eq('id', idPlantao).single();
+        if (error) throw error;
+
+        const conteudo = document.getElementById('detalhes-plantao-conteudo');
+        
+        const dataC = new Date(p.created_at).toLocaleDateString('pt-BR');
+        const horaC = new Date(p.created_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+
+        conteudo.innerHTML = `
+            <div style="background: #f8f9fa; padding: 10px; border-radius: 5px; margin-bottom: 15px;">
+                <strong>Data de Registro:</strong> ${dataC} às ${horaC}<br>
+                <strong>Turno do Técnico:</strong> Das ${formatarDataCrua(p.hora_assumiu)} às ${formatarDataCrua(p.hora_largou)}<br>
+                <strong>Técnicos na Equipe:</strong> ${p.tecnicos_plantao || 'Nenhum / Plantão Sozinho'}
+            </div>
+            
+            <p>📧 <strong>E-mails todos respondidos?</strong> <span style="color: ${p.emails_resp ? 'green' : 'red'}; font-weight: bold;">${p.emails_resp ? 'Sim' : 'Não'}</span> <br> 
+            <span style="color: #555;">${p.motivo_emails ? `↳ Obs: ${p.motivo_emails}` : ''}</span></p>
+
+            <p>🖨️ <strong>Há chamados pendentes?</strong> <span style="color: ${p.chamados_pend ? 'red' : 'green'}; font-weight: bold;">${p.chamados_pend ? 'Sim' : 'Não'}</span> <br> 
+            <span style="color: #555;">${p.motivo_chamados ? `↳ Obs: ${p.motivo_chamados}` : ''}</span></p>
+
+            <p>📝 <strong>MS Forms zerado?</strong> <span style="color: ${p.forms_zerado ? 'green' : 'red'}; font-weight: bold;">${p.forms_zerado ? 'Sim' : 'Não'}</span> <br> 
+            <span style="color: #555;">${p.motivo_forms ? `↳ Obs: ${p.motivo_forms}` : ''}</span></p>
+
+            <p>📚 <strong>Forms de Treinamentos zerado?</strong> <span style="color: ${p.forms_treinamento ? 'green' : 'red'}; font-weight: bold;">${p.forms_treinamento ? 'Sim' : 'Não'}</span> <br> 
+            <span style="color: #555;">${p.motivo_treinamento ? `↳ Obs: ${p.motivo_treinamento}` : ''}</span></p>
+
+            <p>💻 <strong>Todas as máquinas funcionando?</strong> <span style="color: ${p.maquinas_func ? 'green' : 'red'}; font-weight: bold;">${p.maquinas_func ? 'Sim' : 'Não'}</span> <br> 
+            <span style="color: #555;">${p.motivo_maquinas ? `↳ Obs: ${p.motivo_maquinas}` : ''}</span></p>
+
+            <p>🪑 <strong>Cadeiras nos lugares?</strong> <span style="color: ${p.cadeiras_lugar ? 'green' : 'red'}; font-weight: bold;">${p.cadeiras_lugar ? 'Sim' : 'Não'}</span> <br> 
+            <span style="color: #555;">${p.motivo_cadeiras ? `↳ Obs: ${p.motivo_cadeiras}` : ''}</span></p>
+
+            <p>📺 <strong>Painel de TV em operation?</strong> <span style="color: ${p.painel_tv ? 'green' : 'red'}; font-weight: bold;">${p.painel_tv ? 'Sim' : 'Não'}</span> <br> 
+            <span style="color: #555;">${p.motivo_tv ? `↳ Obs: ${p.motivo_tv}` : ''}</span></p>
+
+            <p>⚠️ <strong>Houve ocorrências no plantão?</strong> <span style="color: ${p.ocorrencias ? 'red' : 'green'}; font-weight: bold;">${p.ocorrencias ? 'Sim' : 'Não'}</span> <br> 
+            <span style="color: #555;">${p.motivo_ocorrencias ? `↳ Obs: ${p.motivo_ocorrencias}` : ''}</span></p>
+
+            <div style="margin-top: 15px;">
+                <strong>✍️ Assinatura do Técnico:</strong><br>
+                <img src="${p.assinatura_url}" style="max-width: 250px; height: auto; border: 1px solid #ccc; border-radius: 4px; background: #fff; margin-top: 5px;">
+            </div>
+        `;
+
+        document.getElementById('visto_plantao_id').value = idPlantao;
+        abrirModal('modal-ver-plantao');
+
+    } catch (err) { alert("Erro ao buscar detalhes do plantão: " + err.message); }
 }
 
 async function carregarPlantoesAdmin() {
