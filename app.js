@@ -2215,13 +2215,13 @@ async function carregarSolicitacoesAD() {
                 let botoesAcao = '';
                 if (c.status !== 'Realizado' && c.status !== 'Cancelado') {
                     botoesAcao = `
-                        <button class="btn-success btn-sm" style="flex: 1; margin: 0; padding: 4px 2px; font-size: 10px;" onclick="alterarStatusAD('${c.id}', 'Realizado')">✔️ Finalizar</button>
-                        <button class="btn-danger btn-sm" style="flex: 1; margin: 0; padding: 4px 2px; font-size: 10px;" onclick="darBaixaAD('${c.id}')">❌ Baixa</button>
+                        <button class="btn-success btn-sm" style="flex: 1; margin: 0; padding: 8px 4px; font-size: 10px;" onclick="alterarStatusAD('${c.id}', 'Realizado')">✔️ Finalizar</button>
+                        <button class="btn-danger btn-sm" style="flex: 1; margin: 0; padding: 8px 4px; font-size: 10px;" onclick="darBaixaAD('${c.id}')">❌ Baixa</button>
                     `;
                 } else {
                     if (isAdmin) {
                         botoesAcao = `
-                            <button class="btn-primary btn-sm" style="background: #e67e22; flex: 1; margin: 0; padding: 4px 2px; font-size: 10px;" onclick="alterarStatusAD('${c.id}', 'Pendente')">↩️ Desfazer</button>
+                            <button class="btn-primary btn-sm" style="background: #e67e22; flex: 1; margin: 0; padding: 8px 4px; font-size: 10px;" onclick="alterarStatusAD('${c.id}', 'Pendente')">↩️ Desfazer</button>
                         `;
                     }
                 }
