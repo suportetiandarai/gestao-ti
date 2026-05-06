@@ -794,6 +794,11 @@ async function salvarAtendimentoChamado() {
 
 let idSolicitacaoEmAndamento = null; // Guarda o ID da solicitação que estamos agendando
 
+// 🟢 VARIÁVEIS PARA CONTROLAR AS PÁGINAS DO HISTÓRICO
+let paginaAtualHistorico = 1;
+const itensPorPaginaTr = 5;
+let dadosHistoricoTr = []; // Memória temporária para não travar o banco de dados
+
 window.prepararAgendamento = function(id, nome, telefone, tema) {
     idSolicitacaoEmAndamento = id; // Armazena o ID
     
@@ -857,11 +862,6 @@ async function salvarTreinamento() {
     } catch (err) { alert("Erro ao agendar: " + err.message); }
 }
 
-// Função para buscar ao apertar Enter
-function verificarEnterFiltroHistorico(event) {
-    if (event.key === 'Enter') carregarHistoricoTreinamentos();
-}
-
 // 🟢 ATUALIZADO: Mostra APENAS os "Agendados" na agenda principal
 async function carregarListaTreinamentos() {
     try {
@@ -901,47 +901,81 @@ async function carregarListaTreinamentos() {
     } catch (err) { console.error("Erro ao carregar treinamentos:", err); }
 }
 
-// 🟢 NOVA FUNÇÃO: Tabela exclusiva para o Histórico (Concluídos e Cancelados)
+// Função para buscar ao apertar Enter
+function verificarEnterFiltroHistorico(event) {
+    if (event.key === 'Enter') carregarHistoricoTreinamentos();
+}
+
+// 🟢 BUSCA NO BANCO E SALVA NA MEMÓRIA
 async function carregarHistoricoTreinamentos() {
     const nome = document.getElementById('filtro_hist_tr_colaborador').value.trim();
+    paginaAtualHistorico = 1; // Reseta para a página 1 ao fazer uma nova busca
 
     try {
         let query = supabase.from('treinamentos')
             .select('*')
-            .neq('status', 'Agendado') // Puxa TUDO que não for "Agendado" (ou seja, concluído/cancelado)
-            .order('data_hora', { ascending: false }); // Histórico do mais recente para o mais antigo
+            .neq('status', 'Agendado')
+            .order('data_hora', { ascending: false });
 
         if (nome) query = query.ilike('colaborador', `%${nome}%`);
 
         const { data, error } = await query;
         if (error) throw error;
 
-        const tbody = document.getElementById('lista-historico-treinamentos-aba');
-        if (tbody) {
-            tbody.innerHTML = data.length > 0 ? data.map(t => {
-                const dataFormatada = new Date(t.data_hora).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }).replace(',', ' às');
-                
-                let corStatus = t.status === 'Concluído' ? '#2ecc71' : '#e74c3c';
-                let responsavel = t.responsavel_conclusao ? `<span style="font-size: 11px;"><strong>${t.responsavel_conclusao}</strong></span>` : '-';
-
-                return `
-                    <tr>
-                        <td><strong>${dataFormatada}</strong></td>
-                        <td>${t.colaborador}<br><small>${t.telefone}</small></td>
-                        <td><strong>${t.tema}</strong><br><small>${t.predio} - ${t.setor} (${t.andar})</small></td>
-                        <td>
-                            <div style="margin-bottom: 4px;">
-                                <span style="background-color: ${corStatus}; color: white; padding: 4px 8px; border-radius: 4px; font-size: 11px; font-weight: bold; display: inline-block; text-align: center;">${t.status}</span>
-                            </div>
-                            ${t.status === 'Cancelado' && t.motivo_cancelamento ? `<div style="font-size: 10px; color: #475569;"><strong>Motivo:</strong> ${t.motivo_cancelamento}</div>` : ''}
-                        </td>
-                        <td>${responsavel}</td>
-                    </tr>
-                `;
-            }).join('') : '<tr><td colspan="5" style="text-align: center; color: #7f8c8d; padding: 20px;">Nenhum registro encontrado no histórico.</td></tr>';
-        }
+        dadosHistoricoTr = data || [];
+        renderizarTabelaHistorico(); // Manda fatiar e desenhar na tela
     } catch (err) { console.error("Erro ao carregar histórico de treinamentos:", err); }
 }
+
+// 🟢 FATIA OS DADOS DE 5 EM 5 E DESENHA NA TELA
+function renderizarTabelaHistorico() {
+    const tbody = document.getElementById('lista-historico-treinamentos-aba');
+    const spanPagina = document.getElementById('span-pagina-historico');
+    if (!tbody) return;
+
+    // Calcula quantas páginas existem no total
+    const totalPaginas = Math.ceil(dadosHistoricoTr.length / itensPorPaginaTr) || 1;
+    if (spanPagina) spanPagina.innerText = `Página ${paginaAtualHistorico} de ${totalPaginas}`;
+
+    // Corta a lista para mostrar só os 5 da página atual
+    const inicio = (paginaAtualHistorico - 1) * itensPorPaginaTr;
+    const fim = inicio + itensPorPaginaTr;
+    const itensPagina = dadosHistoricoTr.slice(inicio, fim);
+
+    tbody.innerHTML = itensPagina.length > 0 ? itensPagina.map(t => {
+        const dataFormatada = new Date(t.data_hora).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }).replace(',', ' às');
+        let corStatus = t.status === 'Concluído' ? '#2ecc71' : '#e74c3c';
+        let responsavel = t.responsavel_conclusao ? `<span style="font-size: 11px;"><strong>${t.responsavel_conclusao}</strong></span>` : '-';
+
+        return `
+            <tr>
+                <td><strong>${dataFormatada}</strong></td>
+                <td>${t.colaborador}<br><small>${t.telefone}</small></td>
+                <td><strong>${t.tema}</strong><br><small>${t.predio} - ${t.setor} (${t.andar})</small></td>
+                <td>
+                    <div style="margin-bottom: 4px;">
+                        <span style="background-color: ${corStatus}; color: white; padding: 4px 8px; border-radius: 4px; font-size: 11px; font-weight: bold; display: inline-block; text-align: center;">${t.status}</span>
+                    </div>
+                    ${t.status === 'Cancelado' && t.motivo_cancelamento ? `<div style="font-size: 10px; color: #475569;"><strong>Motivo:</strong> ${t.motivo_cancelamento}</div>` : ''}
+                </td>
+                <td>${responsavel}</td>
+            </tr>
+        `;
+    }).join('') : '<tr><td colspan="5" style="text-align: center; color: #7f8c8d; padding: 20px;">Nenhum registro encontrado no histórico.</td></tr>';
+}
+
+// 🟢 NAVEGAÇÃO DOS BOTÕES ANTERIOR E PRÓXIMA
+function mudarPaginaHistorico(direcao) {
+    const totalPaginas = Math.ceil(dadosHistoricoTr.length / itensPorPaginaTr) || 1;
+    paginaAtualHistorico += direcao;
+
+    // Travas para não ir para a página 0 ou passar do limite máximo
+    if (paginaAtualHistorico < 1) paginaAtualHistorico = 1;
+    if (paginaAtualHistorico > totalPaginas) paginaAtualHistorico = totalPaginas;
+
+    renderizarTabelaHistorico();
+}
+
 // 🟢 NOVO: Abre modal para Editar Treinamento
 async function abrirModalEditarTreinamento(id) {
     try {
