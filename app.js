@@ -2069,20 +2069,33 @@ async function carregarCadastros() {
                     dataNascFormatada = c.data_nascimento.split('-').reverse().join('/');
                 }
 
-                // 🟢 LÓGICA DE BOTÕES PADRONIZADA (MEDIANO)
-                let botoesAcao = `
-                    <div style="display: flex; gap: 4px; flex-wrap: wrap; justify-content: center;">
-                        ${c.status !== 'Realizado' ? `
-                            <button class="btn-success btn-sm" style="flex: 1; padding: 5px 2px; font-size: 11px;" onclick="alterarStatusCadastro('${c.id}', 'Realizado')">✔️ Finalizar</button>
-                            
-                            ${c.status === 'Pendente' 
-                                ? `<button class="btn-primary btn-sm" style="background: #e74c3c; flex: 1; padding: 5px 2px; font-size: 11px;" onclick="alterarStatusCadastro('${c.id}', 'Aguardando')">⏳ Pausar</button>` 
-                                : `<button class="btn-primary btn-sm" style="background: #3498db; flex: 1; padding: 5px 2px; font-size: 11px;" onclick="alterarStatusCadastro('${c.id}', 'Pendente')">▶️ Retornar</button>`
-                            }
-                        ` : ''}
-                        <button class="btn-primary btn-sm" style="background: #95a5a6; flex: 1; padding: 5px 2px; font-size: 11px;" onclick="abrirModalObsCadastro('${c.id}', \`${c.observacao || ''}\`)">📝 Obs</button>
-                    </div>
-                `;
+                const isAdmin = typeof window.usuarioAtual !== 'undefined' && window.usuarioAtual && window.usuarioAtual.role === 'admin';
+
+                // 🟢 LÓGICA DO TIMED, MAS COM A ESTRUTURA DOS BOTÕES DO AD
+                let botoesAcao = '';
+                if (c.status !== 'Realizado') {
+                    botoesAcao = `
+                        <button class="btn-success btn-sm" style="flex: 1; margin: 0; padding: 4px 2px; font-size: 10px;" onclick="alterarStatusCadastro('${c.id}', 'Realizado')">✔️ Fin</button>
+                        
+                        ${c.status === 'Pendente' 
+                            ? `<button class="btn-primary btn-sm" style="background: #e74c3c; flex: 1; margin: 0; padding: 4px 2px; font-size: 10px;" onclick="alterarStatusCadastro('${c.id}', 'Aguardando')">⏳ Pausa</button>` 
+                            : `<button class="btn-primary btn-sm" style="background: #3498db; flex: 1; margin: 0; padding: 4px 2px; font-size: 10px;" onclick="alterarStatusCadastro('${c.id}', 'Pendente')">▶️ Retorna</button>`
+                        }
+                        
+                        <button class="btn-primary btn-sm" style="background: #95a5a6; flex: 1; margin: 0; padding: 4px 2px; font-size: 10px;" onclick="abrirModalObsCadastro('${c.id}', \`${c.observacao || ''}\`)">📝 Obs</button>
+                    `;
+                } else {
+                    if (isAdmin) {
+                        botoesAcao = `
+                            <button class="btn-primary btn-sm" style="background: #e67e22; flex: 1; margin: 0; padding: 4px 2px; font-size: 10px;" onclick="alterarStatusCadastro('${c.id}', 'Pendente')">↩️ Desfazer</button>
+                            <button class="btn-primary btn-sm" style="background: #95a5a6; flex: 1; margin: 0; padding: 4px 2px; font-size: 10px;" onclick="abrirModalObsCadastro('${c.id}', \`${c.observacao || ''}\`)">📝 Obs</button>
+                        `;
+                    } else {
+                        botoesAcao = `
+                            <button class="btn-primary btn-sm" style="background: #95a5a6; flex: 1; margin: 0; padding: 4px 2px; font-size: 10px; width: 100%;" onclick="abrirModalObsCadastro('${c.id}', \`${c.observacao || ''}\`)">📝 Ver Obs</button>
+                        `;
+                    }
+                }
 
                 return `
                     <tr>
@@ -2116,15 +2129,17 @@ async function carregarCadastros() {
                             </div>
                         </td>
 
-                        <!-- 🟢 COLUNA DE AÇÕES COM PADRÃO MEDIANO -->
-                        <td style="width: 140px; min-width: 140px;">
-                            <div style="margin-bottom: 6px;">
-                                <span style="background-color: ${corStatus}; color: white; padding: 5px; border-radius: 4px; font-size: 11px; font-weight: bold; display: block; width: 100%; text-align: center;">${c.status}</span>
+                        <!-- 🟢 ESTRUTURA VISUAL EXATAMENTE IGUAL A DO AD (COMPACTA) -->
+                        <td style="width: 120px; min-width: 110px;">
+                            <div style="margin-bottom: 4px;">
+                                <span style="background-color: ${corStatus}; color: white; padding: 4px; border-radius: 4px; font-size: 10px; font-weight: bold; display: block; width: 100%; text-align: center;">${c.status}</span>
                             </div>
                             
-                            ${botoesAcao}
+                            <div style="display: flex; gap: 2px; flex-wrap: wrap; justify-content: center;">
+                                ${botoesAcao}
+                            </div>
 
-                            ${c.observacao ? `<div style="margin-top: 6px; font-size: 10px; color: #475569; background: #f1f5f9; padding: 4px; border-radius: 4px; line-height: 1.3;"><strong>Obs:</strong> ${c.observacao}</div>` : ''}
+                            ${c.observacao ? `<div style="margin-top: 4px; font-size: 9px; color: #475569; background: #f1f5f9; padding: 2px; border-radius: 4px; text-align: center; line-height: 1.2;"><strong>Obs:</strong> ${c.observacao}</div>` : ''}
                         </td>
 
                         <td>${realizadoPor}</td>
