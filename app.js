@@ -427,6 +427,12 @@ async function registrarChave(tipo) {
 // ==========================================
 // ABA 3: GESTÃO DE OCORRÊNCIAS 
 // ==========================================
+
+// 🟢 VARIÁVEIS DA PAGINAÇÃO DO HISTÓRICO DE OCORRÊNCIAS
+let paginaAtualOc = 1;
+const itensPorPaginaOc = 5;
+let dadosHistoricoOc = [];
+
 async function salvarOcorrencia() {
     const descricao = document.getElementById('o_descricao').value;
     const proposta = document.getElementById('o_proposta').value;
@@ -463,44 +469,136 @@ async function salvarOcorrencia() {
     }
 }
 
+// 🟢 ATUALIZADO: CARREGA APENAS OCORRÊNCIAS EM ANDAMENTO NA TELA PRINCIPAL
 async function carregarListaOcorrencias() {
     try {
-        const { data, error } = await supabase.from('ocorrencias').select('*').order('created_at', { ascending: false });
+        const { data, error } = await supabase.from('ocorrencias')
+            .select('*')
+            .neq('status', 'Solucionada')
+            .neq('status', 'Cancelada')
+            .order('created_at', { ascending: false });
+
         if (error) throw error;
 
         const tbody = document.getElementById('lista-ocorrencias-aba');
         if (tbody) {
-            tbody.innerHTML = data.map(o => {
+            tbody.innerHTML = data.length > 0 ? data.map(o => {
                 const prazoFormatado = o.prazo ? o.prazo.split('-').reverse().join('/') : '-';
-                
-                let corStatus = '#e74c3c'; 
-                if (o.status === 'Solucionada') corStatus = '#2ecc71'; 
-                else if (o.status === 'Em andamento') corStatus = '#f39c12'; 
-                else if (o.status === 'Cancelada') corStatus = '#7f8c8d';
+                let corStatus = o.status === 'Em andamento' ? '#f39c12' : '#e74c3c'; // Pendente/Andamento
+
+                let botoesAcao = `
+                    <button class="btn-primary btn-sm" style="background: #3498db; flex: 1; margin: 0; padding: 6px 2px;" onclick="abrirModalVerOcorrencia('${o.id}')">👁️ Ver</button>
+                    <button class="btn-primary btn-sm" style="background: #f39c12; flex: 1; margin: 0; padding: 6px 2px;" onclick="abrirModalEditarOcorrencia('${o.id}')">✏️ Editar</button>
+                    <button class="btn-success btn-sm" style="flex: 1; margin: 0; padding: 6px 2px;" onclick="abrirModalFinalizarOcorrencia('${o.id}')">✔️ Solucionar</button>
+                    <button class="btn-danger btn-sm" style="flex: 1; margin: 0; padding: 6px 2px;" onclick="cancelarOcorrencia('${o.id}')">❌ Cancelar</button>
+                `;
 
                 return `
                     <tr>
-                        <td>${o.descricao}</td>
-                        <td>${prazoFormatado}</td>
-                        <td>${o.responsavel_abertura}</td>
-                        <td><span style="background-color: ${corStatus}; color: white; padding: 4px 8px; border-radius: 4px; font-size: 12px; font-weight: bold;">${o.status}</span></td>
-                        <td>
-                            <div style="display: flex; gap: 5px; flex-wrap: wrap;">
-                                <button class="btn-primary btn-sm" style="background: #3498db;" onclick="abrirModalVerOcorrencia('${o.id}')">👁️ Ver</button>
-                                ${o.status !== 'Solucionada' && o.status !== 'Cancelada' ? `
-                                    <button class="btn-primary btn-sm" style="background: #f39c12;" onclick="abrirModalEditarOcorrencia('${o.id}')">✏️ Editar</button>
-                                    <button class="btn-success btn-sm" onclick="abrirModalFinalizarOcorrencia('${o.id}')">✔️ Solucionar</button>
-                                    <button class="btn-danger btn-sm" onclick="cancelarOcorrencia('${o.id}')">❌ Cancelar</button>
-                                ` : ''}
+                        <td style="font-size: 12px;"><strong>${o.descricao}</strong><br><small style="color: #7f8c8d;">Abertura: ${new Date(o.created_at).toLocaleDateString('pt-BR')}</small></td>
+                        <td style="font-size: 12px;">${prazoFormatado}</td>
+                        <td style="font-size: 12px;">${o.responsavel_abertura}</td>
+                        
+                        <!-- 🟢 STATUS E AÇÕES UNIFICADOS -->
+                        <td style="min-width: 200px;">
+                            <div style="margin-bottom: 8px;">
+                                <span style="background-color: ${corStatus}; color: white; padding: 4px 8px; border-radius: 4px; font-size: 11px; font-weight: bold; display: block; width: 100%; text-align: center;">${o.status}</span>
+                            </div>
+                            <div style="display: flex; gap: 4px; flex-wrap: nowrap; justify-content: center;">
+                                ${botoesAcao}
                             </div>
                         </td>
                     </tr>
                 `;
-            }).join('');
+            }).join('') : '<tr><td colspan="4" style="text-align: center; color: #7f8c8d; padding: 20px;">Nenhuma ocorrência pendente.</td></tr>';
         }
+
+        // 🟢 Mantém o histórico atualizado junto
+        carregarHistoricoOcorrencias();
+
     } catch (err) { console.error("Erro ao carregar ocorrências:", err.message); }
 }
 
+// 🟢 FUNÇÕES DO HISTÓRICO DE OCORRÊNCIAS
+window.verificarEnterFiltroOcorrencia = function(event) {
+    if (event.key === 'Enter') {
+        event.preventDefault();
+        carregarHistoricoOcorrencias();
+    }
+}
+
+window.carregarHistoricoOcorrencias = async function() {
+    const inputResp = document.getElementById('filtro_hist_oc_responsavel');
+    const inputData = document.getElementById('filtro_hist_oc_data');
+    
+    const resp = inputResp ? inputResp.value.trim() : '';
+    const dataFiltro = inputData ? inputData.value : '';
+    paginaAtualOc = 1; // Reseta para a página 1 ao fazer nova busca
+
+    try {
+        let query = supabase.from('ocorrencias')
+            .select('*')
+            .in('status', ['Solucionada', 'Cancelada']) // Traz só o que finalizou
+            .order('created_at', { ascending: false });
+
+        if (resp) query = query.ilike('responsavel_abertura', `%${resp}%`);
+        
+        // 🟢 Filtro de Data: Puxa do dia especificado
+        if (dataFiltro) {
+            const dataInicio = `${dataFiltro}T00:00:00.000Z`;
+            const dataFim = `${dataFiltro}T23:59:59.999Z`;
+            query = query.gte('created_at', dataInicio).lte('created_at', dataFim);
+        }
+
+        const { data, error } = await query;
+        if (error) throw error;
+
+        dadosHistoricoOc = data || [];
+        renderizarTabelaHistoricoOc();
+    } catch (err) { console.error("Erro ao carregar histórico:", err); }
+}
+
+function renderizarTabelaHistoricoOc() {
+    const tbody = document.getElementById('lista-historico-ocorrencias-aba');
+    const spanPagina = document.getElementById('span-pagina-historico-oc');
+    if (!tbody) return;
+
+    const totalPaginas = Math.ceil(dadosHistoricoOc.length / itensPorPaginaOc) || 1;
+    if (spanPagina) spanPagina.innerText = `Página ${paginaAtualOc} de ${totalPaginas}`;
+
+    const inicio = (paginaAtualOc - 1) * itensPorPaginaOc;
+    const fim = inicio + itensPorPaginaOc;
+    const itensPagina = dadosHistoricoOc.slice(inicio, fim);
+
+    tbody.innerHTML = itensPagina.length > 0 ? itensPagina.map(o => {
+        const dataC = new Date(o.created_at).toLocaleDateString('pt-BR');
+        let corStatus = o.status === 'Solucionada' ? '#2ecc71' : '#e74c3c';
+
+        return `
+            <tr>
+                <td style="font-size: 12px;"><strong>${o.descricao}</strong><br><small style="color: #7f8c8d;">Data: ${dataC}</small></td>
+                <td style="font-size: 12px;">${o.responsavel_abertura}</td>
+                <td style="min-width: 120px;">
+                    <span style="background-color: ${corStatus}; color: white; padding: 4px 8px; border-radius: 4px; font-size: 11px; font-weight: bold; display: inline-block; width: 100%; text-align: center;">${o.status}</span>
+                    ${o.status === 'Cancelada' && o.motivo_cancelamento ? `<div style="margin-top: 4px; font-size: 10px; color: #475569; background: #f1f5f9; padding: 4px; border-radius: 4px;"><strong>Motivo:</strong> ${o.motivo_cancelamento}</div>` : ''}
+                </td>
+                <td>
+                    <button class="btn-primary btn-sm" style="background: #3498db; margin: 0; padding: 6px 10px;" onclick="abrirModalVerOcorrencia('${o.id}')">👁️ Ver Detalhes</button>
+                </td>
+            </tr>
+        `;
+    }).join('') : '<tr><td colspan="4" style="text-align: center; color: #7f8c8d; padding: 20px;">Nenhum registro encontrado no histórico.</td></tr>';
+}
+
+function mudarPaginaHistoricoOc(direcao) {
+    const totalPaginas = Math.ceil(dadosHistoricoOc.length / itensPorPaginaOc) || 1;
+    paginaAtualOc += direcao;
+    if (paginaAtualOc < 1) paginaAtualOc = 1;
+    if (paginaAtualOc > totalPaginas) paginaAtualOc = totalPaginas;
+    renderizarTabelaHistoricoOc();
+}
+
+// 🟢 AS DEMAIS FUNÇÕES PERMANECEM IGUAIS
 async function abrirModalVerOcorrencia(id) {
     try {
         const { data: o, error } = await supabase.from('ocorrencias').select('*').eq('id', id).single();
@@ -592,14 +690,11 @@ async function salvarEdicaoOcorrencia() {
     }
 }
 
-// 🟢 ATUALIZADO: Agora pede o motivo e muda o status
 async function cancelarOcorrencia(id) {
     const motivo = prompt("⚠️ Atenção: Por favor, digite o motivo do cancelamento desta ocorrência:");
     
-    // Se o usuário clicar em "Cancelar" no prompt, a variável vem nula e abortamos a operação
     if (motivo === null) return; 
     
-    // Se o usuário der OK mas deixar em branco, barramos
     if (motivo.trim() === "") {
         return alert("O motivo é obrigatório para cancelar uma ocorrência!");
     }
