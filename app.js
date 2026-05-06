@@ -2069,6 +2069,21 @@ async function carregarCadastros() {
                     dataNascFormatada = c.data_nascimento.split('-').reverse().join('/');
                 }
 
+                // 🟢 LÓGICA DE BOTÕES PADRONIZADA (MEDIANO)
+                let botoesAcao = `
+                    <div style="display: flex; gap: 4px; flex-wrap: wrap; justify-content: center;">
+                        ${c.status !== 'Realizado' ? `
+                            <button class="btn-success btn-sm" style="flex: 1; padding: 5px 2px; font-size: 11px;" onclick="alterarStatusCadastro('${c.id}', 'Realizado')">✔️ Finalizar</button>
+                            
+                            ${c.status === 'Pendente' 
+                                ? `<button class="btn-primary btn-sm" style="background: #e74c3c; flex: 1; padding: 5px 2px; font-size: 11px;" onclick="alterarStatusCadastro('${c.id}', 'Aguardando')">⏳ Pausar</button>` 
+                                : `<button class="btn-primary btn-sm" style="background: #3498db; flex: 1; padding: 5px 2px; font-size: 11px;" onclick="alterarStatusCadastro('${c.id}', 'Pendente')">▶️ Retornar</button>`
+                            }
+                        ` : ''}
+                        <button class="btn-primary btn-sm" style="background: #95a5a6; flex: 1; padding: 5px 2px; font-size: 11px;" onclick="abrirModalObsCadastro('${c.id}', \`${c.observacao || ''}\`)">📝 Obs</button>
+                    </div>
+                `;
+
                 return `
                     <tr>
                         <td style="font-size: 12px; min-width: 80px;">${new Date(c.created_at).toLocaleDateString('pt-BR')} <br><small style="color:#64748b;">${new Date(c.created_at).toLocaleTimeString('pt-BR')}</small></td>
@@ -2101,25 +2116,15 @@ async function carregarCadastros() {
                             </div>
                         </td>
 
-                        <td style="min-width: 140px;">
-                            <div style="margin-bottom: 8px;">
-                                <span style="background-color: ${corStatus}; color: white; padding: 4px 8px; border-radius: 4px; font-size: 11px; font-weight: bold; display: inline-block; width: 100%; text-align: center;">${c.status}</span>
+                        <!-- 🟢 COLUNA DE AÇÕES COM PADRÃO MEDIANO -->
+                        <td style="width: 140px; min-width: 140px;">
+                            <div style="margin-bottom: 6px;">
+                                <span style="background-color: ${corStatus}; color: white; padding: 5px; border-radius: 4px; font-size: 11px; font-weight: bold; display: block; width: 100%; text-align: center;">${c.status}</span>
                             </div>
                             
-                            <!-- 🟢 O SEU HTML EXATO, APENAS COM A LÓGICA DE TROCA EMBUTIDA -->
-                            <div style="display: flex; gap: 4px; flex-wrap: wrap; justify-content: center;">
-                                ${c.status !== 'Realizado' ? `
-                                    <button class="btn-success btn-sm" style="flex: 1; padding: 4px; font-size: 11px;" onclick="alterarStatusCadastro('${c.id}', 'Realizado')">✔️ Finalizar</button>
-                                    
-                                    ${c.status === 'Pendente' 
-                                        ? `<button class="btn-primary btn-sm" style="background: #e74c3c; flex: 1; padding: 4px; font-size: 11px;" onclick="alterarStatusCadastro('${c.id}', 'Aguardando')">⏳ Pausar</button>` 
-                                        : `<button class="btn-primary btn-sm" style="background: #3498db; flex: 1; padding: 4px; font-size: 11px;" onclick="alterarStatusCadastro('${c.id}', 'Pendente')">▶️ Retornar</button>`
-                                    }
-                                ` : ''}
-                                <button class="btn-primary btn-sm" style="background: #95a5a6; flex: 1; padding: 4px; font-size: 11px;" onclick="abrirModalObsCadastro('${c.id}', \`${c.observacao || ''}\`)">📝 Obs</button>
-                            </div>
+                            ${botoesAcao}
 
-                            ${c.observacao ? `<div style="margin-top: 8px; font-size: 10px; color: #475569; background: #f1f5f9; padding: 4px; border-radius: 4px; line-height: 1.4;"><strong>Obs:</strong> ${c.observacao}</div>` : ''}
+                            ${c.observacao ? `<div style="margin-top: 6px; font-size: 10px; color: #475569; background: #f1f5f9; padding: 4px; border-radius: 4px; line-height: 1.3;"><strong>Obs:</strong> ${c.observacao}</div>` : ''}
                         </td>
 
                         <td>${realizadoPor}</td>
@@ -2129,7 +2134,6 @@ async function carregarCadastros() {
         }
     } catch (err) { console.error("Erro ao carregar cadastros:", err); }
 }
-
 async function alterarStatusCadastro(id, novoStatus) {
     if(!confirm(`Confirma a mudança de status para "${novoStatus}"?`)) return;
 
