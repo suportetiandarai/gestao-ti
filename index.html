@@ -397,6 +397,9 @@
                 </div>
             </section>
 
+          <!-- ========================================== -->
+            <!-- ABA: TREINAMENTOS AGENDADOS E HISTÓRICO      -->
+            <!-- ========================================== -->
             <section id="aba-treinamentos" class="tab-content hidden">
                 <h3>Agendamento de Treinamentos</h3>
                 
@@ -456,9 +459,8 @@
                         </table>
                     </div>
                 </div>
-            </section>
             
-           <!-- 🟢 NOVO CARD: HISTÓRICO DE TREINAMENTOS (COM PAGINAÇÃO) -->
+                <!-- 🟢 CARD DO HISTÓRICO AGORA ESTÁ DENTRO DA ABA CORRETA -->
                 <div class="admin-card mt-20">
                     <h4>📂 Histórico de Treinamentos (Concluídos / Cancelados)</h4>
                     
@@ -468,7 +470,7 @@
                             <input type="text" id="filtro_hist_tr_colaborador" placeholder="Digite o nome do colaborador..." style="margin-bottom: 0;" onkeyup="verificarEnterFiltroHistorico(event)">
                         </div>
                         <div style="display: flex; gap: 10px;">
-                            <button class="btn-primary" onclick="carregarHistoricoTreinamentos()">Buscar</button>
+                            <button type="button" class="btn-primary" onclick="carregarHistoricoTreinamentos()">Buscar</button>
                         </div>
                     </div>
 
@@ -491,12 +493,16 @@
                     
                     <!-- 🟢 CONTROLES DE PAGINAÇÃO (DE 5 EM 5) -->
                     <div style="display: flex; justify-content: center; align-items: center; gap: 15px; margin-top: 15px;">
-                        <button class="btn-primary btn-sm" style="margin: 0;" onclick="mudarPaginaHistorico(-1)">⬅️ Anterior</button>
+                        <button type="button" class="btn-primary btn-sm" style="margin: 0;" onclick="mudarPaginaHistorico(-1)">⬅️ Anterior</button>
                         <span id="span-pagina-historico" style="font-size: 13px; font-weight: bold; color: #475569;">Página 1</span>
-                        <button class="btn-primary btn-sm" style="margin: 0;" onclick="mudarPaginaHistorico(1)">Próxima ➡️</button>
+                        <button type="button" class="btn-primary btn-sm" style="margin: 0;" onclick="mudarPaginaHistorico(1)">Próxima ➡️</button>
                     </div>
                 </div>
+            </section> <!-- 🟢 O FECHAMENTO DA ABA AGORA FICA AQUI, NO FINAL DE TUDO -->
             
+            <!-- ========================================== -->
+            <!-- ABA: SOLICITAÇÕES DE TREINAMENTO             -->
+            <!-- ========================================== -->
             <section id="aba-solicita-treinamento" class="tab-content hidden">
                 <h3>Solicitações de Treinamento</h3>
                 
@@ -532,55 +538,6 @@
                                 </tr>
                             </thead>
                             <tbody id="lista-solicita-treinamento-aba">
-                                <tr><td colspan="6" style="text-align: center;">Carregando...</td></tr>
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-            </section>
-
-            <!-- NOVA ABA: CADASTROS PENDENTES -->
-            <section id="aba-cadastros" class="tab-content hidden">
-                <h3>Gestão de Cadastros Solicitados</h3>
-                
-                <div class="admin-card">
-                    <h4>🔍 Filtrar Solicitações</h4>
-                    <div class="form-row" style="display: flex; gap: 15px; flex-wrap: wrap; align-items: flex-end;">
-                        <div class="form-group" style="flex: 1; min-width: 150px;">
-                            <label>Status:</label>
-                            <select id="filtro_cad_status" style="margin-bottom: 0;">
-                                <option value="Pendente">⏳ Pendentes</option>
-                                <option value="Aguardando">⚠️ Aguardando (Falta Foto)</option>
-                                <option value="Realizado">✅ Realizados</option>
-                                <option value="">Todos</option>
-                            </select>
-                        </div>
-                        <div class="form-group" style="flex: 2; min-width: 200px;">
-                            <label>Nome do Profissional:</label>
-                            <input type="text" id="filtro_cad_nome" placeholder="Buscar por nome..." style="margin-bottom: 0;" onkeyup="verificarEnterCadastro(event)">
-                        </div>
-                        <div style="display: flex; gap: 10px;">
-                            <button class="btn-primary" onclick="carregarCadastros()">Buscar</button>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="admin-card mt-20">
-                    <h4>📋 Lista de Solicitações</h4>
-                    <div class="table-responsive">
-                        <table>
-                            <thead>
-                                <tr>
-                                    <th>Data</th>
-                                    <th>Dados Pessoais</th>
-                                    <th>Atuação Profissional</th>
-                                    <th>Contato</th>
-                                    <th>Conselho e Anexos</th>
-                                    <th>Status e Ações</th>
-                                    <th>Realizado Por</th>
-                                </tr>
-                            </thead>
-                            <tbody id="lista-cadastros-aba">
                                 <tr><td colspan="6" style="text-align: center;">Carregando...</td></tr>
                             </tbody>
                         </table>
