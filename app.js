@@ -515,6 +515,45 @@ async function carregarListaOcorrencias() {
     } catch (err) { console.error("Erro ao carregar ocorrências:", err.message); }
 }
 
+// 🟢 FUNÇÕES DO HISTÓRICO DE OCORRÊNCIAS
+window.verificarEnterFiltroOcorrencia = function(event) {
+    if (event.key === 'Enter') {
+        event.preventDefault();
+        carregarHistoricoOcorrencias();
+    }
+}
+
+window.carregarHistoricoOcorrencias = async function() {
+    const inputResp = document.getElementById('filtro_hist_oc_responsavel');
+    const inputData = document.getElementById('filtro_hist_oc_data');
+    
+    const resp = inputResp ? inputResp.value.trim() : '';
+    const dataFiltro = inputData ? inputData.value : '';
+    paginaAtualOc = 1; // Reseta para a página 1 ao fazer nova busca
+
+    try {
+        let query = supabase.from('ocorrencias')
+            .select('*')
+            .in('status', ['Solucionada', 'Cancelada']) // Traz só o que finalizou
+            .order('created_at', { ascending: false });
+
+        if (resp) query = query.ilike('responsavel_abertura', `%${resp}%`);
+        
+        // 🟢 Filtro de Data
+        if (dataFiltro) {
+            const dataInicio = `${dataFiltro}T00:00:00.000Z`;
+            const dataFim = `${dataFiltro}T23:59:59.999Z`;
+            query = query.gte('created_at', dataInicio).lte('created_at', dataFim);
+        }
+
+        const { data, error } = await query;
+        if (error) throw error;
+
+        dadosHistoricoOc = data || [];
+        renderizarTabelaHistoricoOc();
+    } catch (err) { console.error("Erro ao carregar histórico:", err); }
+}
+
 // 🟢 ATUALIZADO: Status idêntico ao padrão TIMED/AD no Histórico
 function renderizarTabelaHistoricoOc() {
     const tbody = document.getElementById('lista-historico-ocorrencias-aba');
@@ -554,87 +593,6 @@ function renderizarTabelaHistoricoOc() {
     }).join('') : '<tr><td colspan="3" style="text-align: center; color: #7f8c8d; padding: 20px;">Nenhum registro encontrado no histórico.</td></tr>'; 
 }
 
-        carregarHistoricoOcorrencias();
-
-    } catch (err) { console.error("Erro ao carregar ocorrências:", err.message); }
-}
-
-// 🟢 ATUALIZADO: Status e Ações na mesma coluna no Histórico
-function renderizarTabelaHistoricoOc() {
-    const tbody = document.getElementById('lista-historico-ocorrencias-aba');
-    const spanPagina = document.getElementById('span-pagina-historico-oc');
-    if (!tbody) return;
-
-    const totalPaginas = Math.ceil(dadosHistoricoOc.length / itensPorPaginaOc) || 1;
-    if (spanPagina) spanPagina.innerText = `Página ${paginaAtualOc} de ${totalPaginas}`;
-
-    const inicio = (paginaAtualOc - 1) * itensPorPaginaOc;
-    const fim = inicio + itensPorPaginaOc;
-    const itensPagina = dadosHistoricoOc.slice(inicio, fim);
-
-    tbody.innerHTML = itensPagina.length > 0 ? itensPagina.map(o => {
-        const dataC = new Date(o.created_at).toLocaleDateString('pt-BR');
-        let corStatus = o.status === 'Solucionada' ? '#2ecc71' : '#e74c3c';
-
-        return `
-            <tr>
-                <td style="font-size: 12px;"><strong>${o.descricao}</strong><br><small style="color: #7f8c8d;">Data: ${dataC}</small></td>
-                <td style="font-size: 12px;">${o.responsavel_abertura}</td>
-                
-                <!-- 🟢 STATUS E AÇÕES UNIFICADOS AQUI TAMBÉM -->
-                <td style="width: 140px; min-width: 120px;">
-                    <div style="margin-bottom: 6px;">
-                        <span style="background-color: ${corStatus}; color: white; padding: 4px 8px; border-radius: 4px; font-size: 11px; font-weight: bold; display: block; width: 100%; text-align: center;">${o.status}</span>
-                    </div>
-                    <div style="display: flex; justify-content: center;">
-                        <button class="btn-primary btn-sm" style="background: #3498db; width: 100%; margin: 0; padding: 6px 4px; font-size: 11px;" onclick="abrirModalVerOcorrencia('${o.id}')">👁️ Ver Detalhes</button>
-                    </div>
-                    ${o.status === 'Cancelada' && o.motivo_cancelamento ? `<div style="margin-top: 6px; font-size: 10px; color: #475569; background: #f1f5f9; padding: 4px; border-radius: 4px; text-align: center; line-height: 1.3;"><strong>Motivo:</strong> ${o.motivo_cancelamento}</div>` : ''}
-                </td>
-            </tr>
-        `;
-    }).join('') : '<tr><td colspan="3" style="text-align: center; color: #7f8c8d; padding: 20px;">Nenhum registro encontrado no histórico.</td></tr>'; 
-}
-
-// 🟢 FUNÇÕES DO HISTÓRICO DE OCORRÊNCIAS
-window.verificarEnterFiltroOcorrencia = function(event) {
-    if (event.key === 'Enter') {
-        event.preventDefault();
-        carregarHistoricoOcorrencias();
-    }
-}
-
-window.carregarHistoricoOcorrencias = async function() {
-    const inputResp = document.getElementById('filtro_hist_oc_responsavel');
-    const inputData = document.getElementById('filtro_hist_oc_data');
-    
-    const resp = inputResp ? inputResp.value.trim() : '';
-    const dataFiltro = inputData ? inputData.value : '';
-    paginaAtualOc = 1; // Reseta para a página 1 ao fazer nova busca
-
-    try {
-        let query = supabase.from('ocorrencias')
-            .select('*')
-            .in('status', ['Solucionada', 'Cancelada']) // Traz só o que finalizou
-            .order('created_at', { ascending: false });
-
-        if (resp) query = query.ilike('responsavel_abertura', `%${resp}%`);
-        
-        // 🟢 Filtro de Data: Puxa do dia especificado
-        if (dataFiltro) {
-            const dataInicio = `${dataFiltro}T00:00:00.000Z`;
-            const dataFim = `${dataFiltro}T23:59:59.999Z`;
-            query = query.gte('created_at', dataInicio).lte('created_at', dataFim);
-        }
-
-        const { data, error } = await query;
-        if (error) throw error;
-
-        dadosHistoricoOc = data || [];
-        renderizarTabelaHistoricoOc();
-    } catch (err) { console.error("Erro ao carregar histórico:", err); }
-}
-
 function mudarPaginaHistoricoOc(direcao) {
     const totalPaginas = Math.ceil(dadosHistoricoOc.length / itensPorPaginaOc) || 1;
     paginaAtualOc += direcao;
@@ -643,7 +601,6 @@ function mudarPaginaHistoricoOc(direcao) {
     renderizarTabelaHistoricoOc();
 }
 
-// 🟢 AS DEMAIS FUNÇÕES PERMANECEM IGUAIS
 async function abrirModalVerOcorrencia(id) {
     try {
         const { data: o, error } = await supabase.from('ocorrencias').select('*').eq('id', id).single();
