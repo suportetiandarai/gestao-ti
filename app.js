@@ -2237,10 +2237,10 @@ async function carregarSolicitacoesAD() {
                             📱 ${c.telefone || '-'}
                         </td>
                         
-                        <!-- 🟢 COLUNA FINA E COMPACTA (120px) -->
-                        <td style="width: 120px; min-width: 110px;">
+                        <!-- 🟢 COLUNA FINA E COMPACTA (130px) -->
+                        <td style="width: 125px; min-width: 110px;">
                             <div style="margin-bottom: 4px;">
-                                <span style="background-color: ${corStatus}; color: white; padding: 4px; border-radius: 4px; font-size: 10px; font-weight: bold; display: block; width: 100%; text-align: center;">${c.status || 'Pendente'}</span>
+                                <span style="background-color: ${corStatus}; color: white; padding: 6px; border-radius: 4px; font-size: 10px; font-weight: bold; display: block; width: 100%; text-align: center;">${c.status || 'Pendente'}</span>
                             </div>
                             
                             <div style="display: flex; gap: 2px; flex-wrap: nowrap; justify-content: center;">
@@ -2329,8 +2329,8 @@ async function carregarSolicitacoesTreinamento() {
                 let botoesAcao = '';
                 if (t.status === 'Pendente' || !t.status) {
                     botoesAcao = `
-                        <button class="btn-success btn-sm" style="flex: 1; margin: 0; padding: 4px 2px; font-size: 10px;" onclick="prepararAgendamento('${t.id}', '${t.nome_solicitante || t.nome || ''}', '${t.telefone || t.celular || ''}', '${t.tema || ''}')">📅 Agendar</button>
-                        <button class="btn-danger btn-sm" style="flex: 1; margin: 0; padding: 4px 2px; font-size: 10px;" onclick="alterarStatusTreinamentoExt('${t.id}', 'Cancelado')">❌ Baixa</button>
+                        <button class="btn-success btn-sm" style="flex: 1; margin: 0; padding: 8px 4px; font-size: 10px;" onclick="prepararAgendamento('${t.id}', '${t.nome_solicitante || t.nome || ''}', '${t.telefone || t.celular || ''}', '${t.tema || ''}')">📅 Agendar</button>
+                        <button class="btn-danger btn-sm" style="flex: 1; margin: 0; padding: 8px 4px; font-size: 10px;" onclick="alterarStatusTreinamentoExt('${t.id}', 'Cancelado')">❌ Baixa</button>
                     `;
                 } else {
                     if (isAdmin) {
@@ -2350,7 +2350,7 @@ async function carregarSolicitacoesTreinamento() {
                         <!-- 🟢 COLUNA FINA E COMPACTA (120px) -->
                         <td style="width: 120px; min-width: 110px;">
                             <div style="margin-bottom: 4px;">
-                                <span style="background-color: ${corStatus}; color: white; padding: 4px; border-radius: 4px; font-size: 10px; font-weight: bold; display: block; width: 100%; text-align: center;">${t.status || 'Pendente'}</span>
+                                <span style="background-color: ${corStatus}; color: white; padding: 8px; border-radius: 4px; font-size: 10px; font-weight: bold; display: block; width: 100%; text-align: center;">${t.status || 'Pendente'}</span>
                             </div>
                             
                             <div style="display: flex; gap: 2px; flex-wrap: nowrap; justify-content: center;">
