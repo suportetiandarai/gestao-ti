@@ -458,7 +458,7 @@
                 </div>
             </section>
             
-           <!-- 🟢 NOVO CARD: HISTÓRICO DE TREINAMENTOS -->
+           <!-- 🟢 NOVO CARD: HISTÓRICO DE TREINAMENTOS (COM PAGINAÇÃO) -->
                 <div class="admin-card mt-20">
                     <h4>📂 Histórico de Treinamentos (Concluídos / Cancelados)</h4>
                     
@@ -487,6 +487,13 @@
                                 <tr><td colspan="5" style="text-align: center;">Carregando histórico...</td></tr>
                             </tbody>
                         </table>
+                    </div>
+                    
+                    <!-- 🟢 CONTROLES DE PAGINAÇÃO (DE 5 EM 5) -->
+                    <div style="display: flex; justify-content: center; align-items: center; gap: 15px; margin-top: 15px;">
+                        <button class="btn-primary btn-sm" style="margin: 0;" onclick="mudarPaginaHistorico(-1)">⬅️ Anterior</button>
+                        <span id="span-pagina-historico" style="font-size: 13px; font-weight: bold; color: #475569;">Página 1</span>
+                        <button class="btn-primary btn-sm" style="margin: 0;" onclick="mudarPaginaHistorico(1)">Próxima ➡️</button>
                     </div>
                 </div>
             
