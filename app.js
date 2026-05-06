@@ -857,24 +857,25 @@ async function salvarTreinamento() {
     } catch (err) { alert("Erro ao agendar: " + err.message); }
 }
 
-// 🟢 ATUALIZADO: Mostra as ações e o status Cancelado/Concluído
+// Função para buscar ao apertar Enter
+function verificarEnterFiltroHistorico(event) {
+    if (event.key === 'Enter') carregarHistoricoTreinamentos();
+}
+
+// 🟢 ATUALIZADO: Mostra APENAS os "Agendados" na agenda principal
 async function carregarListaTreinamentos() {
     try {
         const { data, error } = await supabase.from('treinamentos')
             .select('*')
-            .order('data_hora', { ascending: false }); 
+            .eq('status', 'Agendado') // Filtra para mostrar só os que vão acontecer
+            .order('data_hora', { ascending: true }); // Coloca os mais próximos no topo
 
         if (error) throw error;
 
         const tbody = document.getElementById('lista-treinamentos-aba');
         if (tbody) {
             tbody.innerHTML = data.length > 0 ? data.map(t => {
-                
-                // 🟢 MÁGICA AQUI: O Javascript obriga a ter 2 dígitos, impedindo o erro do "21:2"
-                const dataFormatada = new Date(t.data_hora).toLocaleString('pt-BR', { 
-                    day: '2-digit', month: '2-digit', year: 'numeric', 
-                    hour: '2-digit', minute: '2-digit' 
-                }).replace(',', ' às'); // Troca a vírgula por "às" para ficar elegante
+                const dataFormatada = new Date(t.data_hora).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }).replace(',', ' às');
                 
                 return `
                     <tr>
@@ -884,22 +885,63 @@ async function carregarListaTreinamentos() {
                         <td>${t.predio} - ${t.setor} (${t.andar})</td>
                         <td>
                             <div style="display: flex; gap: 5px; flex-wrap: wrap;">
-                                ${t.status === 'Agendado' ? `
-                                    <button class="btn-primary btn-sm" style="background: #f39c12;" onclick="abrirModalEditarTreinamento('${t.id}')">✏️ Editar</button>
-                                    <button class="btn-success btn-sm" onclick="abrirModalFinalizarTreinamento('${t.id}')">✔️ Concluir</button>
-                                    <button class="btn-danger btn-sm" onclick="cancelarTreinamento('${t.id}')">❌ Cancelar</button>
-                                ` : `<em style="font-size:12px; color:${t.status === 'Concluído' ? '#2ecc71' : '#e74c3c'}; font-weight: bold;">${t.status}</em>
-                                     ${t.status === 'Cancelado' && t.motivo_cancelamento ? `<br><small style="color:#7f8c8d;">Motivo: ${t.motivo_cancelamento}</small>` : ''}
-                                `}
+                                <button class="btn-primary btn-sm" style="background: #f39c12;" onclick="abrirModalEditarTreinamento('${t.id}')">✏️ Editar</button>
+                                <button class="btn-success btn-sm" onclick="abrirModalFinalizarTreinamento('${t.id}')">✔️ Concluir</button>
+                                <button class="btn-danger btn-sm" onclick="cancelarTreinamento('${t.id}')">❌ Cancelar</button>
                             </div>
                         </td>
                     </tr>
                 `;
-            }).join('') : '<tr><td colspan="5" style="text-align: center;">Nenhum treinamento registrado.</td></tr>';
+            }).join('') : '<tr><td colspan="5" style="text-align: center; color: #7f8c8d; padding: 20px;">Nenhum treinamento pendente na agenda.</td></tr>';
         }
+
+        // 🟢 Chama o histórico logo em seguida para manter as duas tabelas atualizadas juntas!
+        carregarHistoricoTreinamentos();
+
     } catch (err) { console.error("Erro ao carregar treinamentos:", err); }
 }
 
+// 🟢 NOVA FUNÇÃO: Tabela exclusiva para o Histórico (Concluídos e Cancelados)
+async function carregarHistoricoTreinamentos() {
+    const nome = document.getElementById('filtro_hist_tr_colaborador').value.trim();
+
+    try {
+        let query = supabase.from('treinamentos')
+            .select('*')
+            .neq('status', 'Agendado') // Puxa TUDO que não for "Agendado" (ou seja, concluído/cancelado)
+            .order('data_hora', { ascending: false }); // Histórico do mais recente para o mais antigo
+
+        if (nome) query = query.ilike('colaborador', `%${nome}%`);
+
+        const { data, error } = await query;
+        if (error) throw error;
+
+        const tbody = document.getElementById('lista-historico-treinamentos-aba');
+        if (tbody) {
+            tbody.innerHTML = data.length > 0 ? data.map(t => {
+                const dataFormatada = new Date(t.data_hora).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }).replace(',', ' às');
+                
+                let corStatus = t.status === 'Concluído' ? '#2ecc71' : '#e74c3c';
+                let responsavel = t.responsavel_conclusao ? `<span style="font-size: 11px;"><strong>${t.responsavel_conclusao}</strong></span>` : '-';
+
+                return `
+                    <tr>
+                        <td><strong>${dataFormatada}</strong></td>
+                        <td>${t.colaborador}<br><small>${t.telefone}</small></td>
+                        <td><strong>${t.tema}</strong><br><small>${t.predio} - ${t.setor} (${t.andar})</small></td>
+                        <td>
+                            <div style="margin-bottom: 4px;">
+                                <span style="background-color: ${corStatus}; color: white; padding: 4px 8px; border-radius: 4px; font-size: 11px; font-weight: bold; display: inline-block; text-align: center;">${t.status}</span>
+                            </div>
+                            ${t.status === 'Cancelado' && t.motivo_cancelamento ? `<div style="font-size: 10px; color: #475569;"><strong>Motivo:</strong> ${t.motivo_cancelamento}</div>` : ''}
+                        </td>
+                        <td>${responsavel}</td>
+                    </tr>
+                `;
+            }).join('') : '<tr><td colspan="5" style="text-align: center; color: #7f8c8d; padding: 20px;">Nenhum registro encontrado no histórico.</td></tr>';
+        }
+    } catch (err) { console.error("Erro ao carregar histórico de treinamentos:", err); }
+}
 // 🟢 NOVO: Abre modal para Editar Treinamento
 async function abrirModalEditarTreinamento(id) {
     try {
