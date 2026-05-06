@@ -783,39 +783,39 @@ async function carregarListaToners() {
     } catch (err) { console.error("Erro ao carregar toners:", err.message); }
 }
 
-// 🟢 ATUALIZADO: Layout fininho e botão Suspender no Chamado
 async function carregarListaChamados() {
     try {
+        // 🟢 ORDENA POR 'id' PARA NÃO DAR ERRO 400 NO BANCO DE DADOS
         const { data, error } = await supabase.from('chamado_simpress')
             .select('*')
             .eq('status', 'Aberto')
-            .order('created_at', { ascending: false });
+            .order('id', { ascending: false });
 
         if (error) throw error;
 
         const tbody = document.getElementById('lista-chamados-aba');
         if(tbody) {
             tbody.innerHTML = data.length > 0 ? data.map(c => {
-                let corStatus = '#f39c12'; // Aberto/Pendente
+                let corStatus = '#f39c12'; 
+                
+                // Evita erro se a data não existir
+                const dataAberta = c.created_at ? new Date(c.created_at).toLocaleDateString('pt-BR') : '-';
 
-                // 🟢 BOTÕES COMPACTOS
                 let botoesAcao = `
-                    <div style="display: flex; gap: 2px; flex-wrap: nowrap; justify-content: center;">
-                        <button class="btn-success btn-sm" style="flex: 1; margin: 0; padding: 4px 2px; font-size: 10px;" onclick="abrirModalAtenderChamado('${c.id}')">✔️ Atender</button>
-                        <button class="btn-danger btn-sm" style="flex: 1; margin: 0; padding: 4px 2px; font-size: 10px;" onclick="suspenderChamado('${c.id}')">⏸️ Suspender</button>
+                    <div style="display: flex; gap: 4px; flex-wrap: nowrap; justify-content: center;">
+                        <button class="btn-success btn-sm" style="flex: 1; margin: 0; padding: 5px 2px; font-size: 11px;" onclick="abrirModalAtenderChamado('${c.id}')">✔️ Atender</button>
+                        <button class="btn-danger btn-sm" style="flex: 1; margin: 0; padding: 5px 2px; font-size: 11px;" onclick="suspenderChamado('${c.id}')">⏸️ Suspender</button>
                     </div>
                 `;
 
                 return `
                     <tr>
-                        <td style="font-size: 12px;"><strong>${c.numero_chamado}</strong><br><small>Abertura: ${new Date(c.created_at).toLocaleDateString('pt-BR')}</small></td>
+                        <td style="font-size: 12px;"><strong>${c.numero_chamado}</strong><br><small>Abertura: ${dataAberta}</small></td>
                         <td style="font-size: 12px;">${c.modelo_impressora} <br><small>Série: ${c.numero_serie}</small></td>
                         <td style="font-size: 12px;">${c.setor_localizada}</td>
-                        
-                        <!-- 🟢 COLUNA FINA E COMPACTA (120px) -->
-                        <td style="width: 120px; min-width: 110px;">
-                            <div style="margin-bottom: 4px;">
-                                <span style="background-color: ${corStatus}; color: white; padding: 4px; border-radius: 4px; font-size: 10px; font-weight: bold; display: block; width: 100%; text-align: center;">${c.status}</span>
+                        <td style="width: 140px; min-width: 140px;">
+                            <div style="margin-bottom: 6px;">
+                                <span style="background-color: ${corStatus}; color: white; padding: 5px; border-radius: 4px; font-size: 11px; font-weight: bold; display: block; width: 100%; text-align: center;">${c.status}</span>
                             </div>
                             ${botoesAcao}
                         </td>
@@ -824,51 +824,43 @@ async function carregarListaChamados() {
             }).join('') : '<tr><td colspan="4" style="text-align: center; color: #7f8c8d; padding: 20px;">Nenhum chamado aberto.</td></tr>';
         }
 
-        // Já chama o histórico para carregar a tabela de baixo
-        carregarHistoricoChamados();
+        // 🟢 CHAMA O HISTÓRICO PARA RENDERIZAR A TABELA DE BAIXO
+        if(typeof carregarHistoricoChamados === 'function') carregarHistoricoChamados();
 
     } catch (err) { console.error("Erro ao carregar chamados:", err.message); }
 }
 
-// 🟢 NOVA FUNÇÃO: Suspender Chamado
 async function suspenderChamado(id) {
     const motivo = prompt("⚠️ Atenção: Por favor, digite o motivo da suspensão deste chamado:");
-    
     if (motivo === null) return; 
     if (motivo.trim() === "") return alert("O motivo é obrigatório para suspender o chamado!");
-
+    
     try {
-        const { error } = await supabase.from('chamado_simpress').update({
-            status: 'Suspenso',
-            observacao: motivo 
-        }).eq('id', id);
-        
+        const { error } = await supabase.from('chamado_simpress').update({ status: 'Suspenso', observacao: motivo }).eq('id', id);
         if (error) throw error;
-
+        
         alert("Chamado suspenso com sucesso!");
         carregarListaChamados();
         if(typeof carregarResumoDashboard === 'function') carregarResumoDashboard();
     } catch (err) { alert("Erro ao suspender chamado: " + err.message); }
 }
 
-// 🟢 NOVA FUNÇÃO: Dispara a busca inteligente apertando o ENTER
 window.verificarEnterFiltroChamado = function(event) {
     if (event.key === 'Enter') carregarHistoricoChamados();
 }
 
-// 🟢 NOVA FUNÇÃO: Busca os dados de histórico no BD usando o filtro inteligente (Nº Chamado, Série ou Setor)
 async function carregarHistoricoChamados() {
-    const filtro = document.getElementById('filtro_hist_chamado').value.trim();
-    paginaAtualChamado = 1; // Reseta para a página 1 ao fazer nova busca
+    const filtro = document.getElementById('filtro_hist_chamado')?.value.trim() || '';
+    paginaAtualChamado = 1; 
 
     try {
+        // 🟢 ORDENA POR 'id' PARA NÃO DAR ERRO 400 NO BANCO
         let query = supabase.from('chamado_simpress')
             .select('*')
-            .in('status', ['Atendido', 'Suspenso']) 
-            .order('created_at', { ascending: false });
+            .in('status', ['Atendido', 'Suspenso'])
+            .order('id', { ascending: false }); 
 
         if (filtro) {
-            // Essa linha mágica pesquisa em QUALQUER UM dos 3 campos ao mesmo tempo!
             query = query.or(`numero_chamado.ilike.%${filtro}%,setor_localizada.ilike.%${filtro}%,numero_serie.ilike.%${filtro}%`);
         }
 
@@ -880,7 +872,6 @@ async function carregarHistoricoChamados() {
     } catch (err) { console.error("Erro ao carregar histórico de chamados:", err); }
 }
 
-// 🟢 NOVA FUNÇÃO: Desenha a tabela do Histórico com paginação de 5 em 5
 function renderizarTabelaHistoricoChamados() {
     const tbody = document.getElementById('lista-historico-chamados-aba');
     const spanPagina = document.getElementById('span-pagina-historico-chamado');
@@ -894,7 +885,7 @@ function renderizarTabelaHistoricoChamados() {
     const itensPagina = dadosHistoricoChamados.slice(inicio, fim);
 
     tbody.innerHTML = itensPagina.length > 0 ? itensPagina.map(c => {
-        const dataC = new Date(c.created_at).toLocaleDateString('pt-BR');
+        const dataC = c.created_at ? new Date(c.created_at).toLocaleDateString('pt-BR') : '-';
         let corStatus = c.status === 'Atendido' ? '#2ecc71' : '#e74c3c';
 
         return `
@@ -902,21 +893,18 @@ function renderizarTabelaHistoricoChamados() {
                 <td style="font-size: 12px;"><strong>${c.numero_chamado}</strong><br><small>${dataC}</small></td>
                 <td style="font-size: 12px;">${c.modelo_impressora} <br><small>Série: ${c.numero_serie}</small></td>
                 <td style="font-size: 12px;">${c.setor_localizada}</td>
-                
-                <td style="width: 120px; min-width: 110px;">
-                    <div style="margin-bottom: 4px;">
-                        <span style="background-color: ${corStatus}; color: white; padding: 4px; border-radius: 4px; font-size: 10px; font-weight: bold; display: block; width: 100%; text-align: center;">${c.status}</span>
+                <td style="width: 140px; min-width: 140px;">
+                    <div style="margin-bottom: 6px;">
+                        <span style="background-color: ${corStatus}; color: white; padding: 5px; border-radius: 4px; font-size: 11px; font-weight: bold; display: block; width: 100%; text-align: center;">${c.status}</span>
                     </div>
-                    ${c.observacao ? `<div style="margin-top: 4px; font-size: 9px; color: #475569; background: #f1f5f9; padding: 2px; border-radius: 4px; text-align: center; line-height: 1.2;"><strong>Obs:</strong> ${c.observacao}</div>` : ''}
+                    ${c.observacao ? `<div style="margin-top: 6px; font-size: 10px; color: #475569; background: #f1f5f9; padding: 4px; border-radius: 4px; text-align: center; line-height: 1.3;"><strong>Obs:</strong> ${c.observacao}</div>` : ''}
                 </td>
-                
                 <td style="font-size: 11px;">${c.tecnico_acompanhante || '-'}</td>
             </tr>
         `;
     }).join('') : '<tr><td colspan="5" style="text-align: center; color: #7f8c8d; padding: 20px;">Nenhum registro encontrado no histórico.</td></tr>';
 }
 
-// 🟢 NAVEGAÇÃO DOS BOTÕES ANTERIOR E PRÓXIMA DO CHAMADO
 function mudarPaginaHistoricoChamado(direcao) {
     const totalPaginas = Math.ceil(dadosHistoricoChamados.length / itensPorPaginaChamado) || 1;
     paginaAtualChamado += direcao;
@@ -925,7 +913,6 @@ function mudarPaginaHistoricoChamado(direcao) {
     renderizarTabelaHistoricoChamados();
 }
 
-// --- FUNÇÕES DE MODAL DE TROCA DE TONER E ATENDIMENTO ---
 function abrirModalTrocaToner(idToner) {
     document.getElementById('tt_toner_id').value = idToner;
     limparCanvas('canvas-troca-toner');
