@@ -2201,7 +2201,7 @@ async function carregarCadastros() {
                 let botoesAcao = '';
                 if (c.status !== 'Realizado') {
                     botoesAcao = `
-                        <button class="btn-success btn-sm" style="flex: 1; margin: 0; padding: 4px 2px; font-size: 10px;" onclick="alterarStatusCadastro('${c.id}', 'Realizado')">✔️ Fin</button>
+                        <button class="btn-success btn-sm" style="flex: 1; margin: 0; padding: 4px 2px; font-size: 10px;" onclick="alterarStatusCadastro('${c.id}', 'Realizado')">✔️ Realizado</button>
                         
                         ${c.status === 'Pendente' 
                             ? `<button class="btn-primary btn-sm" style="background: #e74c3c; flex: 1; margin: 0; padding: 4px 2px; font-size: 10px;" onclick="alterarStatusCadastro('${c.id}', 'Aguardando')">⏳ Pausa</button>` 
