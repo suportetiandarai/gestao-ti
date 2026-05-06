@@ -21,7 +21,7 @@ function resetarTimerInatividade() {
 // 2. CONTROLE DE INTERFACE (ANTI-MISTURA)
 // ==========================================
 function atualizarInterface(session) {
-    const loginContainer = document.getElementById('login-container');e
+    const loginContainer = document.getElementById('login-container');
     const appWrapper = document.getElementById('app-wrapper');
 
     if (session) {
