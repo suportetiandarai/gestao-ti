@@ -1070,13 +1070,13 @@ async function salvarTreinamento() {
     } catch (err) { alert("Erro ao agendar: " + err.message); }
 }
 
-// 🟢 ATUALIZADO: Mostra APENAS os "Agendados" na agenda principal
+// 🟢 ATUALIZADO: Tabela de Agenda de Treinamentos (Padrão Mediano 140px)
 async function carregarListaTreinamentos() {
     try {
         const { data, error } = await supabase.from('treinamentos')
             .select('*')
-            .eq('status', 'Agendado') // Filtra para mostrar só os que vão acontecer
-            .order('data_hora', { ascending: true }); // Coloca os mais próximos no topo
+            .eq('status', 'Agendado') 
+            .order('data_hora', { ascending: true }); 
 
         if (error) throw error;
 
@@ -1085,23 +1085,78 @@ async function carregarListaTreinamentos() {
             tbody.innerHTML = data.length > 0 ? data.map(t => {
                 const dataFormatada = new Date(t.data_hora).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }).replace(',', ' às');
                 
+                let corStatus = '#3498db'; // Azul para indicar que está Agendado
+
+                // 🟢 ESTRUTURA DOS BOTÕES: Lado a lado (Editar/Concluir) e Cancelar embaixo
+                let botoesAcao = `
+                    <div style="display: flex; gap: 4px; flex-wrap: wrap; justify-content: center;">
+                        <button class="btn-primary btn-sm" style="background: #f39c12; flex: 1; margin: 0; padding: 5px 2px; font-size: 11px;" onclick="abrirModalEditarTreinamento('${t.id}')">✏️ Editar</button>
+                        <button class="btn-success btn-sm" style="flex: 1; margin: 0; padding: 5px 2px; font-size: 11px;" onclick="abrirModalFinalizarTreinamento('${t.id}')">✔️ Concluir</button>
+                        <button class="btn-danger btn-sm" style="flex: 1; min-width: 100%; margin: 0; padding: 5px 2px; font-size: 11px;" onclick="cancelarTreinamento('${t.id}')">❌ Cancelar</button>
+                    </div>
+                `;
+
                 return `
                     <tr>
-                        <td><strong>${dataFormatada}</strong></td>
-                        <td>${t.colaborador}<br><small>${t.telefone}</small></td>
-                        <td>${t.tema}</td>
-                        <td>${t.predio} - ${t.setor} (${t.andar})</td>
-                        <td>
-                            <div style="display: flex; gap: 5px; flex-wrap: wrap;">
-                                <button class="btn-primary btn-sm" style="background: #f39c12;" onclick="abrirModalEditarTreinamento('${t.id}')">✏️ Editar</button>
-                                <button class="btn-success btn-sm" onclick="abrirModalFinalizarTreinamento('${t.id}')">✔️ Concluir</button>
-                                <button class="btn-danger btn-sm" onclick="cancelarTreinamento('${t.id}')">❌ Cancelar</button>
+                        <td style="font-size: 12px;"><strong>${dataFormatada}</strong></td>
+                        <td style="font-size: 12px;">${t.colaborador}<br><small>${t.telefone}</small></td>
+                        <td style="font-size: 12px;"><strong>${t.tema}</strong></td>
+                        <td style="font-size: 12px;">${t.predio} - ${t.setor} <br><small>(${t.andar})</small></td>
+                        
+                        <!-- 🟢 COLUNA PADRONIZADA (140px) COM STATUS E AÇÕES -->
+                        <td style="width: 140px; min-width: 140px;">
+                            <div style="margin-bottom: 6px;">
+                                <span style="background-color: ${corStatus}; color: white; padding: 5px; border-radius: 4px; font-size: 11px; font-weight: bold; display: block; width: 100%; text-align: center;">${t.status}</span>
                             </div>
+                            ${botoesAcao}
                         </td>
                     </tr>
                 `;
             }).join('') : '<tr><td colspan="5" style="text-align: center; color: #7f8c8d; padding: 20px;">Nenhum treinamento pendente na agenda.</td></tr>';
         }
+
+        if(typeof carregarHistoricoTreinamentos === 'function') carregarHistoricoTreinamentos();
+
+    } catch (err) { console.error("Erro ao carregar treinamentos:", err); }
+}
+
+// 🟢 ATUALIZADO: Tabela de Histórico de Treinamentos (Padrão Mediano 140px)
+function renderizarTabelaHistorico() {
+    const tbody = document.getElementById('lista-historico-treinamentos-aba');
+    const spanPagina = document.getElementById('span-pagina-historico');
+    if (!tbody) return;
+
+    const totalPaginas = Math.ceil(dadosHistoricoTr.length / itensPorPaginaTr) || 1;
+    if (spanPagina) spanPagina.innerText = `Página ${paginaAtualHistorico} de ${totalPaginas}`;
+
+    const inicio = (paginaAtualHistorico - 1) * itensPorPaginaTr;
+    const fim = inicio + itensPorPaginaTr;
+    const itensPagina = dadosHistoricoTr.slice(inicio, fim);
+
+    tbody.innerHTML = itensPagina.length > 0 ? itensPagina.map(t => {
+        const dataFormatada = new Date(t.data_hora).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }).replace(',', ' às');
+        let corStatus = t.status === 'Concluído' ? '#2ecc71' : '#e74c3c';
+        let responsavel = t.responsavel_conclusao ? `<span style="font-size: 11px;"><strong>${t.responsavel_conclusao}</strong></span>` : '-';
+
+        return `
+            <tr>
+                <td style="font-size: 12px;"><strong>${dataFormatada}</strong></td>
+                <td style="font-size: 12px;">${t.colaborador}<br><small>${t.telefone}</small></td>
+                <td style="font-size: 12px;"><strong>${t.tema}</strong><br><small>${t.predio} - ${t.setor} (${t.andar})</small></td>
+                
+                <!-- 🟢 COLUNA PADRONIZADA (140px) COM STATUS E OBS -->
+                <td style="width: 140px; min-width: 140px;">
+                    <div style="margin-bottom: 4px;">
+                        <span style="background-color: ${corStatus}; color: white; padding: 5px; border-radius: 4px; font-size: 11px; font-weight: bold; display: block; width: 100%; text-align: center;">${t.status}</span>
+                    </div>
+                    ${t.status === 'Cancelado' && t.motivo_cancelamento ? `<div style="margin-top: 6px; font-size: 10px; color: #475569; background: #f1f5f9; padding: 4px; border-radius: 4px; text-align: center; line-height: 1.3;"><strong>Motivo:</strong> ${t.motivo_cancelamento}</div>` : ''}
+                </td>
+                
+                <td style="font-size: 11px;">${responsavel}</td>
+            </tr>
+        `;
+    }).join('') : '<tr><td colspan="5" style="text-align: center; color: #7f8c8d; padding: 20px;">Nenhum registro encontrado no histórico.</td></tr>';
+}
 
         // 🟢 Chama o histórico logo em seguida para manter as duas tabelas atualizadas juntas!
         carregarHistoricoTreinamentos();
