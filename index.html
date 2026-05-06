@@ -635,6 +635,57 @@
                 </div>
             </section>
 
+            <!-- ========================================== -->
+            <!-- ABA: SOLICITAÇÕES TIMED (CADASTROS)        -->
+            <!-- ========================================== -->
+            <section id="aba-cadastros" class="tab-content hidden">
+                <h3>Gestão de Solicitações TIMED (Cadastros)</h3>
+                
+                <div class="admin-card">
+                    <h4>🔍 Filtrar Solicitações</h4>
+                    <div class="form-row" style="display: flex; gap: 15px; flex-wrap: wrap; align-items: flex-end;">
+                        <div class="form-group" style="flex: 1; min-width: 150px;">
+                            <label>Status:</label>
+                            <select id="filtro_cad_status" style="margin-bottom: 0;">
+                                <option value="Pendente">⏳ Pendentes</option>
+                                <option value="Realizado">✅ Realizados</option>
+                                <option value="Aguardando">🔴 Aguardando Correção</option>
+                                <option value="">Todos</option>
+                            </select>
+                        </div>
+                        <div class="form-group" style="flex: 2; min-width: 200px;">
+                            <label>Nome do Colaborador:</label>
+                            <input type="text" id="filtro_cad_nome" placeholder="Buscar por nome..." style="margin-bottom: 0;" onkeyup="verificarEnterCadastro(event)">
+                        </div>
+                        <div style="display: flex; gap: 10px;">
+                            <button class="btn-primary" onclick="carregarCadastros()">Buscar</button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="admin-card mt-20">
+                    <h4>📋 Lista de Cadastros</h4>
+                    <div class="table-responsive">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Data Solicitação</th>
+                                    <th>Dados Pessoais</th>
+                                    <th>Vínculo / Setor</th>
+                                    <th>Contato</th>
+                                    <th>Conselho</th>
+                                    <th>Status e Ações</th>
+                                    <th>Realizado Por</th>
+                                </tr>
+                            </thead>
+                            <tbody id="lista-cadastros-aba">
+                                <tr><td colspan="7" style="text-align: center;">Carregando...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
             <section id="aba-inventario" class="tab-content hidden">
                 <h3>Gestão de Inventário Geral</h3>
                 
