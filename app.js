@@ -488,10 +488,10 @@ async function carregarListaOcorrencias() {
                 // 🟢 BOTÕES COMPACTOS: gap de 2px, padding reduzido e fonte menor (10px)
                 let botoesAcao = `
                     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 2px;">
-                        <button class="btn-primary btn-sm" style="background: #3498db; margin: 0; padding: 4px 2px; font-size: 10px;" onclick="abrirModalVerOcorrencia('${o.id}')">👁️ Ver</button>
-                        <button class="btn-primary btn-sm" style="background: #f39c12; margin: 0; padding: 4px 2px; font-size: 10px;" onclick="abrirModalEditarOcorrencia('${o.id}')">✏️ Editar</button>
-                        <button class="btn-success btn-sm" style="margin: 0; padding: 4px 2px; font-size: 10px;" onclick="abrirModalFinalizarOcorrencia('${o.id}')">✔️ Solucionar</button>
-                        <button class="btn-danger btn-sm" style="margin: 0; padding: 4px 2px; font-size: 10px;" onclick="cancelarOcorrencia('${o.id}')">❌ Cancelar</button>
+                        <button class="btn-primary btn-sm" style="background: #3498db; margin: 0; padding: 8px 2px; font-size: 20px;" onclick="abrirModalVerOcorrencia('${o.id}')">👁️ Ver</button>
+                        <button class="btn-primary btn-sm" style="background: #f39c12; margin: 0; padding: 8px 2px; font-size: 20px;" onclick="abrirModalEditarOcorrencia('${o.id}')">✏️ Editar</button>
+                        <button class="btn-success btn-sm" style="margin: 0; padding: 8px 2px; font-size: 20px;" onclick="abrirModalFinalizarOcorrencia('${o.id}')">✔️ Solucionar</button>
+                        <button class="btn-danger btn-sm" style="margin: 0; padding: 8px 2px; font-size: 20px;" onclick="cancelarOcorrencia('${o.id}')">❌ Cancelar</button>
                     </div>
                 `;
 
