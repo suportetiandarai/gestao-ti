@@ -309,57 +309,101 @@
                 </div>
             </section>
 
-            <section id="aba-ocorrencias" class="tab-content hidden">
-                <h3>Gestão de Ocorrências</h3>
-                
-                <div class="admin-card">
-                    <h4>➕ Nova Ocorrência</h4>
-                    <form id="form-nova-ocorrencia">
-                        <input type="text" id="o_descricao" placeholder="Qual a ocorrência?" required>
-                        <input type="text" id="o_proposta" placeholder="Solução proposta?" required>
-                        
-                        <div class="form-row" style="display: flex; gap: 15px; margin-bottom: 15px; flex-wrap: wrap;">
-                            <div class="form-group" style="flex: 1; min-width: 250px;">
-                                <label>Prazo para solução:</label>
-                                <input type="date" id="o_prazo" required>
-                            </div>
-                            <div class="form-group" style="flex: 1; min-width: 250px;">
-                                <label>Responsável por acompanhar:</label>
-                                <input type="text" id="o_responsavel" placeholder="Nome do Técnico Responsável" required>
-                            </div>
-                        </div>
-
-                        <textarea id="o_observacao" placeholder="Alguma observação? (Opcional)"></textarea>
-
-                        <div class="signature-section mt-10">
-                            <label>Assinatura de quem abriu a ocorrência:</label>
-                            <canvas id="canvas-nova-ocorrencia" class="sig-canvas" width="400" height="200"></canvas>
-                            <button type="button" class="btn-danger btn-sm mt-10" onclick="limparCanvas('canvas-nova-ocorrencia')">Limpar Assinatura</button>
-                        </div>
-
-                        <button type="button" class="btn-success mt-20" onclick="salvarOcorrencia()">Salvar Ocorrência</button>
-                    </form>
+           <section id="aba-ocorrencias" class="tab-content hidden">
+    <h3>Gestão de Ocorrências</h3>
+    
+    <!-- MANTIVE O SEU FORMULÁRIO EXATAMENTE COMO ESTAVA -->
+    <div class="admin-card">
+        <h4>➕ Nova Ocorrência</h4>
+        <form id="form-nova-ocorrencia">
+            <input type="text" id="o_descricao" placeholder="Qual a ocorrência?" required>
+            <input type="text" id="o_proposta" placeholder="Solução proposta?" required>
+            
+            <div class="form-row" style="display: flex; gap: 15px; margin-bottom: 15px; flex-wrap: wrap;">
+                <div class="form-group" style="flex: 1; min-width: 250px;">
+                    <label>Prazo para solução:</label>
+                    <input type="date" id="o_prazo" required>
                 </div>
-
-                <div class="admin-card mt-20">
-                    <h4>📋 Ocorrências Registradas</h4>
-                    <div class="table-responsive">
-                        <table>
-                            <thead>
-                                <tr>
-                                    <th>Ocorrência</th>
-                                    <th>Prazo</th>
-                                    <th>Responsável</th>
-                                    <th>Status</th>
-                                    <th>Ações</th>
-                                </tr>
-                            </thead>
-                            <tbody id="lista-ocorrencias-aba"></tbody>
-                        </table>
-                    </div>
+                <div class="form-group" style="flex: 1; min-width: 250px;">
+                    <label>Responsável por acompanhar:</label>
+                    <input type="text" id="o_responsavel" placeholder="Nome do Técnico Responsável" required>
                 </div>
-            </section>
+            </div>
 
+            <textarea id="o_observacao" placeholder="Alguma observação? (Opcional)"></textarea>
+
+            <div class="signature-section mt-10">
+                <label>Assinatura de quem abriu a ocorrência:</label>
+                <canvas id="canvas-nova-ocorrencia" class="sig-canvas" width="400" height="200"></canvas>
+                <button type="button" class="btn-danger btn-sm mt-10" onclick="limparCanvas('canvas-nova-ocorrencia')">Limpar Assinatura</button>
+            </div>
+
+            <button type="button" class="btn-success mt-20" onclick="salvarOcorrencia()">Salvar Ocorrência</button>
+        </form>
+    </div>
+
+    <!-- 🟢 TABELA 1: EM ANDAMENTO (COM STATUS E AÇÕES JUNTOS) -->
+    <div class="admin-card mt-20">
+        <h4>📋 Ocorrências em Andamento</h4>
+        <div class="table-responsive">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Ocorrência</th>
+                        <th>Prazo</th>
+                        <th>Responsável</th>
+                        <th>Status e Ações</th> <!-- COLUNAS JUNTAS AQUI -->
+                    </tr>
+                </thead>
+                <tbody id="lista-ocorrencias-aba">
+                    <tr><td colspan="4" style="text-align: center;">Carregando...</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- 🟢 TABELA 2: HISTÓRICO COM FILTROS E PAGINAÇÃO -->
+    <div class="admin-card mt-20">
+        <h4>📂 Histórico de Ocorrências (Solucionadas / Canceladas)</h4>
+        
+        <div class="form-row" style="display: flex; gap: 15px; flex-wrap: wrap; align-items: flex-end; margin-bottom: 15px;">
+            <div class="form-group" style="flex: 2; min-width: 200px;">
+                <label>Buscar Responsável:</label>
+                <input type="text" id="filtro_hist_oc_responsavel" placeholder="Digite o nome..." style="margin-bottom: 0;" onkeyup="verificarEnterFiltroOcorrencia(event)">
+            </div>
+            <div class="form-group" style="flex: 1; min-width: 150px;">
+                <label>Data de Abertura:</label>
+                <input type="date" id="filtro_hist_oc_data" style="margin-bottom: 0;" onchange="carregarHistoricoOcorrencias()">
+            </div>
+            <div style="display: flex; gap: 10px;">
+                <button type="button" class="btn-primary" onclick="carregarHistoricoOcorrencias()">Buscar</button>
+            </div>
+        </div>
+
+        <div class="table-responsive">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Ocorrência / Data</th>
+                        <th>Responsável</th>
+                        <th>Status</th>
+                        <th>Ações</th>
+                    </tr>
+                </thead>
+                <tbody id="lista-historico-ocorrencias-aba">
+                    <tr><td colspan="4" style="text-align: center;">Carregando histórico...</td></tr>
+                </tbody>
+            </table>
+        </div>
+        
+        <!-- CONTROLES DE PAGINAÇÃO (DE 5 EM 5) -->
+        <div style="display: flex; justify-content: center; align-items: center; gap: 15px; margin-top: 15px;">
+            <button type="button" class="btn-primary btn-sm" style="margin: 0;" onclick="mudarPaginaHistoricoOc(-1)">⬅️ Anterior</button>
+            <span id="span-pagina-historico-oc" style="font-size: 13px; font-weight: bold; color: #475569;">Página 1</span>
+            <button type="button" class="btn-primary btn-sm" style="margin: 0;" onclick="mudarPaginaHistoricoOc(1)">Próxima ➡️</button>
+        </div>
+    </div>
+</section>
             <section id="aba-toner" class="tab-content hidden">
                 <h3>Controle de Toner e Impressoras</h3>
         
