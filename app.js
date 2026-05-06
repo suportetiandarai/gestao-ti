@@ -469,7 +469,7 @@ async function salvarOcorrencia() {
     }
 }
 
-// 🟢 ATUALIZADO: Layout padronizado com AD e Treinamentos (Etiqueta gordinha e botões proporcionais)
+// 🟢 ATUALIZADO: Layout fininho e compacto para não esticar a tabela de Ocorrências
 async function carregarListaOcorrencias() {
     try {
         const { data, error } = await supabase.from('ocorrencias')
@@ -484,7 +484,17 @@ async function carregarListaOcorrencias() {
         if (tbody) {
             tbody.innerHTML = data.length > 0 ? data.map(o => {
                 const prazoFormatado = o.prazo ? o.prazo.split('-').reverse().join('/') : '-';
-                let corStatus = o.status === 'Em andamento' ? '#f39c12' : '#e74c3c'; // Laranja ou Vermelho
+                let corStatus = o.status === 'Em andamento' ? '#f39c12' : '#e74c3c'; 
+
+                // 🟢 BOTÕES COMPACTOS: gap de 2px, padding reduzido e fonte menor (10px)
+                let botoesAcao = `
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 2px;">
+                        <button class="btn-primary btn-sm" style="background: #3498db; margin: 0; padding: 4px 2px; font-size: 10px;" onclick="abrirModalVerOcorrencia('${o.id}')">👁️ Ver</button>
+                        <button class="btn-primary btn-sm" style="background: #f39c12; margin: 0; padding: 4px 2px; font-size: 10px;" onclick="abrirModalEditarOcorrencia('${o.id}')">✏️ Editar</button>
+                        <button class="btn-success btn-sm" style="margin: 0; padding: 4px 2px; font-size: 10px;" onclick="abrirModalFinalizarOcorrencia('${o.id}')">✔️ Solucionar</button>
+                        <button class="btn-danger btn-sm" style="margin: 0; padding: 4px 2px; font-size: 10px;" onclick="cancelarOcorrencia('${o.id}')">❌ Cancelar</button>
+                    </div>
+                `;
 
                 return `
                     <tr>
@@ -492,23 +502,61 @@ async function carregarListaOcorrencias() {
                         <td style="font-size: 12px;">${prazoFormatado}</td>
                         <td style="font-size: 12px;">${o.responsavel_abertura}</td>
                         
-                        <!-- 🟢 COLUNA PADRONIZADA IGUAL AO AD -->
-                        <td style="min-width: 160px; max-width: 200px;">
-                            <div style="margin-bottom: 8px;">
-                                <span style="background-color: ${corStatus}; color: white; padding: 6px 8px; border-radius: 4px; font-size: 12px; font-weight: bold; display: block; width: 100%; text-align: center;">${o.status}</span>
+                        <!-- 🟢 COLUNA FINA: width reduzido para 120px -->
+                        <td style="width: 120px; min-width: 110px;">
+                            <div style="margin-bottom: 6px;">
+                                <span style="background-color: ${corStatus}; color: white; padding: 4px; border-radius: 4px; font-size: 10px; font-weight: bold; display: block; width: 100%; text-align: center;">${o.status}</span>
                             </div>
-                            
-                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 4px;">
-                                <button class="btn-primary btn-sm" style="background: #3498db; margin: 0; padding: 6px 4px; font-size: 11px;" onclick="abrirModalVerOcorrencia('${o.id}')">👁️ Ver</button>
-                                <button class="btn-primary btn-sm" style="background: #f39c12; margin: 0; padding: 6px 4px; font-size: 11px;" onclick="abrirModalEditarOcorrencia('${o.id}')">✏️ Editar</button>
-                                <button class="btn-success btn-sm" style="margin: 0; padding: 6px 4px; font-size: 11px;" onclick="abrirModalFinalizarOcorrencia('${o.id}')">✔️ Solucionar</button>
-                                <button class="btn-danger btn-sm" style="margin: 0; padding: 6px 4px; font-size: 11px;" onclick="cancelarOcorrencia('${o.id}')">❌ Cancelar</button>
-                            </div>
+                            ${botoesAcao}
                         </td>
                     </tr>
                 `;
             }).join('') : '<tr><td colspan="4" style="text-align: center; color: #7f8c8d; padding: 20px;">Nenhuma ocorrência pendente.</td></tr>';
         }
+
+        carregarHistoricoOcorrencias();
+
+    } catch (err) { console.error("Erro ao carregar ocorrências:", err.message); }
+}
+
+// 🟢 ATUALIZADO: Histórico de Ocorrências com a coluna fina
+function renderizarTabelaHistoricoOc() {
+    const tbody = document.getElementById('lista-historico-ocorrencias-aba');
+    const spanPagina = document.getElementById('span-pagina-historico-oc');
+    if (!tbody) return;
+
+    const totalPaginas = Math.ceil(dadosHistoricoOc.length / itensPorPaginaOc) || 1;
+    if (spanPagina) spanPagina.innerText = `Página ${paginaAtualOc} de ${totalPaginas}`;
+
+    const inicio = (paginaAtualOc - 1) * itensPorPaginaOc;
+    const fim = inicio + itensPorPaginaOc;
+    const itensPagina = dadosHistoricoOc.slice(inicio, fim);
+
+    tbody.innerHTML = itensPagina.length > 0 ? itensPagina.map(o => {
+        const dataC = new Date(o.created_at).toLocaleDateString('pt-BR');
+        let corStatus = o.status === 'Solucionada' ? '#2ecc71' : '#e74c3c';
+
+        return `
+            <tr>
+                <td style="font-size: 12px;"><strong>${o.descricao}</strong><br><small style="color: #7f8c8d;">Data: ${dataC}</small></td>
+                <td style="font-size: 12px;">${o.responsavel_abertura}</td>
+                
+                <!-- 🟢 COLUNA FINA: width reduzido para 120px -->
+                <td style="width: 120px; min-width: 110px;">
+                    <div style="margin-bottom: 6px;">
+                        <span style="background-color: ${corStatus}; color: white; padding: 4px; border-radius: 4px; font-size: 10px; font-weight: bold; display: block; width: 100%; text-align: center;">${o.status}</span>
+                    </div>
+                    
+                    <div style="display: flex; gap: 2px; flex-wrap: nowrap; justify-content: center;">
+                        <button class="btn-primary btn-sm" style="background: #3498db; flex: 1; margin: 0; padding: 4px 2px; font-size: 10px;" onclick="abrirModalVerOcorrencia('${o.id}')">👁️ Ver Detalhes</button>
+                    </div>
+                    
+                    ${o.status === 'Cancelada' && o.motivo_cancelamento ? `<div style="margin-top: 6px; font-size: 9px; color: #475569; background: #f1f5f9; padding: 4px; border-radius: 4px; line-height: 1.2;"><strong>Motivo:</strong> ${o.motivo_cancelamento}</div>` : ''}
+                </td>
+            </tr>
+        `;
+    }).join('') : '<tr><td colspan="3" style="text-align: center; color: #7f8c8d; padding: 20px;">Nenhum registro encontrado no histórico.</td></tr>'; 
+}
 
         carregarHistoricoOcorrencias();
 
@@ -2248,16 +2296,17 @@ async function carregarSolicitacoesAD() {
 
                 const isAdmin = typeof window.usuarioAtual !== 'undefined' && window.usuarioAtual && window.usuarioAtual.role === 'admin';
 
+                // 🟢 BOTÕES COMPACTOS (Fonte 10px, padding 4px 2px, gap 2px)
                 let botoesAcao = '';
                 if (c.status !== 'Realizado' && c.status !== 'Cancelado') {
                     botoesAcao = `
-                        <button class="btn-success btn-sm" style="flex: 1; margin: 0; padding: 6px 4px; font-size: 11px;" onclick="alterarStatusAD('${c.id}', 'Realizado')">✔️ Finalizar</button>
-                        <button class="btn-danger btn-sm" style="flex: 1; margin: 0; padding: 6px 4px; font-size: 11px;" onclick="darBaixaAD('${c.id}')">❌ Baixa</button>
+                        <button class="btn-success btn-sm" style="flex: 1; margin: 0; padding: 4px 2px; font-size: 10px;" onclick="alterarStatusAD('${c.id}', 'Realizado')">✔️ Finalizar</button>
+                        <button class="btn-danger btn-sm" style="flex: 1; margin: 0; padding: 4px 2px; font-size: 10px;" onclick="darBaixaAD('${c.id}')">❌ Baixa</button>
                     `;
                 } else {
                     if (isAdmin) {
                         botoesAcao = `
-                            <button class="btn-primary btn-sm" style="background: #e67e22; flex: 1; margin: 0; padding: 6px 4px; font-size: 11px;" onclick="alterarStatusAD('${c.id}', 'Pendente')">↩️ Desfazer</button>
+                            <button class="btn-primary btn-sm" style="background: #e67e22; flex: 1; margin: 0; padding: 4px 2px; font-size: 10px;" onclick="alterarStatusAD('${c.id}', 'Pendente')">↩️ Desfazer</button>
                         `;
                     }
                 }
@@ -2273,17 +2322,17 @@ async function carregarSolicitacoesAD() {
                             📱 ${c.telefone || '-'}
                         </td>
                         
-                        <!-- 🟢 COLUNA PADRONIZADA COM A IMAGEM -->
-                        <td style="min-width: 160px; max-width: 200px;">
-                            <div style="margin-bottom: 8px;">
-                                <span style="background-color: ${corStatus}; color: white; padding: 6px 8px; border-radius: 4px; font-size: 12px; font-weight: bold; display: block; width: 100%; text-align: center;">${c.status || 'Pendente'}</span>
+                        <!-- 🟢 COLUNA FINA E COMPACTA (120px) -->
+                        <td style="width: 120px; min-width: 110px;">
+                            <div style="margin-bottom: 4px;">
+                                <span style="background-color: ${corStatus}; color: white; padding: 4px; border-radius: 4px; font-size: 10px; font-weight: bold; display: block; width: 100%; text-align: center;">${c.status || 'Pendente'}</span>
                             </div>
                             
-                            <div style="display: flex; gap: 4px; flex-wrap: nowrap; justify-content: center;">
+                            <div style="display: flex; gap: 2px; flex-wrap: nowrap; justify-content: center;">
                                 ${botoesAcao}
                             </div>
                             
-                            ${c.status === 'Cancelado' && c.motivo_cancelamento ? `<div style="margin-top: 8px; font-size: 10px; color: #475569; background: #f1f5f9; padding: 4px; border-radius: 4px; line-height: 1.4;"><strong>Motivo:</strong> ${c.motivo_cancelamento}</div>` : ''}
+                            ${c.status === 'Cancelado' && c.motivo_cancelamento ? `<div style="margin-top: 4px; font-size: 9px; color: #475569; background: #f1f5f9; padding: 2px; border-radius: 4px; text-align: center; line-height: 1.2;"><strong>Motivo:</strong> ${c.motivo_cancelamento}</div>` : ''}
                         </td>
                         
                         <td style="font-size: 11px;">${realizadoPor}</td>
@@ -2361,16 +2410,17 @@ async function carregarSolicitacoesTreinamento() {
                 const contatoFormatado = t.telefone || t.celular || '-';
                 const isAdmin = typeof window.usuarioAtual !== 'undefined' && window.usuarioAtual && window.usuarioAtual.role === 'admin';
 
+                // 🟢 BOTÕES COMPACTOS (Fonte 10px, padding 4px 2px, gap 2px)
                 let botoesAcao = '';
                 if (t.status === 'Pendente' || !t.status) {
                     botoesAcao = `
-                        <button class="btn-success btn-sm" style="flex: 1; margin: 0; padding: 6px 4px; font-size: 11px;" onclick="prepararAgendamento('${t.id}', '${t.nome_solicitante || t.nome || ''}', '${t.telefone || t.celular || ''}', '${t.tema || ''}')">📅 Agendar</button>
-                        <button class="btn-danger btn-sm" style="flex: 1; margin: 0; padding: 6px 4px; font-size: 11px;" onclick="alterarStatusTreinamentoExt('${t.id}', 'Cancelado')">❌ Baixa</button>
+                        <button class="btn-success btn-sm" style="flex: 1; margin: 0; padding: 4px 2px; font-size: 10px;" onclick="prepararAgendamento('${t.id}', '${t.nome_solicitante || t.nome || ''}', '${t.telefone || t.celular || ''}', '${t.tema || ''}')">📅 Agendar</button>
+                        <button class="btn-danger btn-sm" style="flex: 1; margin: 0; padding: 4px 2px; font-size: 10px;" onclick="alterarStatusTreinamentoExt('${t.id}', 'Cancelado')">❌ Baixa</button>
                     `;
                 } else {
                     if (isAdmin) {
                         botoesAcao = `
-                            <button class="btn-primary btn-sm" style="background: #e67e22; flex: 1; margin: 0; padding: 6px 4px; font-size: 11px;" onclick="alterarStatusTreinamentoExt('${t.id}', 'Pendente')">↩️ Desfazer</button>
+                            <button class="btn-primary btn-sm" style="background: #e67e22; flex: 1; margin: 0; padding: 4px 2px; font-size: 10px;" onclick="alterarStatusTreinamentoExt('${t.id}', 'Pendente')">↩️ Desfazer</button>
                         `;
                     }
                 }
@@ -2382,13 +2432,13 @@ async function carregarSolicitacoesTreinamento() {
                         <td style="font-size: 12px;">${setorFormatado}</td>
                         <td style="font-size: 12px;"><strong>${t.tema || '-'}</strong></td>
                         
-                        <!-- 🟢 COLUNA PADRONIZADA COM A IMAGEM -->
-                        <td style="min-width: 160px; max-width: 200px;">
-                            <div style="margin-bottom: 8px;">
-                                <span style="background-color: ${corStatus}; color: white; padding: 6px 8px; border-radius: 4px; font-size: 12px; font-weight: bold; display: block; width: 100%; text-align: center;">${t.status || 'Pendente'}</span>
+                        <!-- 🟢 COLUNA FINA E COMPACTA (120px) -->
+                        <td style="width: 120px; min-width: 110px;">
+                            <div style="margin-bottom: 4px;">
+                                <span style="background-color: ${corStatus}; color: white; padding: 4px; border-radius: 4px; font-size: 10px; font-weight: bold; display: block; width: 100%; text-align: center;">${t.status || 'Pendente'}</span>
                             </div>
                             
-                            <div style="display: flex; gap: 4px; flex-wrap: nowrap; justify-content: center;">
+                            <div style="display: flex; gap: 2px; flex-wrap: nowrap; justify-content: center;">
                                 ${botoesAcao}
                             </div>
                         </td>
