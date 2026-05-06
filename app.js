@@ -469,7 +469,7 @@ async function salvarOcorrencia() {
     }
 }
 
-// 🟢 ATUALIZADO: Layout idêntico ao AD (Status padronizado e botões agrupados sem esticar)
+// 🟢 ATUALIZADO: Layout padronizado com AD e Treinamentos (Etiqueta gordinha e botões proporcionais)
 async function carregarListaOcorrencias() {
     try {
         const { data, error } = await supabase.from('ocorrencias')
@@ -492,10 +492,10 @@ async function carregarListaOcorrencias() {
                         <td style="font-size: 12px;">${prazoFormatado}</td>
                         <td style="font-size: 12px;">${o.responsavel_abertura}</td>
                         
-                        <!-- 🟢 STATUS E AÇÕES UNIFICADOS E PADRONIZADOS -->
+                        <!-- 🟢 COLUNA PADRONIZADA IGUAL AO AD -->
                         <td style="min-width: 160px; max-width: 200px;">
                             <div style="margin-bottom: 8px;">
-                                <span style="background-color: ${corStatus}; color: white; padding: 6px 8px; border-radius: 4px; font-size: 12px; font-weight: bold; display: block; width: 100%; text-align: center;">${o.status || 'Pendente'}</span>
+                                <span style="background-color: ${corStatus}; color: white; padding: 6px 8px; border-radius: 4px; font-size: 12px; font-weight: bold; display: block; width: 100%; text-align: center;">${o.status}</span>
                             </div>
                             
                             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 4px;">
@@ -515,6 +515,44 @@ async function carregarListaOcorrencias() {
     } catch (err) { console.error("Erro ao carregar ocorrências:", err.message); }
 }
 
+// 🟢 ATUALIZADO: Histórico de Ocorrências com a coluna padronizada
+function renderizarTabelaHistoricoOc() {
+    const tbody = document.getElementById('lista-historico-ocorrencias-aba');
+    const spanPagina = document.getElementById('span-pagina-historico-oc');
+    if (!tbody) return;
+
+    const totalPaginas = Math.ceil(dadosHistoricoOc.length / itensPorPaginaOc) || 1;
+    if (spanPagina) spanPagina.innerText = `Página ${paginaAtualOc} de ${totalPaginas}`;
+
+    const inicio = (paginaAtualOc - 1) * itensPorPaginaOc;
+    const fim = inicio + itensPorPaginaOc;
+    const itensPagina = dadosHistoricoOc.slice(inicio, fim);
+
+    tbody.innerHTML = itensPagina.length > 0 ? itensPagina.map(o => {
+        const dataC = new Date(o.created_at).toLocaleDateString('pt-BR');
+        let corStatus = o.status === 'Solucionada' ? '#2ecc71' : '#e74c3c';
+
+        return `
+            <tr>
+                <td style="font-size: 12px;"><strong>${o.descricao}</strong><br><small style="color: #7f8c8d;">Data: ${dataC}</small></td>
+                <td style="font-size: 12px;">${o.responsavel_abertura}</td>
+                
+                <!-- 🟢 COLUNA PADRONIZADA IGUAL AO AD -->
+                <td style="min-width: 160px; max-width: 200px;">
+                    <div style="margin-bottom: 8px;">
+                        <span style="background-color: ${corStatus}; color: white; padding: 6px 8px; border-radius: 4px; font-size: 12px; font-weight: bold; display: block; width: 100%; text-align: center;">${o.status}</span>
+                    </div>
+                    
+                    <div style="display: flex; gap: 4px; flex-wrap: nowrap; justify-content: center;">
+                        <button class="btn-primary btn-sm" style="background: #3498db; flex: 1; margin: 0; padding: 6px 4px; font-size: 11px;" onclick="abrirModalVerOcorrencia('${o.id}')">👁️ Ver Detalhes</button>
+                    </div>
+                    
+                    ${o.status === 'Cancelada' && o.motivo_cancelamento ? `<div style="margin-top: 8px; font-size: 10px; color: #475569; background: #f1f5f9; padding: 4px; border-radius: 4px; line-height: 1.4;"><strong>Motivo:</strong> ${o.motivo_cancelamento}</div>` : ''}
+                </td>
+            </tr>
+        `;
+    }).join('') : '<tr><td colspan="3" style="text-align: center; color: #7f8c8d; padding: 20px;">Nenhum registro encontrado no histórico.</td></tr>'; 
+}
 // 🟢 FUNÇÕES DO HISTÓRICO DE OCORRÊNCIAS
 window.verificarEnterFiltroOcorrencia = function(event) {
     if (event.key === 'Enter') {
@@ -2208,21 +2246,18 @@ async function carregarSolicitacoesAD() {
                     ? `<span style="font-size: 11px;"><strong>${c.realizado_por_nome}</strong></span>`
                     : '-';
 
-                // 🟢 VERIFICA SE QUEM ESTÁ LOGADO É ADMIN
                 const isAdmin = typeof window.usuarioAtual !== 'undefined' && window.usuarioAtual && window.usuarioAtual.role === 'admin';
 
-                // 🟢 LÓGICA DE BOTÕES COM TRAVA DE SEGURANÇA
                 let botoesAcao = '';
                 if (c.status !== 'Realizado' && c.status !== 'Cancelado') {
                     botoesAcao = `
-                        <button class="btn-success btn-sm" style="flex: 1; margin: 0; padding: 6px 4px;" onclick="alterarStatusAD('${c.id}', 'Realizado')">✔️ Finalizar</button>
-                        <button class="btn-danger btn-sm" style="flex: 1; margin: 0; padding: 6px 4px;" onclick="darBaixaAD('${c.id}')">❌ Baixa</button>
+                        <button class="btn-success btn-sm" style="flex: 1; margin: 0; padding: 6px 4px; font-size: 11px;" onclick="alterarStatusAD('${c.id}', 'Realizado')">✔️ Finalizar</button>
+                        <button class="btn-danger btn-sm" style="flex: 1; margin: 0; padding: 6px 4px; font-size: 11px;" onclick="darBaixaAD('${c.id}')">❌ Baixa</button>
                     `;
                 } else {
-                    // Se estiver finalizado ou cancelado, SÓ mostra o Desfazer se for Admin
                     if (isAdmin) {
                         botoesAcao = `
-                            <button class="btn-primary btn-sm" style="background: #e67e22; flex: 1; margin: 0; padding: 6px 4px;" onclick="alterarStatusAD('${c.id}', 'Pendente')">↩️ Desfazer</button>
+                            <button class="btn-primary btn-sm" style="background: #e67e22; flex: 1; margin: 0; padding: 6px 4px; font-size: 11px;" onclick="alterarStatusAD('${c.id}', 'Pendente')">↩️ Desfazer</button>
                         `;
                     }
                 }
@@ -2238,9 +2273,10 @@ async function carregarSolicitacoesAD() {
                             📱 ${c.telefone || '-'}
                         </td>
                         
-                        <td style="min-width: 160px;">
+                        <!-- 🟢 COLUNA PADRONIZADA COM A IMAGEM -->
+                        <td style="min-width: 160px; max-width: 200px;">
                             <div style="margin-bottom: 8px;">
-                                <span style="background-color: ${corStatus}; color: white; padding: 4px 8px; border-radius: 4px; font-size: 11px; font-weight: bold; display: block; width: 100%; text-align: center;">${c.status || 'Pendente'}</span>
+                                <span style="background-color: ${corStatus}; color: white; padding: 6px 8px; border-radius: 4px; font-size: 12px; font-weight: bold; display: block; width: 100%; text-align: center;">${c.status || 'Pendente'}</span>
                             </div>
                             
                             <div style="display: flex; gap: 4px; flex-wrap: nowrap; justify-content: center;">
@@ -2257,18 +2293,18 @@ async function carregarSolicitacoesAD() {
         }
     } catch (err) { console.error("Erro ao carregar AD:", err); }
 }
+
 async function alterarStatusAD(id, novoStatus) {
     if(!confirm(`Confirma a mudança de status para "${novoStatus}"?`)) return;
 
     try {
         let updateData = { status: novoStatus };
 
-        // Se finalizou, pega o nome de quem está logado. Se desfez, limpa tudo.
         if (novoStatus === 'Realizado' && typeof window.usuarioAtual !== 'undefined' && window.usuarioAtual) {
             updateData.realizado_por_nome = window.usuarioAtual.nome;
         } else if (novoStatus === 'Pendente') {
             updateData.realizado_por_nome = null;
-            updateData.motivo_cancelamento = null; // Limpa o motivo se voltar a ficar pendente
+            updateData.motivo_cancelamento = null; 
         }
 
         const { error } = await supabase.from('solicitacoes_ad').update(updateData).eq('id', id);
@@ -2278,11 +2314,10 @@ async function alterarStatusAD(id, novoStatus) {
     } catch (err) { alert("Erro ao atualizar AD: " + err.message); }
 }
 
-// 🟢 NOVA FUNÇÃO: Pede o motivo e dá baixa
 async function darBaixaAD(id) {
     const motivo = prompt("⚠️ Atenção: Por favor, digite o motivo da baixa (cancelamento) desta criação de AD:");
     
-    if (motivo === null) return; // Se apertar cancelar
+    if (motivo === null) return; 
     if (motivo.trim() === "") return alert("O motivo é obrigatório para dar baixa!");
 
     try {
@@ -2291,7 +2326,6 @@ async function darBaixaAD(id) {
             motivo_cancelamento: motivo
         };
 
-        // Salva quem deu a baixa
         if (typeof window.usuarioAtual !== 'undefined' && window.usuarioAtual) {
             updateData.realizado_por_nome = window.usuarioAtual.nome;
         }
@@ -2303,7 +2337,7 @@ async function darBaixaAD(id) {
         carregarSolicitacoesAD();
     } catch (err) { alert("Erro ao dar baixa: " + err.message); }
 }
-// --- 2. GESTÃO DE SOLICITAÇÕES DE TREINAMENTO (VINDAS DO SITE) ---
+
 // --- 2. GESTÃO DE SOLICITAÇÕES DE TREINAMENTO (VINDAS DO SITE) ---
 async function carregarSolicitacoesTreinamento() {
     const status = document.getElementById('filtro_sol_tr_status').value;
@@ -2323,25 +2357,20 @@ async function carregarSolicitacoesTreinamento() {
                 if (t.status === 'Agendado' || t.status === 'Realizado') corStatus = '#2ecc71'; 
                 if (t.status === 'Cancelado') corStatus = '#e74c3c'; 
 
-                // Ajuste para não quebrar caso a coluna venha vazia do banco
                 const setorFormatado = t.setor || t.cargo || '-';
                 const contatoFormatado = t.telefone || t.celular || '-';
-
-                // 🟢 VERIFICA SE QUEM ESTÁ LOGADO É ADMIN
                 const isAdmin = typeof window.usuarioAtual !== 'undefined' && window.usuarioAtual && window.usuarioAtual.role === 'admin';
 
-                // 🟢 LÓGICA DE BOTÕES UNIFICADA E BLINDADA
                 let botoesAcao = '';
                 if (t.status === 'Pendente' || !t.status) {
                     botoesAcao = `
-                        <button class="btn-success btn-sm" style="flex: 1; margin: 0; padding: 6px 4px;" onclick="prepararAgendamento('${t.id}', '${t.nome_solicitante || t.nome || ''}', '${t.telefone || t.celular || ''}', '${t.tema || ''}')">📅 Agendar</button>
-                        <button class="btn-danger btn-sm" style="flex: 1; margin: 0; padding: 6px 4px;" onclick="alterarStatusTreinamentoExt('${t.id}', 'Cancelado')">❌ Baixa</button>
+                        <button class="btn-success btn-sm" style="flex: 1; margin: 0; padding: 6px 4px; font-size: 11px;" onclick="prepararAgendamento('${t.id}', '${t.nome_solicitante || t.nome || ''}', '${t.telefone || t.celular || ''}', '${t.tema || ''}')">📅 Agendar</button>
+                        <button class="btn-danger btn-sm" style="flex: 1; margin: 0; padding: 6px 4px; font-size: 11px;" onclick="alterarStatusTreinamentoExt('${t.id}', 'Cancelado')">❌ Baixa</button>
                     `;
                 } else {
-                    // Se estiver Agendado, Cancelado ou Realizado, SÓ mostra o Desfazer se for Admin
                     if (isAdmin) {
                         botoesAcao = `
-                            <button class="btn-primary btn-sm" style="background: #e67e22; flex: 1; margin: 0; padding: 6px 4px;" onclick="alterarStatusTreinamentoExt('${t.id}', 'Pendente')">↩️ Desfazer</button>
+                            <button class="btn-primary btn-sm" style="background: #e67e22; flex: 1; margin: 0; padding: 6px 4px; font-size: 11px;" onclick="alterarStatusTreinamentoExt('${t.id}', 'Pendente')">↩️ Desfazer</button>
                         `;
                     }
                 }
@@ -2353,10 +2382,10 @@ async function carregarSolicitacoesTreinamento() {
                         <td style="font-size: 12px;">${setorFormatado}</td>
                         <td style="font-size: 12px;"><strong>${t.tema || '-'}</strong></td>
                         
-                        <!-- 🟢 STATUS E AÇÕES NA MESMA COLUNA -->
-                        <td style="min-width: 160px;">
+                        <!-- 🟢 COLUNA PADRONIZADA COM A IMAGEM -->
+                        <td style="min-width: 160px; max-width: 200px;">
                             <div style="margin-bottom: 8px;">
-                                <span style="background-color: ${corStatus}; color: white; padding: 4px 8px; border-radius: 4px; font-size: 11px; font-weight: bold; display: block; width: 100%; text-align: center;">${t.status || 'Pendente'}</span>
+                                <span style="background-color: ${corStatus}; color: white; padding: 6px 8px; border-radius: 4px; font-size: 12px; font-weight: bold; display: block; width: 100%; text-align: center;">${t.status || 'Pendente'}</span>
                             </div>
                             
                             <div style="display: flex; gap: 4px; flex-wrap: nowrap; justify-content: center;">
@@ -2369,6 +2398,7 @@ async function carregarSolicitacoesTreinamento() {
         }
     } catch (err) { console.error("Erro ao carregar solicitações de treinamento:", err); }
 }
+
 async function alterarStatusTreinamentoExt(id, novoStatus) {
     if(!confirm(`Confirma a mudança de status para "${novoStatus}"?`)) return;
 
