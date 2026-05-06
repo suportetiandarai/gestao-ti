@@ -457,8 +457,39 @@
                     </div>
                 </div>
             </section>
+            
+           <!-- 🟢 NOVO CARD: HISTÓRICO DE TREINAMENTOS -->
+                <div class="admin-card mt-20">
+                    <h4>📂 Histórico de Treinamentos (Concluídos / Cancelados)</h4>
+                    
+                    <div class="form-row" style="display: flex; gap: 15px; flex-wrap: wrap; align-items: flex-end; margin-bottom: 15px;">
+                        <div class="form-group" style="flex: 2; min-width: 200px;">
+                            <label>Buscar Colaborador no Histórico:</label>
+                            <input type="text" id="filtro_hist_tr_colaborador" placeholder="Digite o nome do colaborador..." style="margin-bottom: 0;" onkeyup="verificarEnterFiltroHistorico(event)">
+                        </div>
+                        <div style="display: flex; gap: 10px;">
+                            <button class="btn-primary" onclick="carregarHistoricoTreinamentos()">Buscar</button>
+                        </div>
+                    </div>
 
-            <!-- NOVA ABA: SOLICITAÇÕES DE TREINAMENTO EXTERNAS -->
+                    <div class="table-responsive">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Data/Hora</th>
+                                    <th>Colaborador</th>
+                                    <th>Tema / Local</th>
+                                    <th>Status</th>
+                                    <th>Realizado Por</th>
+                                </tr>
+                            </thead>
+                            <tbody id="lista-historico-treinamentos-aba">
+                                <tr><td colspan="5" style="text-align: center;">Carregando histórico...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            
             <section id="aba-solicita-treinamento" class="tab-content hidden">
                 <h3>Solicitações de Treinamento</h3>
                 
