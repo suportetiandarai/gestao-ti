@@ -1000,30 +1000,21 @@ async function salvarAtendimentoChamado() {
 // ABA: GESTÃO DE TREINAMENTOS
 // ==========================================
 
-let idSolicitacaoEmAndamento = null; // Guarda o ID da solicitação que estamos agendando
-
-// 🟢 VARIÁVEIS PARA CONTROLAR AS PÁGINAS DO HISTÓRICO
+let idSolicitacaoEmAndamento = null; 
 let paginaAtualHistorico = 1;
 const itensPorPaginaTr = 5;
-let dadosHistoricoTr = []; // Memória temporária para não travar o banco de dados
+let dadosHistoricoTr = []; 
 
 window.prepararAgendamento = function(id, nome, telefone, tema) {
-    idSolicitacaoEmAndamento = id; // Armazena o ID
-    
-    // 1. Preenche os campos da tela de NOVO AGENDAMENTO
+    idSolicitacaoEmAndamento = id; 
     document.getElementById('tr_colaborador').value = nome;
     document.getElementById('tr_telefone').value = telefone;
     document.getElementById('tr_tema').value = tema;
-    
-    // 2. Troca para a aba de agendamentos
     abrirAba('aba-treinamentos');
-    
-    // Dá um foco no próximo campo a ser preenchido para agilizar
     document.getElementById('tr_predio').focus();
 };
 
 async function salvarTreinamento() {
-    // 1. Captura os dados da tela
     const colaborador = document.getElementById('tr_colaborador').value;
     const telefone = document.getElementById('tr_telefone').value;
     const tema = document.getElementById('tr_tema').value;
@@ -1037,7 +1028,6 @@ async function salvarTreinamento() {
     }
 
     try {
-        // 2. Salva o agendamento normal (incluindo o ID da solicitação se houver)
         const { error: errAgendamento } = await supabase.from('treinamentos').insert([{
             colaborador: colaborador,
             telefone: telefone,
@@ -1047,12 +1037,11 @@ async function salvarTreinamento() {
             andar: andar,
             data_hora: dataHora,
             status: 'Agendado',
-            solicitacao_id: idSolicitacaoEmAndamento // Liga ao pedido original
+            solicitacao_id: idSolicitacaoEmAndamento 
         }]);
 
         if (errAgendamento) throw errAgendamento;
 
-        // 3. Se veio de uma solicitação, atualiza o status dela para "Agendado"
         if (idSolicitacaoEmAndamento) {
             await supabase.from('solicitacoes_treinamento')
                 .update({ status: 'Agendado' })
@@ -1061,8 +1050,7 @@ async function salvarTreinamento() {
 
         alert("Treinamento agendado com sucesso!");
         
-        // 4. Limpeza
-        idSolicitacaoEmAndamento = null; // Reseta a ponte
+        idSolicitacaoEmAndamento = null; 
         document.getElementById('form-novo-treinamento').reset();
         carregarListaTreinamentos();
         if(typeof carregarResumoDashboard === 'function') carregarResumoDashboard(); 
@@ -1070,7 +1058,7 @@ async function salvarTreinamento() {
     } catch (err) { alert("Erro ao agendar: " + err.message); }
 }
 
-// 🟢 ATUALIZADO: Tabela de Agenda de Treinamentos (Padrão Mediano 140px)
+// 🟢 Tabela de Agenda de Treinamentos (Padrão Mediano 140px)
 async function carregarListaTreinamentos() {
     try {
         const { data, error } = await supabase.from('treinamentos')
@@ -1085,9 +1073,8 @@ async function carregarListaTreinamentos() {
             tbody.innerHTML = data.length > 0 ? data.map(t => {
                 const dataFormatada = new Date(t.data_hora).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }).replace(',', ' às');
                 
-                let corStatus = '#3498db'; // Azul para indicar que está Agendado
+                let corStatus = '#3498db'; 
 
-                // 🟢 ESTRUTURA DOS BOTÕES: Lado a lado (Editar/Concluir) e Cancelar embaixo
                 let botoesAcao = `
                     <div style="display: flex; gap: 4px; flex-wrap: wrap; justify-content: center;">
                         <button class="btn-primary btn-sm" style="background: #f39c12; flex: 1; margin: 0; padding: 5px 2px; font-size: 11px;" onclick="abrirModalEditarTreinamento('${t.id}')">✏️ Editar</button>
@@ -1103,7 +1090,6 @@ async function carregarListaTreinamentos() {
                         <td style="font-size: 12px;"><strong>${t.tema}</strong></td>
                         <td style="font-size: 12px;">${t.predio} - ${t.setor} <br><small>(${t.andar})</small></td>
                         
-                        <!-- 🟢 COLUNA PADRONIZADA (140px) COM STATUS E AÇÕES -->
                         <td style="width: 140px; min-width: 140px;">
                             <div style="margin-bottom: 6px;">
                                 <span style="background-color: ${corStatus}; color: white; padding: 5px; border-radius: 4px; font-size: 11px; font-weight: bold; display: block; width: 100%; text-align: center;">${t.status}</span>
@@ -1120,6 +1106,200 @@ async function carregarListaTreinamentos() {
     } catch (err) { console.error("Erro ao carregar treinamentos:", err); }
 }
 
+function verificarEnterFiltroHistorico(event) {
+    if (event.key === 'Enter') carregarHistoricoTreinamentos();
+}
+
+async function carregarHistoricoTreinamentos() {
+    const nome = document.getElementById('filtro_hist_tr_colaborador').value.trim();
+    paginaAtualHistorico = 1; 
+
+    try {
+        let query = supabase.from('treinamentos')
+            .select('*')
+            .neq('status', 'Agendado')
+            .order('data_hora', { ascending: false });
+
+        if (nome) query = query.ilike('colaborador', `%${nome}%`);
+
+        const { data, error } = await query;
+        if (error) throw error;
+
+        dadosHistoricoTr = data || [];
+        renderizarTabelaHistorico(); 
+    } catch (err) { console.error("Erro ao carregar histórico de treinamentos:", err); }
+}
+
+// 🟢 Tabela de Histórico de Treinamentos (Padrão Mediano 140px)
+function renderizarTabelaHistorico() {
+    const tbody = document.getElementById('lista-historico-treinamentos-aba');
+    const spanPagina = document.getElementById('span-pagina-historico');
+    if (!tbody) return;
+
+    const totalPaginas = Math.ceil(dadosHistoricoTr.length / itensPorPaginaTr) || 1;
+    if (spanPagina) spanPagina.innerText = `Página ${paginaAtualHistorico} de ${totalPaginas}`;
+
+    const inicio = (paginaAtualHistorico - 1) * itensPorPaginaTr;
+    const fim = inicio + itensPorPaginaTr;
+    const itensPagina = dadosHistoricoTr.slice(inicio, fim);
+
+    tbody.innerHTML = itensPagina.length > 0 ? itensPagina.map(t => {
+        const dataFormatada = new Date(t.data_hora).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }).replace(',', ' às');
+        let corStatus = t.status === 'Concluído' ? '#2ecc71' : '#e74c3c';
+        let responsavel = t.responsavel_conclusao ? `<span style="font-size: 11px;"><strong>${t.responsavel_conclusao}</strong></span>` : '-';
+
+        return `
+            <tr>
+                <td style="font-size: 12px;"><strong>${dataFormatada}</strong></td>
+                <td style="font-size: 12px;">${t.colaborador}<br><small>${t.telefone}</small></td>
+                <td style="font-size: 12px;"><strong>${t.tema}</strong><br><small>${t.predio} - ${t.setor} (${t.andar})</small></td>
+                
+                <td style="width: 140px; min-width: 140px;">
+                    <div style="margin-bottom: 4px;">
+                        <span style="background-color: ${corStatus}; color: white; padding: 5px; border-radius: 4px; font-size: 11px; font-weight: bold; display: block; width: 100%; text-align: center;">${t.status}</span>
+                    </div>
+                    ${t.status === 'Cancelado' && t.motivo_cancelamento ? `<div style="margin-top: 6px; font-size: 10px; color: #475569; background: #f1f5f9; padding: 4px; border-radius: 4px; text-align: center; line-height: 1.3;"><strong>Motivo:</strong> ${t.motivo_cancelamento}</div>` : ''}
+                </td>
+                
+                <td style="font-size: 11px;">${responsavel}</td>
+            </tr>
+        `;
+    }).join('') : '<tr><td colspan="5" style="text-align: center; color: #7f8c8d; padding: 20px;">Nenhum registro encontrado no histórico.</td></tr>';
+}
+
+function mudarPaginaHistorico(direcao) {
+    const totalPaginas = Math.ceil(dadosHistoricoTr.length / itensPorPaginaTr) || 1;
+    paginaAtualHistorico += direcao;
+
+    if (paginaAtualHistorico < 1) paginaAtualHistorico = 1;
+    if (paginaAtualHistorico > totalPaginas) paginaAtualHistorico = totalPaginas;
+
+    renderizarTabelaHistorico();
+}
+
+async function abrirModalEditarTreinamento(id) {
+    try {
+        const { data: t, error } = await supabase.from('treinamentos').select('*').eq('id', id).single();
+        if (error) throw error;
+
+        document.getElementById('edit_tr_id').value = t.id;
+        document.getElementById('edit_tr_colaborador').value = t.colaborador;
+        document.getElementById('edit_tr_telefone').value = t.telefone;
+        document.getElementById('edit_tr_tema').value = t.tema;
+        document.getElementById('edit_tr_predio').value = t.predio;
+        document.getElementById('edit_tr_setor').value = t.setor;
+        document.getElementById('edit_tr_andar').value = t.andar;
+        document.getElementById('edit_tr_data_hora').value = t.data_hora;
+
+        abrirModal('modal-editar-treinamento');
+    } catch (err) {
+        alert("Erro ao carregar dados do treinamento: " + err.message);
+    }
+}
+
+async function salvarEdicaoTreinamento() {
+    const id = document.getElementById('edit_tr_id').value;
+    const colaborador = document.getElementById('edit_tr_colaborador').value;
+    const telefone = document.getElementById('edit_tr_telefone').value;
+    const tema = document.getElementById('edit_tr_tema').value;
+    const predio = document.getElementById('edit_tr_predio').value;
+    const setor = document.getElementById('edit_tr_setor').value;
+    const andar = document.getElementById('edit_tr_andar').value;
+    const dataHora = document.getElementById('edit_tr_data_hora').value;
+
+    if (!colaborador || !tema || !dataHora || !setor) {
+        return alert("Preencha os campos obrigatórios.");
+    }
+
+    try {
+        const { error } = await supabase.from('treinamentos').update({
+            colaborador: colaborador,
+            telefone: telefone,
+            tema: tema,
+            predio: predio,
+            setor: setor,
+            andar: andar,
+            data_hora: dataHora
+        }).eq('id', id);
+
+        if (error) throw error;
+
+        alert("Treinamento atualizado com sucesso!");
+        fecharModal('modal-editar-treinamento');
+        carregarListaTreinamentos();
+        if(typeof carregarResumoDashboard === 'function') carregarResumoDashboard();
+    } catch (err) {
+        alert("Erro ao salvar edição do treinamento: " + err.message);
+    }
+}
+
+async function cancelarTreinamento(id) {
+    const motivo = prompt("⚠️ Atenção: Por favor, digite o motivo do cancelamento deste treinamento:");
+    
+    if (motivo === null) return; 
+    if (motivo.trim() === "") return alert("O motivo é obrigatório para cancelar!");
+
+    try {
+        const { error } = await supabase.from('treinamentos').update({
+            status: 'Cancelado',
+            motivo_cancelamento: motivo
+        }).eq('id', id);
+        
+        if (error) throw error;
+
+        alert("Treinamento cancelado com sucesso!");
+        carregarListaTreinamentos();
+        if(typeof carregarResumoDashboard === 'function') carregarResumoDashboard();
+    } catch (err) {
+        alert("Erro ao cancelar treinamento: " + err.message);
+    }
+}
+
+async function abrirModalFinalizarTreinamento(id) {
+    document.getElementById('ft_treinamento_id').value = id;
+    limparCanvas('canvas-finalizar-treinamento');
+    
+    try {
+        const { data, error } = await supabase.from('profiles').select('id, nome').order('nome');
+        if (!error) {
+            const sel = document.getElementById('ft_tecnico');
+            sel.innerHTML = '<option value="">Selecione o Técnico...</option>' + 
+                            data.map(u => `<option value="${u.nome}">${u.nome}</option>`).join('');
+        }
+    } catch (e) { console.error(e); }
+
+    abrirModal('modal-finalizar-treinamento');
+}
+
+async function salvarTreinamentoConcluido() {
+    const id = document.getElementById('ft_treinamento_id').value;
+    const tecnico = document.getElementById('ft_tecnico').value;
+
+    if (!tecnico) return alert("Selecione o técnico responsável.");
+
+    try {
+        const { data: treinamento } = await supabase.from('treinamentos').select('solicitacao_id').eq('id', id).single();
+
+        const sigUrl = await uploadAssinatura(document.getElementById('canvas-finalizar-treinamento'), 'conclusao_treinamento');
+
+        await supabase.from('treinamentos').update({
+            status: 'Concluído',
+            responsavel_conclusao: tecnico,
+            assinatura_url: sigUrl
+        }).eq('id', id);
+
+        if (treinamento && treinamento.solicitacao_id) {
+            await supabase.from('solicitacoes_treinamento')
+                .update({ status: 'Realizado' })
+                .eq('id', treinamento.solicitacao_id);
+        }
+
+        alert("Treinamento finalizado!");
+        fecharModal('modal-finalizar-treinamento');
+        carregarListaTreinamentos();
+        if(typeof carregarResumoDashboard === 'function') carregarResumoDashboard();
+    } catch (err) { alert("Erro: " + err.message); }
+}
 // 🟢 ATUALIZADO: Tabela de Histórico de Treinamentos (Padrão Mediano 140px)
 function renderizarTabelaHistorico() {
     const tbody = document.getElementById('lista-historico-treinamentos-aba');
