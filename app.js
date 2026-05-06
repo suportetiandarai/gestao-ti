@@ -469,7 +469,7 @@ async function salvarOcorrencia() {
     }
 }
 
-// 🟢 ATUALIZADO: Layout compacto para não esticar a tabela
+// 🟢 ATUALIZADO: Layout idêntico ao AD (Status padronizado e botões agrupados sem esticar)
 async function carregarListaOcorrencias() {
     try {
         const { data, error } = await supabase.from('ocorrencias')
@@ -484,17 +484,7 @@ async function carregarListaOcorrencias() {
         if (tbody) {
             tbody.innerHTML = data.length > 0 ? data.map(o => {
                 const prazoFormatado = o.prazo ? o.prazo.split('-').reverse().join('/') : '-';
-                let corStatus = o.status === 'Em andamento' ? '#f39c12' : '#e74c3c'; // Pendente/Andamento
-
-                // 🟢 BOTÕES EM FORMATO DE GRADE (2 em cima, 2 embaixo) para economizar espaço
-                let botoesAcao = `
-                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 4px;">
-                        <button class="btn-primary btn-sm" style="background: #3498db; margin: 0; padding: 6px 2px; font-size: 10px;" onclick="abrirModalVerOcorrencia('${o.id}')">👁️ Ver</button>
-                        <button class="btn-primary btn-sm" style="background: #f39c12; margin: 0; padding: 6px 2px; font-size: 10px;" onclick="abrirModalEditarOcorrencia('${o.id}')">✏️ Editar</button>
-                        <button class="btn-success btn-sm" style="margin: 0; padding: 6px 2px; font-size: 10px;" onclick="abrirModalFinalizarOcorrencia('${o.id}')">✔️ Solucionar</button>
-                        <button class="btn-danger btn-sm" style="margin: 0; padding: 6px 2px; font-size: 10px;" onclick="cancelarOcorrencia('${o.id}')">❌ Cancelar</button>
-                    </div>
-                `;
+                let corStatus = o.status === 'Em andamento' ? '#f39c12' : '#e74c3c'; // Laranja ou Vermelho
 
                 return `
                     <tr>
@@ -502,17 +492,67 @@ async function carregarListaOcorrencias() {
                         <td style="font-size: 12px;">${prazoFormatado}</td>
                         <td style="font-size: 12px;">${o.responsavel_abertura}</td>
                         
-                        <!-- 🟢 LARGURA REDUZIDA E CONTROLADA (width: 150px) -->
-                        <td style="width: 150px; min-width: 140px;">
-                            <div style="margin-bottom: 6px;">
-                                <span style="background-color: ${corStatus}; color: white; padding: 4px 8px; border-radius: 4px; font-size: 11px; font-weight: bold; display: block; width: 100%; text-align: center;">${o.status}</span>
+                        <!-- 🟢 STATUS E AÇÕES UNIFICADOS E PADRONIZADOS -->
+                        <td style="min-width: 160px; max-width: 200px;">
+                            <div style="margin-bottom: 8px;">
+                                <span style="background-color: ${corStatus}; color: white; padding: 6px 8px; border-radius: 4px; font-size: 12px; font-weight: bold; display: block; width: 100%; text-align: center;">${o.status || 'Pendente'}</span>
                             </div>
-                            ${botoesAcao}
+                            
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 4px;">
+                                <button class="btn-primary btn-sm" style="background: #3498db; margin: 0; padding: 6px 4px; font-size: 11px;" onclick="abrirModalVerOcorrencia('${o.id}')">👁️ Ver</button>
+                                <button class="btn-primary btn-sm" style="background: #f39c12; margin: 0; padding: 6px 4px; font-size: 11px;" onclick="abrirModalEditarOcorrencia('${o.id}')">✏️ Editar</button>
+                                <button class="btn-success btn-sm" style="margin: 0; padding: 6px 4px; font-size: 11px;" onclick="abrirModalFinalizarOcorrencia('${o.id}')">✔️ Solucionar</button>
+                                <button class="btn-danger btn-sm" style="margin: 0; padding: 6px 4px; font-size: 11px;" onclick="cancelarOcorrencia('${o.id}')">❌ Cancelar</button>
+                            </div>
                         </td>
                     </tr>
                 `;
             }).join('') : '<tr><td colspan="4" style="text-align: center; color: #7f8c8d; padding: 20px;">Nenhuma ocorrência pendente.</td></tr>';
         }
+
+        carregarHistoricoOcorrencias();
+
+    } catch (err) { console.error("Erro ao carregar ocorrências:", err.message); }
+}
+
+// 🟢 ATUALIZADO: Status idêntico ao padrão TIMED/AD no Histórico
+function renderizarTabelaHistoricoOc() {
+    const tbody = document.getElementById('lista-historico-ocorrencias-aba');
+    const spanPagina = document.getElementById('span-pagina-historico-oc');
+    if (!tbody) return;
+
+    const totalPaginas = Math.ceil(dadosHistoricoOc.length / itensPorPaginaOc) || 1;
+    if (spanPagina) spanPagina.innerText = `Página ${paginaAtualOc} de ${totalPaginas}`;
+
+    const inicio = (paginaAtualOc - 1) * itensPorPaginaOc;
+    const fim = inicio + itensPorPaginaOc;
+    const itensPagina = dadosHistoricoOc.slice(inicio, fim);
+
+    tbody.innerHTML = itensPagina.length > 0 ? itensPagina.map(o => {
+        const dataC = new Date(o.created_at).toLocaleDateString('pt-BR');
+        let corStatus = o.status === 'Solucionada' ? '#2ecc71' : '#e74c3c';
+
+        return `
+            <tr>
+                <td style="font-size: 12px;"><strong>${o.descricao}</strong><br><small style="color: #7f8c8d;">Data: ${dataC}</small></td>
+                <td style="font-size: 12px;">${o.responsavel_abertura}</td>
+                
+                <!-- 🟢 COLUNA PADRONIZADA COM A IMAGEM -->
+                <td style="min-width: 160px; max-width: 200px;">
+                    <div style="margin-bottom: 8px;">
+                        <span style="background-color: ${corStatus}; color: white; padding: 6px 8px; border-radius: 4px; font-size: 12px; font-weight: bold; display: block; width: 100%; text-align: center;">${o.status}</span>
+                    </div>
+                    
+                    <div style="display: flex; gap: 4px; flex-wrap: nowrap; justify-content: center;">
+                        <button class="btn-primary btn-sm" style="background: #3498db; flex: 1; margin: 0; padding: 6px 4px; font-size: 11px;" onclick="abrirModalVerOcorrencia('${o.id}')">👁️ Ver Detalhes</button>
+                    </div>
+                    
+                    ${o.status === 'Cancelada' && o.motivo_cancelamento ? `<div style="margin-top: 8px; font-size: 10px; color: #475569; background: #f1f5f9; padding: 4px; border-radius: 4px; line-height: 1.4;"><strong>Motivo:</strong> ${o.motivo_cancelamento}</div>` : ''}
+                </td>
+            </tr>
+        `;
+    }).join('') : '<tr><td colspan="3" style="text-align: center; color: #7f8c8d; padding: 20px;">Nenhum registro encontrado no histórico.</td></tr>'; 
+}
 
         carregarHistoricoOcorrencias();
 
