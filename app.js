@@ -1,4 +1,64 @@
 // ==========================================
+// 🟢 SISTEMA DE AVISOS MODERNOS (TOASTS) E SUBSTITUIÇÃO DO ALERT NATIVO
+// ==========================================
+
+window.mostrarAviso = function(mensagem, tipo = 'info') {
+    const container = document.getElementById('toast-container');
+    if (!container) return;
+
+    const toast = document.createElement('div');
+    toast.className = `toast ${tipo}`;
+
+    // Define o ícone e o título baseado no tipo
+    let icone = '💡';
+    let titulo = 'Informação';
+
+    if (tipo === 'erro') { icone = '❌'; titulo = 'Ops, algo deu errado'; }
+    else if (tipo === 'sucesso') { icone = '✅'; titulo = 'Sucesso'; }
+    else if (tipo === 'aviso') { icone = '⚠️'; titulo = 'Atenção'; }
+
+    toast.innerHTML = `
+        <span class="toast-icon">${icone}</span>
+        <div class="toast-content">
+            <span class="toast-title">${titulo}</span>
+            <span>${mensagem}</span>
+        </div>
+    `;
+
+    container.appendChild(toast);
+
+    // Some sozinho após 4.5 segundos
+    setTimeout(() => {
+        toast.classList.add('hiding');
+        toast.addEventListener('animationend', () => {
+            toast.remove();
+        });
+    }, 4500);
+};
+
+// 🟢 O TRUQUE DE MESTRE: Intercepta todos os alert() antigos do sistema
+window.alert = function(mensagem) {
+    let tipo = 'info';
+    let msgLimpa = mensagem;
+    
+    // O sistema é inteligente: ele lê a sua mensagem para saber se é erro ou sucesso!
+    if (mensagem.toLowerCase().includes('erro') || mensagem.includes('❌')) {
+        tipo = 'erro';
+    } else if (mensagem.toLowerCase().includes('sucesso') || mensagem.includes('✅')) {
+        tipo = 'sucesso';
+    } else if (mensagem.toLowerCase().includes('atenção') || mensagem.includes('⚠️')) {
+        tipo = 'aviso';
+    }
+    
+    // Limpa os emojis que você colocava antes nos alertas para o novo card ficar limpo
+    msgLimpa = mensagem.replace(/[✅❌⚠️💡]/g, '').trim();
+    
+    // Chama o novo aviso bonito
+    mostrarAviso(msgLimpa, tipo);
+};
+// ==========================================
+
+// ==========================================
 // 1. GESTÃO DE SESSÃO E SEGURANÇA (TIMER 20MIN)
 // ==========================================
 let timerInatividade;
