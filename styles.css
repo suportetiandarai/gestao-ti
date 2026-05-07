@@ -716,3 +716,51 @@ tr:hover td { background-color: #fbfdff; color: #0f172a; }
         box-shadow: none;
     }
 }
+
+/* =========================================================
+   INPUT DE ARQUIVOS / UPLOAD DE IMAGENS (Minimalista e Tech)
+   ========================================================= */
+input[type="file"] {
+    padding: 6px;
+    background: #f8fafc;
+    border: 1px dashed #cbd5e1; /* Borda tracejada indicando área de upload */
+    border-radius: 8px;
+    color: #64748b; /* Cor do texto do nome do arquivo */
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+    width: 100%;
+    max-width: 600px;
+    transition: all 0.3s ease;
+    margin-bottom: 12px;
+}
+
+/* Efeito ao passar o mouse na caixa de upload */
+input[type="file"]:hover {
+    border-color: #3b82f6;
+    background: #f0f9ff;
+    box-shadow: 0 2px 8px rgba(59, 130, 246, 0.1);
+}
+
+/* Estilizando APENAS o botão interno ("Escolher arquivo") */
+input[type="file"]::file-selector-button {
+    margin-right: 12px;
+    border: none;
+    background: #e0f2fe; /* Fundo azul bem clarinho e moderno */
+    color: #0369a1; /* Texto azul escuro */
+    padding: 8px 14px;
+    border-radius: 6px;
+    font-weight: 700;
+    font-size: 11px;
+    cursor: pointer;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    transition: all 0.2s ease;
+}
+
+/* Efeito ao passar o mouse no botão interno */
+input[type="file"]::file-selector-button:hover {
+    background: #bae6fd;
+    color: #0284c7;
+    transform: scale(1.02);
+}
