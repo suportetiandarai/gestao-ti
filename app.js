@@ -2403,34 +2403,29 @@ async function carregarInventario() {
     const filtroSerie = document.getElementById('filtro_inv_serie').value.trim();
 
     try {
-        // Inicia a query pegando todos os itens
         let query = supabase.from('inventario').select('*').order('created_at', { ascending: false });
 
-        // Se o usuário selecionou Tipo, filtra por Tipo
-        if (filtroTipo) {
-            query = query.eq('tipo', filtroTipo);
-        }
-        
-        // Se selecionou Status, filtra por Status
-        if (filtroStatus) {
-            query = query.eq('status', filtroStatus);
-        }
-        
-        // Se digitou Número de Série, usa "ilike" para achar mesmo que seja um pedaço do número
-        if (filtroSerie) {
-            query = query.ilike('numero_serie', `%${filtroSerie}%`);
-        }
+        if (filtroTipo) query = query.eq('tipo', filtroTipo);
+        if (filtroStatus) query = query.eq('status', filtroStatus);
+        if (filtroSerie) query = query.ilike('numero_serie', `%${filtroSerie}%`);
 
         const { data, error } = await query;
         if (error) throw error;
 
         const tbody = document.getElementById('lista-inventario-aba');
-        if(tbody) {
-            // Operador ternário elegante para mostrar mensagem caso os filtros não achem nada
+        if (tbody) {
+            // 🟢 VERIFICAÇÃO DE ADMIN
+            const isAdmin = typeof window.usuarioAtual !== 'undefined' && window.usuarioAtual && window.usuarioAtual.role === 'admin';
+
             tbody.innerHTML = data.length > 0 ? data.map(e => {
-                let corStatus = '#3498db'; // Azul para estoque
-                if (e.status === 'Em uso') corStatus = '#2ecc71'; // Verde
-                if (e.status === 'Danificado') corStatus = '#e74c3c'; // Vermelho
+                let corStatus = '#3498db'; 
+                if (e.status === 'Em uso') corStatus = '#2ecc71'; 
+                if (e.status === 'Danificado') corStatus = '#e74c3c'; 
+
+                // 🟢 GERA O BOTÃO DE EXCLUIR APENAS SE FOR ADMIN
+                let botaoExcluir = isAdmin 
+                    ? `<button class="btn-danger btn-sm" onclick="deletarEquipamento('${e.id}')">🗑️ Excluir</button>` 
+                    : '';
 
                 return `
                     <tr>
@@ -2440,8 +2435,10 @@ async function carregarInventario() {
                         <td>${e.predio || '-'} / ${e.setor || '-'} <br><small>(${e.andar || '-'})</small></td>
                         <td><span style="background-color: ${corStatus}; color: white; padding: 4px 8px; border-radius: 4px; font-size: 12px; font-weight: bold;">${e.status}</span></td>
                         <td>
-                            <button class="btn-primary btn-sm" style="background: #f39c12;" onclick="alterarStatusInventario('${e.id}')">🔄 Status</button>
-                            <button class="btn-danger btn-sm" onclick="deletarEquipamento('${e.id}')">🗑️ Excluir</button>
+                            <div style="display: flex; gap: 5px;">
+                                <button class="btn-primary btn-sm" style="background: #f39c12;" onclick="alterarStatusInventario('${e.id}')">🔄 Status</button>
+                                ${botaoExcluir}
+                            </div>
                         </td>
                     </tr>
                 `;
