@@ -426,7 +426,7 @@ async function registrarChave(tipo) {
         alert('Erro ao processar chave: ' + err.message); 
     }
 }
-}
+
 
 // --- VARIÁVEIS DE CONTROLE DO HISTÓRICO DE CHAVES ---
 let paginaAtualChaves = 1;
