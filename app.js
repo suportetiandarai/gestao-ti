@@ -1704,6 +1704,7 @@ function formatarDataCrua(dataIso) {
 
 async function carregarResumoDashboard() {
     try {
+        // TONERS
         const { data: toners } = await supabase.from('cadastro_toner').select('*').order('modelo_toner');
         const dashToners = document.getElementById('dash-toners');
         if (dashToners) {
@@ -1712,6 +1713,7 @@ async function carregarResumoDashboard() {
                 : '<li>Nenhum toner cadastrado.</li>';
         }
 
+        // CHAVES
         const { data: chaves } = await supabase.from('chaves').select('*').eq('status', 'retirada');
         const dashChaves = document.getElementById('dash-chaves');
         if (dashChaves) {
@@ -1720,6 +1722,7 @@ async function carregarResumoDashboard() {
                 : '<li>✅ Todas as chaves na base.</li>';
         }
 
+        // CHAMADOS
         const { data: chamados } = await supabase.from('chamado_simpress').select('*').eq('status', 'Aberto');
         const dashChamados = document.getElementById('dash-chamados');
         if (dashChamados) {
@@ -1728,7 +1731,8 @@ async function carregarResumoDashboard() {
                 : '<li>✅ Nenhum chamado aberto.</li>';
         }
 
-        const { data: ocorrencias } = await supabase.from('ocorrencias').select('*').neq('status', 'Solucionada');
+        // OCORRÊNCIAS
+        const { data: ocorrencias } = await supabase.from('ocorrencias').select('*').neq('status', 'Solucionada').neq('status', 'Cancelada');
         const dashOcorrencias = document.getElementById('dash-ocorrencias');
         if (dashOcorrencias) {
             dashOcorrencias.innerHTML = ocorrencias && ocorrencias.length 
@@ -1736,7 +1740,28 @@ async function carregarResumoDashboard() {
                 : '<li>✅ Nenhuma ocorrência pendente.</li>';
         }
 
-        // 🟢 Correção das Datas dos Plantões
+        // 🟢 NOVO: TIMED
+        const { data: timed } = await supabase.from('solicitacoes_cadastro').select('*').in('status', ['Pendente', 'Aguardando']);
+        const dashTimed = document.getElementById('dash-timed');
+        if (dashTimed) {
+            dashTimed.innerHTML = timed && timed.length 
+                ? timed.map(t => {
+                    const cor = t.status === 'Aguardando' ? '#e74c3c' : '#f39c12';
+                    return `<li>📝 <strong>${t.nome}</strong> <br><small style="color: ${cor}; font-weight: bold;">${t.status}</small></li>`;
+                }).join('') 
+                : '<li>✅ Nenhum cadastro pendente.</li>';
+        }
+
+        // 🟢 NOVO: AD
+        const { data: ad } = await supabase.from('solicitacoes_ad').select('*').eq('status', 'Pendente');
+        const dashAd = document.getElementById('dash-ad');
+        if (dashAd) {
+            dashAd.innerHTML = ad && ad.length 
+                ? ad.map(a => `<li>💻 <strong>${a.nome_completo}</strong> <br><small style="color: #f39c12; font-weight: bold;">Pendente</small></li>`).join('') 
+                : '<li>✅ Nenhuma solicitação de AD pendente.</li>';
+        }
+
+        // PLANTÕES
         const { data: plantoes } = await supabase.from('plantoes').select('*').eq('visto_supervisao', false).order('created_at', { ascending: false });
         const dashPlantoes = document.getElementById('dash-plantoes');
         if (dashPlantoes) {
@@ -1755,7 +1780,7 @@ async function carregarResumoDashboard() {
                 : '<tr><td colspan="3" style="text-align: center;">✅ Todos os plantões estão com visto da supervisão.</td></tr>';
         }
 
-        // 🟢 Correção das Datas dos Treinamentos no Dashboard (Tirando o slice)
+        // TREINAMENTOS
         const { data: treinamentos } = await supabase.from('treinamentos')
             .select('*').eq('status', 'Agendado').order('data_hora', { ascending: true }).limit(5);
 
