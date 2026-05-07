@@ -1005,6 +1005,38 @@ let paginaAtualHistorico = 1;
 const itensPorPaginaTr = 5;
 let dadosHistoricoTr = []; 
 
+// 🟢 NOVA FUNÇÃO: Inteligência para preencher andares automaticamente
+window.atualizarAndares = function(predioId, andarId, valorPreSelecionado = '') {
+    const predio = document.getElementById(predioId).value;
+    const selectAndar = document.getElementById(andarId);
+    
+    selectAndar.innerHTML = '<option value="">Selecione...</option>';
+    
+    let andares = [];
+    
+    if (predio === 'UPI') {
+        andares = ['SL CTI 1º Andar', '2º Andar', '3º Andar', '4º Andar', '5º Andar', '6º Andar', '7º Andar', '8º Andar', '9º Andar', '10º Andar', '11º Andar', '12º Andar', '13º Andar'];
+    } else if (predio === 'UPE') {
+        andares = ['1º Andar', '2º Andar', '3º Andar', '4º Andar', '5º Andar'];
+    } else if (predio === 'PIMAG') {
+        andares = ['1º Andar', '2º Andar', '3º Andar', '4º Andar'];
+    } else if (predio === 'RADIOTERAPIA') {
+        andares = ['Térreo'];
+    } else if (predio === 'TRAUMA') {
+        andares = ['1º Andar', '2º Andar', '3º Andar'];
+    } else if (predio === 'CASA ROSA') {
+        andares = ['1º Andar', '2º Andar'];
+    }
+
+    andares.forEach(a => {
+        const opt = document.createElement('option');
+        opt.value = a;
+        opt.textContent = a;
+        if (a === valorPreSelecionado) opt.selected = true; // Mantém selecionado na edição
+        selectAndar.appendChild(opt);
+    });
+};
+
 window.prepararAgendamento = function(id, nome, telefone, tema) {
     idSolicitacaoEmAndamento = id; 
     document.getElementById('tr_colaborador').value = nome;
@@ -1186,9 +1218,12 @@ async function abrirModalEditarTreinamento(id) {
         document.getElementById('edit_tr_colaborador').value = t.colaborador;
         document.getElementById('edit_tr_telefone').value = t.telefone;
         document.getElementById('edit_tr_tema').value = t.tema;
+        
+        // 🟢 PREENCHE O PRÉDIO E CHAMA A INTELIGÊNCIA DOS ANDARES
         document.getElementById('edit_tr_predio').value = t.predio;
+        atualizarAndares('edit_tr_predio', 'edit_tr_andar', t.andar);
+        
         document.getElementById('edit_tr_setor').value = t.setor;
-        document.getElementById('edit_tr_andar').value = t.andar;
         document.getElementById('edit_tr_data_hora').value = t.data_hora;
 
         abrirModal('modal-editar-treinamento');
