@@ -56,7 +56,45 @@ window.alert = function(mensagem) {
     // Chama o novo aviso bonito
     mostrarAviso(msgLimpa, tipo);
 };
-// ==========================================
+
+// 🟢 SISTEMA DE CONFIRMAÇÃO PERSONALIZADO
+let callbackConfirmacao = null;
+
+window.perguntar = function(titulo, mensagem, tipo, callback) {
+    const modal = document.getElementById('modal-confirmacao');
+    const txtTitulo = document.getElementById('confirm-titulo');
+    const txtMsg = document.getElementById('confirm-mensagem');
+    const btnConfirmar = document.getElementById('btn-confirmar-v2');
+    const icon = document.getElementById('confirm-icon');
+
+    txtTitulo.innerText = titulo;
+    txtMsg.innerText = mensagem;
+    callbackConfirmacao = callback;
+
+    // Ajusta cores e ícones conforme o tipo
+    if (tipo === 'perigo') {
+        icon.innerText = '🗑️';
+        btnConfirmar.style.background = '#ef4444';
+    } else if (tipo === 'sucesso') {
+        icon.innerText = '✅';
+        btnConfirmar.style.background = '#10b981';
+    } else {
+        icon.innerText = '⚠️';
+        btnConfirmar.style.background = '#42B9EB';
+    }
+
+    btnConfirmar.onclick = () => {
+        fecharModal('modal-confirmacao');
+        if (callbackConfirmacao) callbackConfirmacao();
+    };
+
+    abrirModal('modal-confirmacao');
+};
+
+window.cancelarConfirmacao = () => {
+    fecharModal('modal-confirmacao');
+    callbackConfirmacao = null;
+};
 
 // ==========================================
 // 1. GESTÃO DE SESSÃO E SEGURANÇA (TIMER 20MIN)
