@@ -2450,29 +2450,33 @@ async function carregarInventario() {
     } catch (err) { console.error("Erro ao carregar inventário filtrado:", err); }
 }
 
-async function alterarStatusInventario(id) {
-    const novoStatus = prompt("Digite o novo status exato (Em uso, Em estoque, Danificado):");
-    if (novoStatus === null) return;
-    
-    const statusValido = ['Em uso', 'Em estoque', 'Danificado'].includes(novoStatus);
-    if (!statusValido) return alert("❌ Status inválido. Respeite as letras maiúsculas e minúsculas.");
-
-    perguntar(
-        "Alterar Status", 
-        `Confirmar a mudança do status do equipamento para "${novoStatus}"?`, 
-        "aviso", 
-        async () => {
-            try {
-                const { error } = await supabase.from('inventario').update({ status: novoStatus }).eq('id', id);
-                if (error) throw error;
-                
-                alert("✅ Status atualizado com sucesso!");
-                carregarInventario();
-            } catch (err) { alert("❌ Erro ao atualizar: " + err.message); }
-        }
-    );
+// 🟢 Abre a nova janela de seleção de Status
+function alterarStatusInventario(id) {
+    document.getElementById('status_inv_id').value = id;
+    document.getElementById('status_inv_novo').value = ''; // Reseta o campo
+    abrirModal('modal-status-inventario');
 }
 
+// 🟢 Salva o status que o usuário selecionou na lista
+async function salvarNovoStatusInventario() {
+    const id = document.getElementById('status_inv_id').value;
+    const novoStatus = document.getElementById('status_inv_novo').value;
+
+    if (!novoStatus) {
+        return alert("⚠️ Atenção: Por favor, selecione um status na lista.");
+    }
+
+    try {
+        const { error } = await supabase.from('inventario').update({ status: novoStatus }).eq('id', id);
+        if (error) throw error;
+        
+        alert("✅ Status do equipamento atualizado com sucesso!");
+        fecharModal('modal-status-inventario');
+        carregarInventario(); // Recarrega a tabela na mesma hora
+    } catch (err) { 
+        alert("❌ Erro ao atualizar status: " + err.message); 
+    }
+}
 async function deletarEquipamento(id) {
     perguntar(
         "Excluir Equipamento", 
