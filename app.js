@@ -1703,103 +1703,141 @@ function formatarDataCrua(dataIso) {
 }
 
 async function carregarResumoDashboard() {
+    const emptyMsg = (msg) => `<li style="text-align: center; color: #94a3b8; font-size: 12px; padding: 20px;">${msg}</li>`;
+
     try {
         // TONERS
         const { data: toners } = await supabase.from('cadastro_toner').select('*').order('modelo_toner');
         const dashToners = document.getElementById('dash-toners');
         if (dashToners) {
-            dashToners.innerHTML = toners && toners.length 
-                ? toners.map(t => `<li>📦 ${t.modelo_toner}: <strong style="color: ${t.quantidade_atual <= 1 ? 'red' : 'green'}">${t.quantidade_atual} un.</strong></li>`).join('') 
-                : '<li>Nenhum toner cadastrado.</li>';
+            dashToners.innerHTML = toners && toners.length > 0
+                ? toners.map(t => {
+                    const isBaixo = t.quantidade_atual <= 1;
+                    const color = isBaixo ? '#e74c3c' : '#2ecc71';
+                    const bgBadge = isBaixo ? '#fee2e2' : '#dcfce7';
+                    const txtBadge = isBaixo ? '#991b1b' : '#166534';
+                    return `
+                    <li style="background: #f8fafc; border-left: 4px solid ${color}; padding: 12px; border-radius: 6px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 1px 2px rgba(0,0,0,0.05);">
+                        <strong style="font-size: 13px; color: #334155;">${t.modelo_toner}</strong>
+                        <span style="background: ${bgBadge}; color: ${txtBadge}; padding: 4px 8px; border-radius: 12px; font-size: 10px; font-weight: bold; letter-spacing: 0.5px;">${t.quantidade_atual} UN</span>
+                    </li>`;
+                }).join('') : emptyMsg('✅ Estoque vazio.');
         }
 
         // CHAVES
         const { data: chaves } = await supabase.from('chaves').select('*').eq('status', 'retirada');
         const dashChaves = document.getElementById('dash-chaves');
         if (dashChaves) {
-            dashChaves.innerHTML = chaves && chaves.length 
-                ? chaves.map(c => `<li>🔑 ${c.nome} - <span style="color: red; font-weight: bold;">Em uso</span></li>`).join('') 
-                : '<li>✅ Todas as chaves na base.</li>';
+            dashChaves.innerHTML = chaves && chaves.length > 0
+                ? chaves.map(c => `
+                    <li style="background: #f8fafc; border-left: 4px solid #e74c3c; padding: 12px; border-radius: 6px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 1px 2px rgba(0,0,0,0.05);">
+                        <strong style="font-size: 13px; color: #334155;">${c.nome}</strong>
+                        <span style="background: #fee2e2; color: #991b1b; padding: 4px 8px; border-radius: 12px; font-size: 10px; font-weight: bold; letter-spacing: 0.5px;">EM USO</span>
+                    </li>`).join('') : emptyMsg('✅ Todas as chaves na base.');
         }
 
         // CHAMADOS
         const { data: chamados } = await supabase.from('chamado_simpress').select('*').eq('status', 'Aberto');
         const dashChamados = document.getElementById('dash-chamados');
         if (dashChamados) {
-            dashChamados.innerHTML = chamados && chamados.length 
-                ? chamados.map(c => `<li>🖨️ N ${c.numero_chamado} (${c.setor_localizada})</li>`).join('') 
-                : '<li>✅ Nenhum chamado aberto.</li>';
+            dashChamados.innerHTML = chamados && chamados.length > 0
+                ? chamados.map(c => `
+                    <li style="background: #f8fafc; border-left: 4px solid #f39c12; padding: 12px; border-radius: 6px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 1px 2px rgba(0,0,0,0.05);">
+                        <div>
+                            <strong style="font-size: 13px; color: #334155;">Nº ${c.numero_chamado}</strong><br>
+                            <span style="font-size: 11px; color: #64748b;">📍 ${c.setor_localizada}</span>
+                        </div>
+                        <span style="background: #fef08a; color: #b45309; padding: 4px 8px; border-radius: 12px; font-size: 10px; font-weight: bold; letter-spacing: 0.5px;">ABERTO</span>
+                    </li>`).join('') : emptyMsg('✅ Nenhum chamado aberto.');
         }
 
         // OCORRÊNCIAS
         const { data: ocorrencias } = await supabase.from('ocorrencias').select('*').neq('status', 'Solucionada').neq('status', 'Cancelada');
         const dashOcorrencias = document.getElementById('dash-ocorrencias');
         if (dashOcorrencias) {
-            dashOcorrencias.innerHTML = ocorrencias && ocorrencias.length 
-                ? ocorrencias.map(o => `<li>⚠️ ${o.descricao} <br><small style="color: #666;">Prazo: ${o.prazo ? o.prazo.split('-').reverse().join('/') : '-'} | ${o.status}</small></li>`).join('') 
-                : '<li>✅ Nenhuma ocorrência pendente.</li>';
+            dashOcorrencias.innerHTML = ocorrencias && ocorrencias.length > 0
+                ? ocorrencias.map(o => `
+                    <li style="background: #f8fafc; border-left: 4px solid #f39c12; padding: 12px; border-radius: 6px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 1px 2px rgba(0,0,0,0.05);">
+                        <div>
+                            <strong style="font-size: 13px; color: #334155;">${o.descricao}</strong><br>
+                            <span style="font-size: 11px; color: #64748b;">Prazo: ${o.prazo ? o.prazo.split('-').reverse().join('/') : '-'}</span>
+                        </div>
+                        <span style="background: #fef08a; color: #b45309; padding: 4px 8px; border-radius: 12px; font-size: 10px; font-weight: bold; letter-spacing: 0.5px;">PENDENTE</span>
+                    </li>`).join('') : emptyMsg('✅ Nenhuma ocorrência pendente.');
         }
 
-        // 🟢 NOVO: TIMED
+        // TIMED
         const { data: timed } = await supabase.from('solicitacoes_cadastro').select('*').in('status', ['Pendente', 'Aguardando']);
         const dashTimed = document.getElementById('dash-timed');
         if (dashTimed) {
-            dashTimed.innerHTML = timed && timed.length 
+            dashTimed.innerHTML = timed && timed.length > 0
                 ? timed.map(t => {
-                    const cor = t.status === 'Aguardando' ? '#e74c3c' : '#f39c12';
-                    return `<li>📝 <strong>${t.nome}</strong> <br><small style="color: ${cor}; font-weight: bold;">${t.status}</small></li>`;
-                }).join('') 
-                : '<li>✅ Nenhum cadastro pendente.</li>';
+                    const isAg = t.status === 'Aguardando';
+                    const color = isAg ? '#e74c3c' : '#f39c12';
+                    const bgBadge = isAg ? '#fee2e2' : '#fef08a';
+                    const txtBadge = isAg ? '#991b1b' : '#b45309';
+                    return `
+                    <li style="background: #f8fafc; border-left: 4px solid ${color}; padding: 12px; border-radius: 6px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 1px 2px rgba(0,0,0,0.05);">
+                        <div>
+                            <strong style="font-size: 13px; color: #334155;">${t.nome}</strong><br>
+                            <span style="font-size: 11px; color: #64748b;">${t.cargo || '-'}</span>
+                        </div>
+                        <span style="background: ${bgBadge}; color: ${txtBadge}; padding: 4px 8px; border-radius: 12px; font-size: 10px; font-weight: bold; letter-spacing: 0.5px;">${t.status.toUpperCase()}</span>
+                    </li>`;
+                }).join('') : emptyMsg('✅ Nenhum cadastro pendente.');
         }
 
-        // 🟢 NOVO: AD
+        // AD
         const { data: ad } = await supabase.from('solicitacoes_ad').select('*').eq('status', 'Pendente');
         const dashAd = document.getElementById('dash-ad');
         if (dashAd) {
-            dashAd.innerHTML = ad && ad.length 
-                ? ad.map(a => `<li>💻 <strong>${a.nome_completo}</strong> <br><small style="color: #f39c12; font-weight: bold;">Pendente</small></li>`).join('') 
-                : '<li>✅ Nenhuma solicitação de AD pendente.</li>';
+            dashAd.innerHTML = ad && ad.length > 0
+                ? ad.map(a => `
+                    <li style="background: #f8fafc; border-left: 4px solid #3498db; padding: 12px; border-radius: 6px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 1px 2px rgba(0,0,0,0.05);">
+                        <strong style="font-size: 13px; color: #334155;">${a.nome_completo}</strong>
+                        <span style="background: #e0f2fe; color: #0369a1; padding: 4px 8px; border-radius: 12px; font-size: 10px; font-weight: bold; letter-spacing: 0.5px;">PENDENTE</span>
+                    </li>`).join('') : emptyMsg('✅ Nenhuma solicitação pendente.');
         }
 
         // PLANTÕES
         const { data: plantoes } = await supabase.from('plantoes').select('*').eq('visto_supervisao', false).order('created_at', { ascending: false });
         const dashPlantoes = document.getElementById('dash-plantoes');
         if (dashPlantoes) {
-            dashPlantoes.innerHTML = plantoes && plantoes.length 
+            dashPlantoes.innerHTML = plantoes && plantoes.length > 0
                 ? plantoes.map(p => {
                     const dataC = new Date(p.created_at).toLocaleDateString('pt-BR');
                     const horaC = new Date(p.created_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
-                    
                     return `
-                    <tr>
-                        <td>${dataC}<br><small style="color:#64748b;">${horaC}</small></td>
-                        <td>Das ${formatarDataCrua(p.hora_assumiu)} <br>às ${formatarDataCrua(p.hora_largou)}</td>
-                        <td style="color: #f39c12; font-weight: bold;">⏳ Pendente</td>
-                    </tr>
-                `}).join('') 
-                : '<tr><td colspan="3" style="text-align: center;">✅ Todos os plantões estão com visto da supervisão.</td></tr>';
+                    <li style="background: #f8fafc; border-left: 4px solid #f39c12; padding: 12px; border-radius: 6px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 1px 2px rgba(0,0,0,0.05);">
+                        <div>
+                            <strong style="font-size: 13px; color: #334155;">Aberto em: ${dataC} às ${horaC}</strong><br>
+                            <span style="font-size: 11px; color: #64748b;">Turno: ${formatarDataCrua(p.hora_assumiu)} até ${formatarDataCrua(p.hora_largou)}</span>
+                        </div>
+                        <span style="background: #fef08a; color: #b45309; padding: 4px 8px; border-radius: 12px; font-size: 10px; font-weight: bold; letter-spacing: 0.5px;">PENDENTE</span>
+                    </li>`;
+                }).join('') : emptyMsg('✅ Todos os plantões com visto.');
         }
 
         // TREINAMENTOS
-        const { data: treinamentos } = await supabase.from('treinamentos')
-            .select('*').eq('status', 'Agendado').order('data_hora', { ascending: true }).limit(5);
-
+        const { data: treinamentos } = await supabase.from('treinamentos').select('*').eq('status', 'Agendado').order('data_hora', { ascending: true }).limit(5);
         const dashTreinamentos = document.getElementById('dash-treinamentos');
         if (dashTreinamentos) {
             dashTreinamentos.innerHTML = treinamentos && treinamentos.length > 0
                 ? treinamentos.map(t => {
-                    const dataF = new Date(t.data_hora).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }).replace(',', ' às');
+                    const dtStr = new Date(t.data_hora).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+                    const [dataF, horaF] = dtStr.split(', ');
                     return `
-                        <tr>
-                            <td style="color: #42B9EB; font-weight: bold;">${dataF}</td>
-                            <td>${t.colaborador}</td>
-                            <td>${t.tema}</td>
-                            <td>${t.predio} / ${t.setor}</td>
-                            <td>${t.telefone}</td>
-                        </tr>
-                    `;
-                }).join('') 
-                : '<tr><td colspan="5" style="text-align: center;">✅ Agenda de treinamentos livre.</td></tr>';
+                        <li style="background: #f8fafc; border-left: 4px solid #3498db; padding: 12px; border-radius: 6px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 1px 2px rgba(0,0,0,0.05);">
+                            <div>
+                                <strong style="font-size: 13px; color: #334155;">${t.tema}</strong><br>
+                                <span style="font-size: 11px; color: #64748b;">👤 ${t.colaborador} | 📍 ${t.predio} (${t.setor})</span>
+                            </div>
+                            <div style="text-align: right; background: #e0f2fe; padding: 4px 8px; border-radius: 6px;">
+                                <strong style="font-size: 11px; color: #0369a1;">${dataF}</strong><br>
+                                <span style="font-size: 10px; color: #0284c7;">${horaF}</span>
+                            </div>
+                        </li>`;
+                }).join('') : emptyMsg('✅ Agenda de treinamentos livre.');
         }
 
     } catch (err) { console.error("Erro ao carregar Dashboard:", err.message); }
