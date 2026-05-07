@@ -1252,56 +1252,117 @@
         </div>
     </div>
 
-    <div id="modal-novo-equipamento" class="modal">
-        <div class="modal-content">
-            <span class="close-modal" onclick="fecharModal('modal-novo-equipamento')">&times;</span>
-            <h3>Cadastrar Equipamento</h3>
-            <form id="form-novo-equipamento">
-                <label>Tipo de Equipamento:</label>
-                <select id="inv_tipo" required>
-                    <option value="">Carregando...</option>
-                </select>
+   <div id="modal-novo-equipamento" class="modal">
+    <div class="modal-content">
+        <span class="close-modal" onclick="fecharModal('modal-novo-equipamento')">&times;</span>
+        <h3>Cadastrar Equipamento</h3>
+        <form id="form-novo-equipamento">
+            <label>Tipo de Equipamento:</label>
+            <select id="inv_tipo" required>
+                <option value="">Carregando...</option>
+            </select>
 
-                <div class="form-row" style="display: flex; gap: 15px; margin-bottom: 15px; flex-wrap: wrap;">
-                    <div class="form-group" style="flex: 1; min-width: 150px;">
-                        <label>Marca:</label>
-                        <input type="text" id="inv_marca" placeholder="Ex: Dell, Samsung" required>
-                    </div>
-                    <div class="form-group" style="flex: 1; min-width: 150px;">
-                        <label>Modelo:</label>
-                        <input type="text" id="inv_modelo" placeholder="Ex: Optiplex 3020" required>
-                    </div>
+            <div class="form-row" style="display: flex; gap: 15px; margin-bottom: 15px; flex-wrap: wrap;">
+                <div class="form-group" style="flex: 1; min-width: 150px;">
+                    <label>Marca:</label>
+                    <input type="text" id="inv_marca" placeholder="Ex: Dell, Samsung" required>
                 </div>
-
-                <label>Número de Série (S/N):</label>
-                <input type="text" id="inv_serie" required>
-
-                <label>Status Atual:</label>
-                <select id="inv_status" required>
-                    <option value="Em uso">🟢 Em uso</option>
-                    <option value="Em estoque">📦 Em estoque</option>
-                    <option value="Danificado">🔴 Danificado</option>
-                </select>
-
-                <div class="form-row" style="display: flex; gap: 15px; margin-bottom: 15px; flex-wrap: wrap; margin-top: 15px;">
-                    <div class="form-group" style="flex: 1; min-width: 100px;">
-                        <label>Prédio:</label>
-                        <input type="text" id="inv_predio" placeholder="Ex: Principal">
-                    </div>
-                    <div class="form-group" style="flex: 1; min-width: 100px;">
-                        <label>Andar:</label>
-                        <input type="text" id="inv_andar" placeholder="Ex: 3º Andar">
-                    </div>
-                    <div class="form-group" style="flex: 1; min-width: 150px;">
-                        <label>Setor:</label>
-                        <input type="text" id="inv_setor" placeholder="Ex: CTI">
-                    </div>
+                <div class="form-group" style="flex: 1; min-width: 150px;">
+                    <label>Modelo:</label>
+                    <input type="text" id="inv_modelo" placeholder="Ex: Optiplex 3020" required>
                 </div>
+            </div>
 
-                <button type="button" class="btn-success mt-20" onclick="salvarEquipamento()">Salvar Equipamento</button>
-            </form>
-        </div>
+            <label>Número de Série (S/N):</label>
+            <input type="text" id="inv_serie" required>
+
+            <label>Status Atual:</label>
+            <select id="inv_status" required>
+                <option value="Em uso">🟢 Em uso</option>
+                <option value="Em estoque">📦 Em estoque</option>
+                <option value="Danificado">🔴 Danificado</option>
+            </select>
+
+            <div class="form-row" style="display: flex; gap: 15px; margin-bottom: 15px; flex-wrap: wrap; margin-top: 15px;">
+                <div class="form-group" style="flex: 1; min-width: 120px;">
+                    <label>Prédio:</label>
+                    <select id="inv_predio" onchange="atualizarAndares('inv_predio', 'inv_andar')" required>
+                        <option value="">Selecione...</option>
+                        <option value="UPI">UPI</option>
+                        <option value="UPE">UPE</option>
+                        <option value="PIMAG">PIMAG</option>
+                        <option value="RADIOTERAPIA">RADIOTERAPIA</option>
+                        <option value="TRAUMA">TRAUMA</option>
+                        <option value="CASA ROSA">CASA ROSA</option>
+                    </select>
+                </div>
+                <div class="form-group" style="flex: 1; min-width: 120px;">
+                    <label>Andar:</label>
+                    <select id="inv_andar" required>
+                        <option value="">Selecione o prédio...</option>
+                    </select>
+                </div>
+                <div class="form-group" style="flex: 1; min-width: 150px;">
+                    <label>Setor:</label>
+                    <input type="text" id="inv_setor" placeholder="Ex: CTI">
+                </div>
+            </div>
+
+            <button type="button" class="btn-success mt-20" onclick="salvarEquipamento()">Salvar Equipamento</button>
+        </form>
     </div>
+</div>
+
+<div id="modal-editar-equipamento" class="modal">
+    <div class="modal-content">
+        <span class="close-modal" onclick="fecharModal('modal-editar-equipamento')">&times;</span>
+        <h3>Editar Equipamento</h3>
+        <form id="form-editar-equipamento">
+            <input type="hidden" id="edit_inv_id">
+            
+            <label>Tipo de Equipamento:</label>
+            <select id="edit_inv_tipo" required></select>
+
+            <div class="form-row" style="display: flex; gap: 15px; margin-bottom: 15px; flex-wrap: wrap;">
+                <div class="form-group" style="flex: 1; min-width: 150px;">
+                    <label>Marca:</label>
+                    <input type="text" id="edit_inv_marca" required>
+                </div>
+                <div class="form-group" style="flex: 1; min-width: 150px;">
+                    <label>Modelo:</label>
+                    <input type="text" id="edit_inv_modelo" required>
+                </div>
+            </div>
+
+            <label>Número de Série (S/N):</label>
+            <input type="text" id="edit_inv_serie" required>
+
+            <div class="form-row" style="display: flex; gap: 15px; margin-bottom: 15px; flex-wrap: wrap;">
+                <div class="form-group" style="flex: 1;">
+                    <label>Prédio:</label>
+                    <select id="edit_inv_predio" onchange="atualizarAndares('edit_inv_predio', 'edit_inv_andar')" required>
+                        <option value="">Selecione...</option>
+                        <option value="UPI">UPI</option>
+                        <option value="UPE">UPE</option>
+                        <option value="PIMAG">PIMAG</option>
+                        <option value="RADIOTERAPIA">RADIOTERAPIA</option>
+                        <option value="TRAUMA">TRAUMA</option>
+                        <option value="CASA ROSA">CASA ROSA</option>
+                    </select>
+                </div>
+                <div class="form-group" style="flex: 1;">
+                    <label>Andar:</label>
+                    <select id="edit_inv_andar" required></select>
+                </div>
+            </div>
+            
+            <label>Setor:</label>
+            <input type="text" id="edit_inv_setor">
+
+            <button type="button" class="btn-success mt-20" onclick="salvarEdicaoEquipamento()">Atualizar Equipamento</button>
+        </form>
+    </div>
+</div>
 
     <div id="modal-obs-cadastro" class="modal">
         <div class="modal-content">
