@@ -492,10 +492,18 @@
                         <label>Tema do Treinamento:</label>
                         <input type="text" id="tr_tema" placeholder="Ex: Uso do novo sistema de PEP, Configuração da Impressora..." required>
 
-                        <div class="form-row" style="display: flex; gap: 15px; margin-bottom: 15px; flex-wrap: wrap;">
+                      <div class="form-row" style="display: flex; gap: 15px; margin-bottom: 15px; flex-wrap: wrap;">
                             <div class="form-group" style="flex: 1; min-width: 150px;">
                                 <label>Prédio:</label>
-                                <input type="text" id="tr_predio" placeholder="Ex: Principal, Anexo..." required>
+                                <select id="tr_predio" onchange="atualizarAndares('tr_predio', 'tr_andar')" required>
+                                    <option value="">Selecione o Prédio...</option>
+                                    <option value="UPI">UPI</option>
+                                    <option value="UPE">UPE</option>
+                                    <option value="PIMAG">PIMAG</option>
+                                    <option value="RADIOTERAPIA">RADIOTERAPIA</option>
+                                    <option value="TRAUMA">TRAUMA</option>
+                                    <option value="CASA ROSA">CASA ROSA</option>
+                                </select>
                             </div>
                             <div class="form-group" style="flex: 1; min-width: 150px;">
                                 <label>Setor:</label>
@@ -503,7 +511,9 @@
                             </div>
                             <div class="form-group" style="flex: 1; min-width: 100px;">
                                 <label>Andar:</label>
-                                <input type="text" id="tr_andar" placeholder="Ex: 3º Andar" required>
+                                <select id="tr_andar" required>
+                                    <option value="">Selecione o Andar</option>
+                                </select>
                             </div>
                         </div>
 
@@ -1110,7 +1120,15 @@
                 <div class="form-row" style="display: flex; gap: 15px; margin-bottom: 15px; flex-wrap: wrap;">
                     <div class="form-group" style="flex: 1; min-width: 150px;">
                         <label>Prédio:</label>
-                        <input type="text" id="edit_tr_predio" required>
+                        <select id="edit_tr_predio" onchange="atualizarAndares('edit_tr_predio', 'edit_tr_andar')" required>
+                            <option value="">Selecione o Prédio...</option>
+                            <option value="UPI">UPI</option>
+                            <option value="UPE">UPE</option>
+                            <option value="PIMAG">PIMAG</option>
+                            <option value="RADIOTERAPIA">RADIOTERAPIA</option>
+                            <option value="TRAUMA">TRAUMA</option>
+                            <option value="CASA ROSA">CASA ROSA</option>
+                        </select>
                     </div>
                     <div class="form-group" style="flex: 1; min-width: 150px;">
                         <label>Setor:</label>
@@ -1118,7 +1136,9 @@
                     </div>
                     <div class="form-group" style="flex: 1; min-width: 100px;">
                         <label>Andar:</label>
-                        <input type="text" id="edit_tr_andar" required>
+                        <select id="edit_tr_andar" required>
+                            <option value="">Selecione o Andar</option>
+                        </select>
                     </div>
                 </div>
 
