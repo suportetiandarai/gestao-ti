@@ -862,53 +862,56 @@
                 </div>
             </section>
             
-            <section id="aba-admin" class="tab-content hidden">
-                <h3>Painel de Gestão (Admin)</h3>
-                
-                <div class="admin-card">
-                    <h4>1. Gestão de Usuários (Acesso e Senhas)</h4>
-                    <div class="button-group">
-                        <button class="btn-primary" onclick="abrirModal('modal-usuario')">Cadastrar Novo Usuário</button>
-                        <button class="btn-primary" onclick="abrirModal('modal-permissoes')">Gerenciar Permissões</button>
-                    </div>
-                </div>
+           <section id="aba-admin" class="tab-content hidden">
+    <h3>Painel de Gestão (Admin)</h3>
+    
+    <div class="admin-card">
+        <h4>1. Gestão de Usuários (Acesso e Senhas)</h4>
+        <div class="button-group">
+            <button class="btn-primary" onclick="abrirModal('modal-usuario')">Cadastrar Novo Usuário</button>
+            <button class="btn-primary" onclick="abrirModal('modal-permissoes')">Gerenciar Permissões</button>
+        </div>
+    </div>
 
-                <div class="admin-card">
-                    <h4>Exportação de Logs e Auditoria</h4>
-                    <div class="date-group">
-                        <label>De:</label>
-                        <input type="date" id="data-inicio-relatorio"> 
-                        <label>Até:</label>
-                        <input type="date" id="data-fim-relatorio">
-                    </div>
-                    <button class="btn-success" onclick="exportarPDF()">Exportar Relatório (PDF/CSV)</button>
-                </div>
+    <div class="admin-card">
+        <h4>Exportação de Logs e Auditoria</h4>
+        <div class="date-group">
+            <label>De:</label>
+            <input type="date" id="data-inicio-relatorio"> 
+            <label>Até:</label>
+            <input type="date" id="data-fim-relatorio">
+        </div>
+        <button class="btn-success" onclick="exportarPDF()">Exportar Relatório (PDF/CSV)</button>
+    </div>
 
-                <div class="admin-card">
-                    <h4>Cadastros Base e Chamados</h4>
-                    <div class="button-group">
-                        <button class="btn-primary" onclick="abrirModal('modal-chave')">Cadastrar Tipo de Chave</button>
-                        <button class="btn-primary" onclick="abrirModal('modal-toner')">Cadastrar Modelo de Toner</button>
-                        <button class="btn-primary" onclick="abrirModal('modal-simpress')">Chamado com a Simpress</button>
-                    </div>
-                </div>
+    <div class="admin-card">
+        <h4>Cadastros Base e Chamados</h4>
+        <div class="button-group">
+            <button class="btn-primary" onclick="abrirModal('modal-chave')">Cadastrar Tipo de Chave</button>
+            <button class="btn-primary" onclick="abrirModal('modal-toner')">Cadastrar Modelo de Toner</button>
+            
+            <button class="btn-primary" style="background: #2c3e50;" onclick="abrirModalGerenciarToner()">📦 Gerenciar Estoque de Toners</button>
+            
+            <button class="btn-primary" onclick="abrirModal('modal-simpress')">Chamado com a Simpress</button>
+        </div>
+    </div>
 
-                <div class="admin-card mt-20">
-                    <h4>Plantões Pendentes de Visto</h4>
-                    <div class="table-responsive">
-                        <table>
-                            <thead>
-                                <tr>
-                                    <th>Data</th>
-                                    <th>Turno</th>
-                                    <th>Ação</th>
-                                </tr>
-                            </thead>
-                            <tbody id="admin-plantoes-lista"></tbody>
-                        </table>
-                    </div>
-                </div>
-            </section>
+    <div class="admin-card mt-20">
+        <h4>Plantões Pendentes de Visto</h4>
+        <div class="table-responsive">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Data</th>
+                        <th>Turno</th>
+                        <th>Ação</th>
+                    </tr>
+                </thead>
+                <tbody id="admin-plantoes-lista"></tbody>
+            </table>
+        </div>
+    </div>
+</section>
 
         </main>
     </div>
@@ -1422,6 +1425,33 @@
             <button type="button" class="btn-primary" style="background: #3498db; width: 100%;" onclick="salvarNovoStatusInventario()">Confirmar Alteração</button>
         </div>
     </div>
+
+    <div id="modal-gerenciar-toner" class="modal">
+    <div class="modal-content large">
+        <span class="close-modal" onclick="fecharModal('modal-gerenciar-toner')">&times;</span>
+        <h3>📦 Gerenciamento de Estoque (Toners)</h3>
+        <p style="font-size: 13px; color: #64748b; margin-bottom: 20px;">
+            Visualize o estoque atual e atualize as quantidades conforme a chegada de novos suprimentos.
+        </p>
+
+        <div class="table-responsive">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Modelo do Toner</th>
+                        <th>Compatibilidade</th>
+                        <th>Qtd. Atual</th>
+                        <th>Nova Quantidade</th>
+                        <th>Ação</th>
+                    </tr>
+                </thead>
+                <tbody id="tabela-gerenciar-toner-corpo">
+                    </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+    
     
     <div id="toast-container" class="toast-container"></div>
     <script src="auth.js"></script>
