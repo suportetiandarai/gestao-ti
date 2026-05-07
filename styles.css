@@ -864,3 +864,41 @@ input[type="file"]::file-selector-button:hover {
         animation: fadeOutToastMobile 0.3s forwards;
     }
 }
+
+/* =========================================================
+   14. AJUSTES FINOS: MODAIS E Z-INDEX 
+   ========================================================= */
+
+/* Garante que a tabela de gerenciamento de toner não vase do modal */
+#modal-gerenciar-toner .modal-content {
+    max-height: 85vh; /* O modal não passará de 85% da altura da tela */
+    display: flex;
+    flex-direction: column;
+}
+
+#modal-gerenciar-toner .table-responsive {
+    overflow-y: auto; /* Adiciona scroll interno na tabela se houver muitos toners */
+    flex: 1; /* Faz a tabela ocupar o espaço restante do modal */
+    margin-bottom: 0;
+}
+
+/* Mantém os inputs de edição de toner mais alinhados e discretos */
+#tabela-gerenciar-toner-corpo input[type="number"] {
+    border: 1px solid #cbd5e1;
+    border-radius: 4px;
+    background: #f8fafc;
+    transition: all 0.2s ease;
+}
+
+#tabela-gerenciar-toner-corpo input[type="number"]:focus {
+    background: #ffffff;
+    border-color: #3b82f6;
+    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1);
+}
+
+/* 🟢 Garante que as caixas de alerta (tech) furem o teto e fiquem por cima de TUDO */
+#modal-confirmacao, 
+#modal-prompt,
+#modal-status-inventario {
+    z-index: 99999 !important; /* Prioridade máxima na tela */
+}
