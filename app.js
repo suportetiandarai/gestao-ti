@@ -374,7 +374,7 @@ async function registrarChave(tipo) {
     try {
         let urlFoto = null;
         
-        // NOVO: Lógica de upload de foto exclusiva para DEVOLUÇÃO
+        // Lógica de upload de foto exclusiva para DEVOLUÇÃO
         if (tipo === 'devolucao') {
             const inputFoto = document.getElementById('foto-devolucao');
             if (inputFoto.files.length === 0) {
@@ -384,7 +384,6 @@ async function registrarChave(tipo) {
             const fotoFile = inputFoto.files[0];
             const nomeFoto = `devolucao_chave_${Date.now()}_${fotoFile.name}`;
             
-            // Usando o mesmo bucket 'assinaturas' que você já tem para armazenar
             const { error: errFoto } = await supabase.storage.from('assinaturas').upload(nomeFoto, fotoFile);
             if (errFoto) throw errFoto;
             
@@ -419,10 +418,14 @@ async function registrarChave(tipo) {
         document.getElementById(formId).reset();
         limparCanvas(canvasId);
         carregarSelectChaves(); // Recarrega os dropdowns na mesma hora
+        
+        // 🟢 LINHA ADICIONADA AQUI: Atualiza o histórico na mesma hora!
+        carregarHistoricoChaves(); 
 
     } catch (err) { 
         alert('Erro ao processar chave: ' + err.message); 
     }
+}
 }
 
 // --- VARIÁVEIS DE CONTROLE DO HISTÓRICO DE CHAVES ---
