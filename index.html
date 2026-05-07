@@ -1341,6 +1341,26 @@
         </div>
     </div>
 </div>
+
+    <div id="modal-status-inventario" class="modal">
+        <div class="modal-content" style="max-width: 350px; text-align: center;">
+            <span class="close-modal" onclick="fecharModal('modal-status-inventario')">&times;</span>
+            <div style="font-size: 40px; margin-bottom: 15px;">🔄</div>
+            <h3 style="margin-bottom: 10px;">Alterar Status</h3>
+            <p style="color: #64748b; font-size: 13px; margin-bottom: 15px;">Selecione a nova situação do equipamento:</p>
+            
+            <input type="hidden" id="status_inv_id">
+            
+            <select id="status_inv_novo" style="width: 100%; margin-bottom: 25px; padding: 10px; font-size: 13px;">
+                <option value="">Selecione...</option>
+                <option value="Em uso">🟢 Em uso</option>
+                <option value="Em estoque">📦 Em estoque</option>
+                <option value="Danificado">🔴 Danificado</option>
+            </select>
+            
+            <button type="button" class="btn-primary" style="background: #3498db; width: 100%;" onclick="salvarNovoStatusInventario()">Confirmar Alteração</button>
+        </div>
+    </div>
     
     <div id="toast-container" class="toast-container"></div>
     <script src="auth.js"></script>
