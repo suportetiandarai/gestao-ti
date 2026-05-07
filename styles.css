@@ -336,16 +336,81 @@ header .badge {
     margin-top: 0;
 }
 
-.sig-canvas { 
-    border: 2px dashed #cbd5e1; border-radius: 8px; background: #f8fafc; 
-    cursor: crosshair; touch-action: none; width: 100%; max-width: 600px;
-    transition: border-color 0.3s, background 0.3s;
+/* ========================================== */
+/* 🟢 DESIGN MINIMALISTA/TECNOLÓGICO: ASSINATURAS */
+/* ========================================== */
+
+.signature-section {
+    background: #f8fafc; /* Fundo cinza super claro */
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+    padding: 16px;
+    margin-top: 20px;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    box-shadow: inset 0 2px 4px rgba(0,0,0,0.02);
 }
 
-.sig-canvas:hover { border-color: #94a3b8; background: #ffffff; }
+.signature-section label {
+    align-self: flex-start;
+    font-size: 11px;
+    text-transform: uppercase;
+    font-weight: 800;
+    color: #64748b;
+    letter-spacing: 0.5px;
+    margin-bottom: 12px;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
 
-.mt-20 { margin-top: 20px; }
-.mt-10 { margin-top: 10px; }
+/* O Canvas com cara de "Mesa Digitalizadora" */
+.sig-canvas {
+    width: 100%;
+    max-width: 400px;
+    border: 2px dashed #cbd5e1 !important; /* Borda tracejada tecnológica */
+    border-radius: 8px !important;
+    background-color: #ffffff;
+    
+    /* Cria aquele fundo de grid pontilhado igual software de arquitetura */
+    background-image: radial-gradient(#cbd5e1 1px, transparent 1px);
+    background-size: 15px 15px;
+    
+    cursor: crosshair; /* Muda o mouse para uma cruz de precisão */
+    transition: all 0.3s ease;
+}
+
+/* Efeito quando vai assinar (Muda a cor do grid e a borda brilha) */
+.sig-canvas:hover, 
+.sig-canvas:active {
+    border-color: #3b82f6 !important;
+    box-shadow: 0 0 15px rgba(59, 130, 246, 0.15) !important;
+    background-image: radial-gradient(#93c5fd 1px, transparent 1px);
+}
+
+/* Deixa o botão de Limpar minimalista e alinhado */
+.signature-section button {
+    margin-top: 12px;
+    background: transparent !important;
+    color: #ef4444 !important;
+    border: 1px solid #ef4444 !important;
+    border-radius: 6px;
+    padding: 6px 16px;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    transition: all 0.2s ease;
+    align-self: flex-end; /* Joga o botão para o canto direito */
+}
+
+.signature-section button:hover {
+    background: #fef2f2 !important;
+    color: #dc2626 !important;
+    box-shadow: 0 2px 4px rgba(239, 68, 68, 0.1);
+}
 
 /* =========================================================
    7. DATAS, HORAS, E AGRUPAMENTOS
