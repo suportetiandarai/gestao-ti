@@ -96,6 +96,41 @@ window.cancelarConfirmacao = () => {
     callbackConfirmacao = null;
 };
 
+// 🟢 SISTEMA DE DIGITAÇÃO PERSONALIZADO (Substitui o prompt nativo)
+window.pedirMotivo = function(titulo, mensagem, placeholder, tipo, callback) {
+    document.getElementById('prompt-titulo').innerText = titulo;
+    document.getElementById('prompt-mensagem').innerText = mensagem;
+    
+    const input = document.getElementById('prompt-input');
+    input.placeholder = placeholder;
+    input.value = ''; // Limpa o campo
+    
+    const btnConfirmar = document.getElementById('btn-prompt-confirmar');
+    const icon = document.getElementById('prompt-icon');
+    
+    if (tipo === 'perigo') {
+        icon.innerText = '🗑️';
+        btnConfirmar.style.background = '#ef4444';
+    } else {
+        icon.innerText = '⚠️';
+        btnConfirmar.style.background = '#f39c12';
+    }
+
+    // Clone para evitar múltiplos cliques acumulados
+    const novoBtn = btnConfirmar.cloneNode(true);
+    btnConfirmar.parentNode.replaceChild(novoBtn, btnConfirmar);
+
+    novoBtn.onclick = () => {
+        const valor = document.getElementById('prompt-input').value.trim();
+        if (!valor) return alert("❌ O preenchimento deste campo é obrigatório!");
+        fecharModal('modal-prompt');
+        callback(valor);
+    };
+    
+    abrirModal('modal-prompt');
+    setTimeout(() => document.getElementById('prompt-input').focus(), 100);
+};
+
 // ==========================================
 // 1. GESTÃO DE SESSÃO E SEGURANÇA (TIMER 20MIN)
 // ==========================================
@@ -917,22 +952,19 @@ async function salvarEdicaoOcorrencia() {
 }
 
 async function cancelarOcorrencia(id) {
-    const motivo = prompt("⚠️ Atenção: Por favor, digite o motivo do cancelamento desta ocorrência:");
-    if (motivo === null) return; 
-    if (motivo.trim() === "") return alert("⚠️ O motivo é obrigatório para cancelar uma ocorrência!");
-
-    perguntar(
+    pedirMotivo(
         "Cancelar Ocorrência", 
-        "Tem certeza que deseja cancelar esta ocorrência?", 
+        "Digite o motivo do cancelamento desta ocorrência:", 
+        "Motivo da baixa...", 
         "perigo", 
-        async () => {
+        async (motivo) => {
             try {
                 const { error } = await supabase.from('ocorrencias').update({
                     status: 'Cancelada',
                     motivo_cancelamento: motivo
                 }).eq('id', id);
                 if (error) throw error;
-
+                
                 alert("✅ Ocorrência cancelada com sucesso!");
                 carregarListaOcorrencias();
                 if(typeof carregarResumoDashboard === 'function') carregarResumoDashboard();
@@ -940,19 +972,18 @@ async function cancelarOcorrencia(id) {
         }
     );
 }
-
 async function suspenderChamado(id) {
-    const motivo = prompt("⚠️ Atenção: Por favor, digite o motivo da suspensão deste chamado:");
-    if (motivo === null) return; 
-    if (motivo.trim() === "") return alert("⚠️ O motivo é obrigatório para suspender o chamado!");
-    
-    perguntar(
+    pedirMotivo(
         "Suspender Chamado", 
-        "Confirmar a suspensão deste chamado Simpress?", 
+        "Digite o motivo da suspensão deste chamado Simpress:", 
+        "Descreva a pendência...", 
         "aviso", 
-        async () => {
+        async (motivo) => {
             try {
-                const { error } = await supabase.from('chamado_simpress').update({ status: 'Suspenso', observacao: motivo }).eq('id', id);
+                const { error } = await supabase.from('chamado_simpress').update({ 
+                    status: 'Suspenso', 
+                    observacao: motivo 
+                }).eq('id', id);
                 if (error) throw error;
                 
                 alert("✅ Chamado suspenso com sucesso!");
@@ -1539,24 +1570,20 @@ async function salvarEdicaoTreinamento() {
 }
 
 async function cancelarTreinamento(id) {
-    const motivo = prompt("⚠️ Atenção: Por favor, digite o motivo do cancelamento deste treinamento:");
-    if (motivo === null) return; 
-    if (motivo.trim() === "") return alert("⚠️ O motivo é obrigatório para cancelar!");
-
-    perguntar(
-        "Cancelar Treinamento", 
-        "Confirmar o cancelamento deste treinamento na agenda?", 
+    pedirMotivo(
+        "Cancelar Agendamento", 
+        "Digite o motivo do cancelamento deste treinamento:", 
+        "Motivo...", 
         "perigo", 
-        async () => {
+        async (motivo) => {
             try {
                 const { error } = await supabase.from('treinamentos').update({
                     status: 'Cancelado',
                     motivo_cancelamento: motivo
                 }).eq('id', id);
-                
                 if (error) throw error;
-
-                alert("✅ Treinamento cancelado com sucesso!");
+                
+                alert("✅ Treinamento cancelado na agenda!");
                 carregarListaTreinamentos();
                 if(typeof carregarResumoDashboard === 'function') carregarResumoDashboard();
             } catch (err) { alert("❌ Erro ao cancelar: " + err.message); }
@@ -1569,14 +1596,14 @@ async function alterarStatusTreinamentoExt(id, novoStatus) {
 
     perguntar(
         "Alterar Solicitação (Site)", 
-        `Confirma a mudança de status desta requisição para "${novoStatus}"?`, 
+        `Confirma a mudança desta requisição para "${novoStatus}"?`, 
         tipoModal, 
         async () => {
             try {
                 const { error } = await supabase.from('solicitacoes_treinamento').update({ status: novoStatus }).eq('id', id);
                 if (error) throw error;
                 
-                alert(`✅ Solicitação alterada para ${novoStatus}!`);
+                alert(`✅ Solicitação movida para ${novoStatus}!`);
                 carregarSolicitacoesTreinamento();
             } catch (err) { alert("❌ Erro ao atualizar Treinamento: " + err.message); }
         }
@@ -2542,13 +2569,19 @@ function verificarEnterCadastro(event) {
     if (event.key === 'Enter') carregarCadastros();
 }
 
+window.abrirModalObsCadastro = function(id, obsCodificada) {
+    document.getElementById('obs_cad_id').value = id;
+    // Decodifica a string de volta para texto normal com quebra de linha
+    document.getElementById('obs_cad_texto').value = obsCodificada && obsCodificada !== 'undefined' ? decodeURIComponent(obsCodificada) : '';
+    abrirModal('modal-obs-cadastro');
+};
+
 async function carregarCadastros() {
     const status = document.getElementById('filtro_cad_status').value;
     const nome = document.getElementById('filtro_cad_nome').value.trim();
 
     try {
         let query = supabase.from('solicitacoes_cadastro').select('*').order('created_at', { ascending: false });
-
         if (status) query = query.eq('status', status);
         if (nome) query = query.ilike('nome', `%${nome}%`);
 
@@ -2558,75 +2591,56 @@ async function carregarCadastros() {
         const tbody = document.getElementById('lista-cadastros-aba');
         if (tbody) {
             tbody.innerHTML = data.length > 0 ? data.map(c => {
-                let corStatus = '#f39c12'; // Pendente
-                if (c.status === 'Realizado') corStatus = '#2ecc71'; 
-                if (c.status === 'Aguardando') corStatus = '#e74c3c'; 
+                let corStatus = c.status === 'Realizado' ? '#2ecc71' : (c.status === 'Aguardando' ? '#e74c3c' : '#f39c12'); 
 
-                // Lógica dos Anexos (Documento e Conselho)
-                const linkDoc = c.foto_documento_url 
-                    ? `<a href="${c.foto_documento_url}" target="_blank" style="color: #3498db; text-decoration: none; font-weight: bold; display: block; margin-bottom: 3px;">📄 Ver Documento</a>` 
-                   : '';
+                let linkDoc = c.foto_documento_url ? `<a href="${c.foto_documento_url}" target="_blank" style="color: #3498db; text-decoration: none; font-weight: bold; display: block; margin-bottom: 3px;">📄 Ver Documento</a>` : '';
                 
-                // Lógica inteligente para o Conselho (Se tem ou se é isento)
                 let linkConselho = '';
                 if (c.numero_conselho && c.numero_conselho.toUpperCase() !== 'ISENTO' && c.numero_conselho.toUpperCase() !== 'NÃO POSSUI') {
-                    linkConselho = c.foto_conselho_url 
-                        ? `<a href="${c.foto_conselho_url}" target="_blank" style="color: #8e44ad; text-decoration: none; font-weight: bold; display: block;">🖼️ Ver Conselho</a>` 
-                        : '<span style="color: #e74c3c; font-size: 11px; display: block;">Falta Foto Conselho</span>';
+                    linkConselho = c.foto_conselho_url ? `<a href="${c.foto_conselho_url}" target="_blank" style="color: #8e44ad; text-decoration: none; font-weight: bold; display: block;">🖼️ Ver Conselho</a>` : '<span style="color: #e74c3c; font-size: 11px; display: block;">Falta Foto Conselho</span>';
                 } else {
                     linkConselho = '<span style="color: #7f8c8d; font-size: 11px; font-weight: bold; display: block;">(Isento de Conselho)</span>';
                 }
 
-                // Quem realizou
-                const realizadoPor = c.realizado_por_nome 
-                    ? `<span style="font-size: 11px;"><strong>${c.realizado_por_nome}</strong><br><span style="color: #64748b;">${c.realizado_por_email}</span></span>`
-                    : '-';
-
-                // Formatando a Data de Nascimento para o padrão BR se existir
-                let dataNascFormatada = c.data_nascimento;
-                if (c.data_nascimento && c.data_nascimento.includes('-')) {
-                    dataNascFormatada = c.data_nascimento.split('-').reverse().join('/');
-                }
-
+                const realizadoPor = c.realizado_por_nome ? `<span style="font-size: 11px;"><strong>${c.realizado_por_nome}</strong><br><span style="color: #64748b;">${c.realizado_por_email}</span></span>` : '-';
+                
+                let dataNascFormatada = c.data_nascimento && c.data_nascimento.includes('-') ? c.data_nascimento.split('-').reverse().join('/') : c.data_nascimento;
+                
+                // 🟢 BLINDAGEM DO TEXTO: Codifica a observação para não quebrar o HTML do botão
+                const obsSegura = c.observacao ? encodeURIComponent(c.observacao) : '';
+                
                 const isAdmin = typeof window.usuarioAtual !== 'undefined' && window.usuarioAtual && window.usuarioAtual.role === 'admin';
 
-                // 🟢 LÓGICA DO TIMED, MAS COM A ESTRUTURA DOS BOTÕES DO AD
                 let botoesAcao = '';
                 if (c.status !== 'Realizado') {
                     botoesAcao = `
                         <button class="btn-success btn-sm" style="flex: 1; margin: 0; padding: 4px 2px; font-size: 10px;" onclick="alterarStatusCadastro('${c.id}', 'Realizado')">✔️ Realizado</button>
-                        
                         ${c.status === 'Pendente' 
                             ? `<button class="btn-primary btn-sm" style="background: #e74c3c; flex: 1; margin: 0; padding: 4px 2px; font-size: 10px;" onclick="alterarStatusCadastro('${c.id}', 'Aguardando')">⏳ Pausa</button>` 
                             : `<button class="btn-primary btn-sm" style="background: #3498db; flex: 1; margin: 0; padding: 4px 2px; font-size: 10px;" onclick="alterarStatusCadastro('${c.id}', 'Pendente')">▶️ Retorna</button>`
                         }
-                        
-                        <button class="btn-primary btn-sm" style="background: #95a5a6; flex: 1; margin: 0; padding: 4px 2px; font-size: 10px;" onclick="abrirModalObsCadastro('${c.id}', \`${c.observacao || ''}\`)">📝 Obs</button>
+                        <button class="btn-primary btn-sm" style="background: #95a5a6; flex: 1; margin: 0; padding: 4px 2px; font-size: 10px;" onclick="abrirModalObsCadastro('${c.id}', '${obsSegura}')">📝 Obs</button>
                     `;
                 } else {
                     if (isAdmin) {
                         botoesAcao = `
                             <button class="btn-primary btn-sm" style="background: #e67e22; flex: 1; margin: 0; padding: 4px 2px; font-size: 10px;" onclick="alterarStatusCadastro('${c.id}', 'Pendente')">↩️ Desfazer</button>
-                            <button class="btn-primary btn-sm" style="background: #95a5a6; flex: 1; margin: 0; padding: 4px 2px; font-size: 10px;" onclick="abrirModalObsCadastro('${c.id}', \`${c.observacao || ''}\`)">📝 Obs</button>
+                            <button class="btn-primary btn-sm" style="background: #95a5a6; flex: 1; margin: 0; padding: 4px 2px; font-size: 10px;" onclick="abrirModalObsCadastro('${c.id}', '${obsSegura}')">📝 Obs</button>
                         `;
                     } else {
-                        botoesAcao = `
-                            <button class="btn-primary btn-sm" style="background: #95a5a6; flex: 1; margin: 0; padding: 4px 2px; font-size: 10px; width: 100%;" onclick="abrirModalObsCadastro('${c.id}', \`${c.observacao || ''}\`)">📝 Ver Obs</button>
-                        `;
+                        botoesAcao = `<button class="btn-primary btn-sm" style="background: #95a5a6; flex: 1; margin: 0; padding: 4px 2px; font-size: 10px; width: 100%;" onclick="abrirModalObsCadastro('${c.id}', '${obsSegura}')">📝 Ver Obs</button>`;
                     }
                 }
 
                 return `
                     <tr>
                         <td style="font-size: 12px; min-width: 80px;">${new Date(c.created_at).toLocaleDateString('pt-BR')} <br><small style="color:#64748b;">${new Date(c.created_at).toLocaleTimeString('pt-BR')}</small></td>
-                        
                         <td style="font-size: 12px;">
                             <strong style="font-size: 13px;">${c.nome}</strong><br>
                             <span style="color:#475569;">CPF:</span> ${c.cpf || '-'}<br>
                             <span style="color:#475569;">CNS:</span> ${c.cns || '-'}<br>
                             <span style="color:#475569;">Nasc:</span> ${dataNascFormatada || '-'} | <span style="color:#475569;">Sexo:</span> ${c.sexo || '-'}
                         </td>
-
                         <td style="font-size: 12px;">
                             <strong style="color: #2c3e50;">${c.cargo || '-'}</strong><br>
                             <span style="color:#475569;">Setor:</span> ${c.setor_andar || '-'}<br>
@@ -2634,33 +2648,20 @@ async function carregarCadastros() {
                             <span style="color:#475569;">Vínculo:</span> ${c.vinculo_empregaticio || '-'} <br>
                             <span style="color:#475569;">Matr:</span> ${c.matricula || '-'}
                         </td>
-
-                        <td style="font-size: 12px;">
-                            📧 ${c.email || '-'}<br>
-                            📱 ${c.telefone || '-'}
-                        </td>
-
+                        <td style="font-size: 12px;">📧 ${c.email || '-'}<br>📱 ${c.telefone || '-'}</td>
                         <td style="font-size: 12px; min-width: 110px;">
                             <span style="color:#475569;">Nº:</span> <strong>${c.numero_conselho || '-'}</strong><br>
                             <div style="margin-top: 5px; background: #f8f9fa; padding: 5px; border-radius: 4px; border: 1px solid #e2e8f0;">
-                                ${linkDoc}
-                                ${linkConselho}
+                                ${linkDoc} ${linkConselho}
                             </div>
                         </td>
-
-                        <!-- 🟢 ESTRUTURA VISUAL EXATAMENTE IGUAL A DO AD (COMPACTA) -->
                         <td style="width: 120px; min-width: 110px;">
                             <div style="margin-bottom: 4px;">
                                 <span style="background-color: ${corStatus}; color: white; padding: 4px; border-radius: 4px; font-size: 10px; font-weight: bold; display: block; width: 100%; text-align: center;">${c.status}</span>
                             </div>
-                            
-                            <div style="display: flex; gap: 2px; flex-wrap: wrap; justify-content: center;">
-                                ${botoesAcao}
-                            </div>
-
+                            <div style="display: flex; gap: 2px; flex-wrap: wrap; justify-content: center;">${botoesAcao}</div>
                             ${c.observacao ? `<div style="margin-top: 4px; font-size: 9px; color: #475569; background: #f1f5f9; padding: 2px; border-radius: 4px; text-align: center; line-height: 1.2;"><strong>Obs:</strong> ${c.observacao}</div>` : ''}
                         </td>
-
                         <td>${realizadoPor}</td>
                     </tr>
                 `;
@@ -2704,8 +2705,8 @@ async function alterarStatusAD(id, novoStatus) {
     let tipoModal = novoStatus === 'Realizado' ? 'sucesso' : 'info';
 
     perguntar(
-        "Status da Solicitação (AD)", 
-        `Confirma a mudança do AD para "${novoStatus}"?`, 
+        "Status do AD", 
+        `Confirma a alteração do login para "${novoStatus}"?`, 
         tipoModal, 
         async () => {
             try {
@@ -2720,9 +2721,31 @@ async function alterarStatusAD(id, novoStatus) {
                 const { error } = await supabase.from('solicitacoes_ad').update(updateData).eq('id', id);
                 if (error) throw error;
                 
-                alert(`✅ AD marcado como ${novoStatus}!`);
+                alert(`✅ Ação concluída. AD marcado como ${novoStatus}!`);
                 carregarSolicitacoesAD();
             } catch (err) { alert("❌ Erro ao atualizar AD: " + err.message); }
+        }
+    );
+}
+
+async function darBaixaAD(id) {
+    pedirMotivo(
+        "Baixa em Criação de AD", 
+        "Motivo do cancelamento desta criação de usuário:", 
+        "Descreva o motivo...", 
+        "perigo", 
+        async (motivo) => {
+            try {
+                let updateData = { status: 'Cancelado', motivo_cancelamento: motivo };
+                if (typeof window.usuarioAtual !== 'undefined' && window.usuarioAtual) {
+                    updateData.realizado_por_nome = window.usuarioAtual.nome;
+                }
+                const { error } = await supabase.from('solicitacoes_ad').update(updateData).eq('id', id);
+                if (error) throw error;
+
+                alert("✅ Solicitação de AD baixada e arquivada!");
+                carregarSolicitacoesAD();
+            } catch (err) { alert("❌ Erro ao dar baixa: " + err.message); }
         }
     );
 }
