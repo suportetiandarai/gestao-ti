@@ -316,6 +316,44 @@
                         </form>
                     </div>
                 </div>
+
+                <div class="admin-card mt-20">
+                    <h4>📂 Histórico de Movimentação (Retiradas / Devoluções)</h4>
+                    
+                    <div class="form-row" style="display: flex; gap: 15px; flex-wrap: wrap; align-items: flex-end; margin-bottom: 15px;">
+                        <div class="form-group" style="flex: 2; min-width: 250px;">
+                            <label>Buscar pela Nomenclatura da Chave:</label>
+                            <input type="text" id="filtro_hist_chaves" placeholder="Ex: Servidor, CPD, Rack..." style="margin-bottom: 0;" onkeyup="verificarEnterChaves(event)">
+                        </div>
+                        <div style="display: flex; gap: 10px;">
+                            <button type="button" class="btn-primary" onclick="carregarHistoricoChaves()">Buscar</button>
+                        </div>
+                    </div>
+                    
+                    <div class="table-responsive">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Data / Hora</th>
+                                    <th>Chave</th>
+                                    <th>Tipo</th>
+                                    <th>Responsável</th>
+                                    <th>Comprovantes</th>
+                                </tr>
+                            </thead>
+                            <tbody id="lista-historico-chaves-aba">
+                                <tr><td colspan="5" style="text-align: center;">Carregando histórico...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    
+                    <div style="display: flex; justify-content: center; align-items: center; gap: 15px; margin-top: 15px;">
+                        <button type="button" class="btn-primary btn-sm" style="margin: 0;" onclick="mudarPaginaHistoricoChaves(-1)">⬅️ Anterior</button>
+                        <span id="span-pagina-historico-chaves" style="font-size: 13px; font-weight: bold; color: #475569;">Página 1</span>
+                        <button type="button" class="btn-primary btn-sm" style="margin: 0;" onclick="mudarPaginaHistoricoChaves(1)">Próxima ➡️</button>
+                    </div>
+                </div>
+                
             </section>
 
             <section id="aba-ocorrencias" class="tab-content hidden">
