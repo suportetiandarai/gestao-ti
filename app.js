@@ -140,6 +140,7 @@ function abrirAba(idAba) {
 
     if (idAba === 'aba-chaves') {
         carregarSelectChaves();
+        carregarHistoricoChaves(); 
     }
 
     if (idAba === 'aba-treinamentos') {
@@ -422,6 +423,92 @@ async function registrarChave(tipo) {
     } catch (err) { 
         alert('Erro ao processar chave: ' + err.message); 
     }
+}
+
+// --- VARIÁVEIS DE CONTROLE DO HISTÓRICO DE CHAVES ---
+let paginaAtualChaves = 1;
+const itensPorPaginaChaves = 5;
+let dadosHistoricoChaves = [];
+
+// 🟢 FUNÇÃO: Dispara a busca ao apertar ENTER no campo de filtro
+window.verificarEnterChaves = function(event) {
+    if (event.key === 'Enter') carregarHistoricoChaves();
+}
+
+// 🟢 FUNÇÃO: Busca os dados no Supabase filtrando pela nomenclatura
+async function carregarHistoricoChaves() {
+    const filtro = document.getElementById('filtro_hist_chaves').value.trim();
+    paginaAtualChaves = 1; // Reseta para a primeira página na busca
+
+    try {
+        // Buscamos na tabela de movimentação e trazemos o NOME da chave da tabela 'chaves'
+        let query = supabase
+            .from('movimentacao_chaves')
+            .select('*, chaves!inner(nome)')
+            .order('data_hora', { ascending: false });
+
+        if (filtro) {
+            query = query.ilike('chaves.nome', `%${filtro}%`);
+        }
+
+        const { data, error } = await query;
+        if (error) throw error;
+
+        dadosHistoricoChaves = data || [];
+        renderizarTabelaHistoricoChaves();
+    } catch (err) {
+        console.error("Erro ao carregar histórico de chaves:", err.message);
+    }
+}
+
+// 🟢 FUNÇÃO: Desenha a tabela fatiando os dados (5 por página)
+function renderizarTabelaHistoricoChaves() {
+    const tbody = document.getElementById('lista-historico-chaves-aba');
+    const spanPagina = document.getElementById('span-pagina-historico-chaves');
+    if (!tbody) return;
+
+    const totalPaginas = Math.ceil(dadosHistoricoChaves.length / itensPorPaginaChaves) || 1;
+    if (spanPagina) spanPagina.innerText = `Página ${paginaAtualChaves} de ${totalPaginas}`;
+
+    const inicio = (paginaAtualChaves - 1) * itensPorPaginaChaves;
+    const fim = inicio + itensPorPaginaChaves;
+    const itensPagina = dadosHistoricoChaves.slice(inicio, fim);
+
+    tbody.innerHTML = itensPagina.length > 0 ? itensPagina.map(m => {
+        const dataF = new Date(m.data_hora).toLocaleString('pt-BR');
+        const isRetirada = m.tipo_movimento === 'retirada';
+        const colorStatus = isRetirada ? '#f39c12' : '#2ecc71';
+
+        // Links de comprovantes
+        const linkAssinatura = `<a href="${m.assinatura_url}" target="_blank" style="color: #3498db; font-weight: bold; font-size: 11px; display: block;">✍️ Assinatura</a>`;
+        const linkFoto = m.foto_url ? `<a href="${m.foto_url}" target="_blank" style="color: #8e44ad; font-weight: bold; font-size: 11px; display: block; margin-top: 2px;">🖼️ Ver Foto</a>` : '';
+
+        return `
+            <tr>
+                <td style="font-size: 12px;">${dataF}</td>
+                <td style="font-size: 12px;"><strong>${m.chaves?.nome || 'Removida'}</strong></td>
+                <td style="width: 130px;">
+                    <span style="background-color: ${colorStatus}; color: white; padding: 4px 8px; border-radius: 4px; font-size: 10px; font-weight: bold; display: block; text-align: center;">
+                        ${m.tipo_movimento.toUpperCase()}
+                    </span>
+                </td>
+                <td style="font-size: 12px;">${m.responsavel}</td>
+                <td style="background: #f8fafc; border-radius: 4px;">
+                    ${linkAssinatura}
+                    ${linkFoto}
+                </td>
+            </tr>
+        `;
+    }).join('') : '<tr><td colspan="5" style="text-align: center; color: #94a3b8; padding: 20px;">Nenhum registro encontrado.</td></tr>';
+}
+
+// 🟢 FUNÇÃO: Navegação de páginas
+function mudarPaginaHistoricoChaves(direcao) {
+    const totalPaginas = Math.ceil(dadosHistoricoChaves.length / itensPorPaginaChaves) || 1;
+    paginaAtualChaves += direcao;
+    if (paginaAtualChaves < 1) paginaAtualChaves = 1;
+    if (paginaAtualChaves > totalPaginas) paginaAtualChaves = totalPaginas;
+    renderizarTabelaHistoricoChaves();
 }
 
 // ==========================================
