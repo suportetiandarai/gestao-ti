@@ -2397,6 +2397,7 @@ function verificarEnterFiltro(event) {
 }
 
 
+// 🟢 Função principal: Carrega a tabela de inventário com filtros e botões condicionais
 async function carregarInventario() {
     const filtroTipo = document.getElementById('filtro_inv_tipo').value;
     const filtroStatus = document.getElementById('filtro_inv_status').value;
@@ -2414,7 +2415,7 @@ async function carregarInventario() {
 
         const tbody = document.getElementById('lista-inventario-aba');
         if (tbody) {
-            // 🟢 VERIFICAÇÃO DE ADMIN
+            // VERIFICAÇÃO DE ADMIN PARA BOTÕES EXCLUSIVOS
             const isAdmin = typeof window.usuarioAtual !== 'undefined' && window.usuarioAtual && window.usuarioAtual.role === 'admin';
 
             tbody.innerHTML = data.length > 0 ? data.map(e => {
@@ -2422,10 +2423,17 @@ async function carregarInventario() {
                 if (e.status === 'Em uso') corStatus = '#2ecc71'; 
                 if (e.status === 'Danificado') corStatus = '#e74c3c'; 
 
-                // 🟢 GERA O BOTÃO DE EXCLUIR APENAS SE FOR ADMIN
-                let botaoExcluir = isAdmin 
-                    ? `<button class="btn-danger btn-sm" onclick="deletarEquipamento('${e.id}')">🗑️ Excluir</button>` 
-                    : '';
+                // Lógica de botões: Todos veem Status, apenas Admin vê Editar e Excluir
+                let botoesAcao = `
+                    <button class="btn-primary btn-sm" style="background: #f39c12;" onclick="alterarStatusInventario('${e.id}')">🔄 Status</button>
+                `;
+
+                if (isAdmin) {
+                    botoesAcao += `
+                        <button class="btn-primary btn-sm" style="background: #8e44ad;" onclick="abrirModalEditarEquipamento('${e.id}')">✏️ Editar</button>
+                        <button class="btn-danger btn-sm" onclick="deletarEquipamento('${e.id}')">🗑️ Excluir</button>
+                    `;
+                }
 
                 return `
                     <tr>
@@ -2436,44 +2444,120 @@ async function carregarInventario() {
                         <td><span style="background-color: ${corStatus}; color: white; padding: 4px 8px; border-radius: 4px; font-size: 12px; font-weight: bold;">${e.status}</span></td>
                         <td>
                             <div style="display: flex; gap: 5px;">
-                                <button class="btn-primary btn-sm" style="background: #f39c12;" onclick="alterarStatusInventario('${e.id}')">🔄 Status</button>
-                                ${botaoExcluir}
+                                ${botoesAcao}
                             </div>
                         </td>
                     </tr>
                 `;
-            }).join('') : '<tr><td colspan="6" style="text-align: center; color: #7f8c8d;">Nenhum equipamento encontrado com estes filtros.</td></tr>';
+            }).join('') : '<tr><td colspan="6" style="text-align: center; color: #7f8c8d;">Nenhum equipamento encontrado.</td></tr>';
         }
-    } catch (err) { console.error("Erro ao carregar inventário filtrado:", err); }
+    } catch (err) { console.error("Erro ao carregar inventário:", err); }
 }
 
-// 🟢 Abre a nova janela de seleção de Status
+// 🟢 Salva um novo equipamento no banco de dados (Com lógica de prédio/andar)
+async function salvarEquipamento() {
+    const tipo = document.getElementById('inv_tipo').value;
+    const marca = document.getElementById('inv_marca').value;
+    const modelo = document.getElementById('inv_modelo').value;
+    const serie = document.getElementById('inv_serie').value;
+    const status = document.getElementById('inv_status').value;
+    const predio = document.getElementById('inv_predio').value;
+    const andar = document.getElementById('inv_andar').value;
+    const setor = document.getElementById('inv_setor').value;
+
+    if(!tipo || !marca || !modelo || !serie || !status || !predio || !andar) {
+        return alert("⚠️ Por favor, preencha todos os campos obrigatórios, incluindo Prédio e Andar.");
+    }
+
+    try {
+        const { error } = await supabase.from('inventario').insert([{
+            tipo, marca, modelo, numero_serie: serie, status, predio, andar, setor
+        }]);
+
+        if (error) throw error;
+
+        alert("✅ Equipamento cadastrado com sucesso!");
+        fecharModal('modal-novo-equipamento');
+        document.getElementById('form-novo-equipamento').reset();
+        carregarInventario();
+    } catch(err) {
+        alert("❌ Erro ao salvar: " + err.message);
+    }
+}
+
+// 🟢 Abre o modal de edição e preenche os dados (Exclusivo Admin)
+async function abrirModalEditarEquipamento(id) {
+    try {
+        const { data: e, error } = await supabase.from('inventario').select('*').eq('id', id).single();
+        if (error) throw error;
+
+        // Preenche os campos do modal de edição
+        document.getElementById('edit_inv_id').value = e.id;
+        document.getElementById('edit_inv_tipo').value = e.tipo;
+        document.getElementById('edit_inv_marca').value = e.marca;
+        document.getElementById('edit_inv_modelo').value = e.modelo;
+        document.getElementById('edit_inv_serie').value = e.numero_serie;
+        document.getElementById('edit_inv_setor').value = e.setor || '';
+        
+        // Lógica de Prédio e Andar na Edição
+        document.getElementById('edit_inv_predio').value = e.predio || '';
+        // Dispara a atualização dos andares antes de selecionar o valor gravado
+        atualizarAndares('edit_inv_predio', 'edit_inv_andar', e.andar || '');
+
+        abrirModal('modal-editar-equipamento');
+    } catch (err) {
+        alert("❌ Erro ao carregar dados para edição: " + err.message);
+    }
+}
+
+// 🟢 Salva as alterações feitas na edição do equipamento
+async function salvarEdicaoEquipamento() {
+    const id = document.getElementById('edit_inv_id').value;
+    
+    const dadosAtualizados = {
+        tipo: document.getElementById('edit_inv_tipo').value,
+        marca: document.getElementById('edit_inv_marca').value,
+        modelo: document.getElementById('edit_inv_modelo').value,
+        numero_serie: document.getElementById('edit_inv_serie').value,
+        predio: document.getElementById('edit_inv_predio').value,
+        andar: document.getElementById('edit_inv_andar').value,
+        setor: document.getElementById('edit_inv_setor').value
+    };
+
+    try {
+        const { error } = await supabase.from('inventario').update(dadosAtualizados).eq('id', id);
+        if (error) throw error;
+
+        alert("✅ Equipamento atualizado com sucesso!");
+        fecharModal('modal-editar-equipamento');
+        carregarInventario();
+    } catch (err) {
+        alert("❌ Erro ao atualizar equipamento: " + err.message);
+    }
+}
+
+// 🟢 Funções auxiliares mantidas (Status e Deletar)
 function alterarStatusInventario(id) {
     document.getElementById('status_inv_id').value = id;
-    document.getElementById('status_inv_novo').value = ''; // Reseta o campo
+    document.getElementById('status_inv_novo').value = '';
     abrirModal('modal-status-inventario');
 }
 
-// 🟢 Salva o status que o usuário selecionou na lista
 async function salvarNovoStatusInventario() {
     const id = document.getElementById('status_inv_id').value;
     const novoStatus = document.getElementById('status_inv_novo').value;
 
-    if (!novoStatus) {
-        return alert("⚠️ Atenção: Por favor, selecione um status na lista.");
-    }
+    if (!novoStatus) return alert("⚠️ Selecione um status.");
 
     try {
         const { error } = await supabase.from('inventario').update({ status: novoStatus }).eq('id', id);
         if (error) throw error;
-        
-        alert("✅ Status do equipamento atualizado com sucesso!");
+        alert("✅ Status atualizado!");
         fecharModal('modal-status-inventario');
-        carregarInventario(); // Recarrega a tabela na mesma hora
-    } catch (err) { 
-        alert("❌ Erro ao atualizar status: " + err.message); 
-    }
+        carregarInventario();
+    } catch (err) { alert("❌ Erro: " + err.message); }
 }
+
 async function deletarEquipamento(id) {
     perguntar(
         "Excluir Equipamento", 
@@ -2483,8 +2567,7 @@ async function deletarEquipamento(id) {
             try {
                 const { error } = await supabase.from('inventario').delete().eq('id', id);
                 if (error) throw error;
-                
-                alert("✅ Equipamento removido do inventário!");
+                alert("✅ Equipamento removido!");
                 carregarInventario();
             } catch (err) { alert("❌ Erro ao remover: " + err.message); }
         }
