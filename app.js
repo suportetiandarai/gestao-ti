@@ -1109,48 +1109,6 @@ async function carregarListaChamados() {
     } catch (err) { console.error("Erro ao carregar chamados:", err.message); }
 }
 
-async function suspenderChamado(id) {
-    const motivo = prompt("⚠️ Atenção: Por favor, digite o motivo da suspensão deste chamado:");
-    if (motivo === null) return; 
-    if (motivo.trim() === "") return alert("O motivo é obrigatório para suspender o chamado!");
-    
-    try {
-        const { error } = await supabase.from('chamado_simpress').update({ status: 'Suspenso', observacao: motivo }).eq('id', id);
-        if (error) throw error;
-        
-        alert("Chamado suspenso com sucesso!");
-        carregarListaChamados();
-        if(typeof carregarResumoDashboard === 'function') carregarResumoDashboard();
-    } catch (err) { alert("Erro ao suspender chamado: " + err.message); }
-}
-
-window.verificarEnterFiltroChamado = function(event) {
-    if (event.key === 'Enter') carregarHistoricoChamados();
-}
-
-async function carregarHistoricoChamados() {
-    const filtro = document.getElementById('filtro_hist_chamado')?.value.trim() || '';
-    paginaAtualChamado = 1; 
-
-    try {
-        // 🟢 ORDENA POR 'id' PARA NÃO DAR ERRO 400 NO BANCO
-        let query = supabase.from('chamado_simpress')
-            .select('*')
-            .in('status', ['Atendido', 'Suspenso'])
-            .order('id', { ascending: false }); 
-
-        if (filtro) {
-            query = query.or(`numero_chamado.ilike.%${filtro}%,setor_localizada.ilike.%${filtro}%,numero_serie.ilike.%${filtro}%`);
-        }
-
-        const { data, error } = await query;
-        if (error) throw error;
-
-        dadosHistoricoChamados = data || [];
-        renderizarTabelaHistoricoChamados();
-    } catch (err) { console.error("Erro ao carregar histórico de chamados:", err); }
-}
-
 function renderizarTabelaHistoricoChamados() {
     const tbody = document.getElementById('lista-historico-chamados-aba');
     const spanPagina = document.getElementById('span-pagina-historico-chamado');
@@ -1595,7 +1553,7 @@ async function alterarStatusTreinamentoExt(id, novoStatus) {
     let tipoModal = novoStatus === 'Cancelado' ? 'perigo' : 'info';
 
     perguntar(
-        "Alterar Solicitação (Site)", 
+        "Confirma a baixa da Solicitação", 
         `Confirma a mudança desta requisição para "${novoStatus}"?`, 
         tipoModal, 
         async () => {
@@ -2828,49 +2786,6 @@ async function carregarSolicitacoesAD() {
             }).join('') : '<tr><td colspan="6" style="text-align: center; color: #7f8c8d; padding: 20px;">Nenhuma solicitação de AD encontrada.</td></tr>';
         }
     } catch (err) { console.error("Erro ao carregar AD:", err); }
-}
-async function alterarStatusAD(id, novoStatus) {
-    if(!confirm(`Confirma a mudança de status para "${novoStatus}"?`)) return;
-
-    try {
-        let updateData = { status: novoStatus };
-
-        if (novoStatus === 'Realizado' && typeof window.usuarioAtual !== 'undefined' && window.usuarioAtual) {
-            updateData.realizado_por_nome = window.usuarioAtual.nome;
-        } else if (novoStatus === 'Pendente') {
-            updateData.realizado_por_nome = null;
-            updateData.motivo_cancelamento = null; 
-        }
-
-        const { error } = await supabase.from('solicitacoes_ad').update(updateData).eq('id', id);
-        if (error) throw error;
-        
-        carregarSolicitacoesAD();
-    } catch (err) { alert("Erro ao atualizar AD: " + err.message); }
-}
-
-async function darBaixaAD(id) {
-    const motivo = prompt("⚠️ Atenção: Por favor, digite o motivo da baixa (cancelamento) desta criação de AD:");
-    
-    if (motivo === null) return; 
-    if (motivo.trim() === "") return alert("O motivo é obrigatório para dar baixa!");
-
-    try {
-        let updateData = { 
-            status: 'Cancelado',
-            motivo_cancelamento: motivo
-        };
-
-        if (typeof window.usuarioAtual !== 'undefined' && window.usuarioAtual) {
-            updateData.realizado_por_nome = window.usuarioAtual.nome;
-        }
-
-        const { error } = await supabase.from('solicitacoes_ad').update(updateData).eq('id', id);
-        if (error) throw error;
-
-        alert("Solicitação baixada com sucesso!");
-        carregarSolicitacoesAD();
-    } catch (err) { alert("Erro ao dar baixa: " + err.message); }
 }
 
 // --- 2. GESTÃO DE SOLICITAÇÕES DE TREINAMENTO (VINDAS DO SITE) ---
