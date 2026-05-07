@@ -994,6 +994,78 @@ async function suspenderChamado(id) {
     );
 }
 
+// ==========================================
+// 🟢 VARIÁVEIS E FUNÇÕES DO HISTÓRICO DE CHAMADOS
+// ==========================================
+
+window.verificarEnterFiltroChamado = function(event) {
+    if (event.key === 'Enter') carregarHistoricoChamados();
+}
+
+async function carregarHistoricoChamados() {
+    const filtro = document.getElementById('filtro_hist_chamado')?.value.trim() || '';
+    paginaAtualChamado = 1; 
+
+    try {
+        // 🟢 ORDENA POR 'id' PARA NÃO DAR ERRO 400 NO BANCO
+        let query = supabase.from('chamado_simpress')
+            .select('*')
+            .in('status', ['Atendido', 'Suspenso'])
+            .order('id', { ascending: false }); 
+
+        if (filtro) {
+            query = query.or(`numero_chamado.ilike.%${filtro}%,setor_localizada.ilike.%${filtro}%,numero_serie.ilike.%${filtro}%`);
+        }
+
+        const { data, error } = await query;
+        if (error) throw error;
+
+        dadosHistoricoChamados = data || [];
+        renderizarTabelaHistoricoChamados();
+    } catch (err) { console.error("Erro ao carregar histórico de chamados:", err); }
+}
+
+function renderizarTabelaHistoricoChamados() {
+    const tbody = document.getElementById('lista-historico-chamados-aba');
+    const spanPagina = document.getElementById('span-pagina-historico-chamado');
+    if (!tbody) return;
+
+    const totalPaginas = Math.ceil(dadosHistoricoChamados.length / itensPorPaginaChamado) || 1;
+    if (spanPagina) spanPagina.innerText = `Página ${paginaAtualChamado} de ${totalPaginas}`;
+
+    const inicio = (paginaAtualChamado - 1) * itensPorPaginaChamado;
+    const fim = inicio + itensPorPaginaChamado;
+    const itensPagina = dadosHistoricoChamados.slice(inicio, fim);
+
+    tbody.innerHTML = itensPagina.length > 0 ? itensPagina.map(c => {
+        const dataC = c.created_at ? new Date(c.created_at).toLocaleDateString('pt-BR') : '-';
+        let corStatus = c.status === 'Atendido' ? '#2ecc71' : '#e74c3c';
+
+        return `
+            <tr>
+                <td style="font-size: 12px;"><strong>${c.numero_chamado}</strong><br><small>${dataC}</small></td>
+                <td style="font-size: 12px;">${c.modelo_impressora} <br><small>Série: ${c.numero_serie}</small></td>
+                <td style="font-size: 12px;">${c.setor_localizada}</td>
+                <td style="width: 140px; min-width: 140px;">
+                    <div style="margin-bottom: 6px;">
+                        <span style="background-color: ${corStatus}; color: white; padding: 5px; border-radius: 4px; font-size: 11px; font-weight: bold; display: block; width: 100%; text-align: center;">${c.status}</span>
+                    </div>
+                    ${c.observacao ? `<div style="margin-top: 6px; font-size: 10px; color: #475569; background: #f1f5f9; padding: 4px; border-radius: 4px; text-align: center; line-height: 1.3;"><strong>Obs:</strong> ${c.observacao}</div>` : ''}
+                </td>
+                <td style="font-size: 11px;">${c.tecnico_acompanhante || '-'}</td>
+            </tr>
+        `;
+    }).join('') : '<tr><td colspan="5" style="text-align: center; color: #7f8c8d; padding: 20px;">Nenhum registro encontrado no histórico.</td></tr>';
+}
+
+function mudarPaginaHistoricoChamado(direcao) {
+    const totalPaginas = Math.ceil(dadosHistoricoChamados.length / itensPorPaginaChamado) || 1;
+    paginaAtualChamado += direcao;
+    if (paginaAtualChamado < 1) paginaAtualChamado = 1;
+    if (paginaAtualChamado > totalPaginas) paginaAtualChamado = totalPaginas;
+    renderizarTabelaHistoricoChamados();
+}
+
 function abrirModalFinalizarOcorrencia(id) {
     document.getElementById('f_ocorrencia_id').value = id;
     limparCanvas('canvas-finalizar-ocorrencia');
