@@ -1119,21 +1119,30 @@ async function salvarTrocaToner() {
     const setor = document.getElementById('tt_setor').value;
     const andar = document.getElementById('tt_andar').value;
     const predio = document.getElementById('tt_predio').value;
+    const canvas = document.getElementById('canvas-troca-toner');
 
+    // 🟢 VALIDAÇÃO ESTRITA (Campos, Foto e Assinatura)
     if (!setor || !andar || !predio || inputFoto.files.length === 0) {
-        return alert("Preencha todos os campos e anexe a foto da página de teste.");
+        return alert("⚠️ Atenção: Preencha todos os campos e anexe a foto da página de teste.");
+    }
+
+    if (isCanvasVazio(canvas)) {
+        return alert("⚠️ Assinatura Obrigatória: Você precisa assinar para confirmar a troca do toner.");
     }
 
     try {
+        // 1. Upload da Foto da Página de Teste
         const fotoFile = inputFoto.files[0];
         const nomeFoto = `teste_${Date.now()}_${fotoFile.name}`;
         const { error: errFoto } = await supabase.storage.from('assinaturas').upload(nomeFoto, fotoFile);
         if (errFoto) throw errFoto;
         const fotoUrl = supabase.storage.from('assinaturas').getPublicUrl(nomeFoto).data.publicUrl;
 
-        const sigUrl = await uploadAssinatura(document.getElementById('canvas-troca-toner'), 'troca_toner');
+        // 2. Upload da Assinatura Digital
+        const sigUrl = await uploadAssinatura(canvas, 'troca_toner');
 
-        await supabase.from('registro_troca_toner').insert([{
+        // 3. Insere o registro na tabela de trocas
+        const { error: errInsert } = await supabase.from('registro_troca_toner').insert([{
             toner_id: tonerId,
             usuario_id: typeof usuarioAtual !== 'undefined' && usuarioAtual ? usuarioAtual.id : null,
             foto_teste_url: fotoUrl,
@@ -1142,16 +1151,29 @@ async function salvarTrocaToner() {
             predio: predio,
             assinatura_tecnico_url: sigUrl
         }]);
+        if (errInsert) throw errInsert;
 
+        // 4. Atualiza o estoque (Baixa de 1 unidade)
         const { data: tonerAtual } = await supabase.from('cadastro_toner').select('quantidade_atual').eq('id', tonerId).single();
-        await supabase.from('cadastro_toner').update({ quantidade_atual: tonerAtual.quantidade_atual - 1 }).eq('id', tonerId);
+        await supabase.from('cadastro_toner').update({ 
+            quantidade_atual: (tonerAtual.quantidade_atual || 1) - 1 
+        }).eq('id', tonerId);
 
-        alert("Troca registrada com sucesso! Estoque atualizado.");
+        alert("✅ Troca registrada com sucesso! Estoque atualizado.");
+        
+        // 5. Limpa e fecha tudo
         document.getElementById('form-troca-toner').reset();
+        limparCanvas('canvas-troca-toner');
         fecharModal('modal-troca-toner');
-        carregarListaToners(); 
+        
+        // Recarrega as listas para atualizar os números na tela
+        if (typeof carregarListaToners === 'function') carregarListaToners();
+        if (typeof carregarResumoDashboard === 'function') carregarResumoDashboard();
 
-    } catch (e) { alert("Erro ao salvar troca: " + e.message); }
+    } catch (e) { 
+        console.error(e);
+        alert("❌ Erro ao salvar troca: " + e.message); 
+    }
 }
 
 async function salvarAtendimentoChamado() {
