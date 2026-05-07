@@ -918,27 +918,49 @@ async function salvarEdicaoOcorrencia() {
 
 async function cancelarOcorrencia(id) {
     const motivo = prompt("⚠️ Atenção: Por favor, digite o motivo do cancelamento desta ocorrência:");
-    
     if (motivo === null) return; 
+    if (motivo.trim() === "") return alert("⚠️ O motivo é obrigatório para cancelar uma ocorrência!");
+
+    perguntar(
+        "Cancelar Ocorrência", 
+        "Tem certeza que deseja cancelar esta ocorrência?", 
+        "perigo", 
+        async () => {
+            try {
+                const { error } = await supabase.from('ocorrencias').update({
+                    status: 'Cancelada',
+                    motivo_cancelamento: motivo
+                }).eq('id', id);
+                if (error) throw error;
+
+                alert("✅ Ocorrência cancelada com sucesso!");
+                carregarListaOcorrencias();
+                if(typeof carregarResumoDashboard === 'function') carregarResumoDashboard();
+            } catch (err) { alert("❌ Erro ao cancelar: " + err.message); }
+        }
+    );
+}
+
+async function suspenderChamado(id) {
+    const motivo = prompt("⚠️ Atenção: Por favor, digite o motivo da suspensão deste chamado:");
+    if (motivo === null) return; 
+    if (motivo.trim() === "") return alert("⚠️ O motivo é obrigatório para suspender o chamado!");
     
-    if (motivo.trim() === "") {
-        return alert("O motivo é obrigatório para cancelar uma ocorrência!");
-    }
-
-    try {
-        const { error } = await supabase.from('ocorrencias').update({
-            status: 'Cancelada',
-            motivo_cancelamento: motivo
-        }).eq('id', id);
-        
-        if (error) throw error;
-
-        alert("Ocorrência cancelada com sucesso!");
-        carregarListaOcorrencias();
-        if(typeof carregarResumoDashboard === 'function') carregarResumoDashboard();
-    } catch (err) {
-        alert("Erro ao cancelar ocorrência: " + err.message);
-    }
+    perguntar(
+        "Suspender Chamado", 
+        "Confirmar a suspensão deste chamado Simpress?", 
+        "aviso", 
+        async () => {
+            try {
+                const { error } = await supabase.from('chamado_simpress').update({ status: 'Suspenso', observacao: motivo }).eq('id', id);
+                if (error) throw error;
+                
+                alert("✅ Chamado suspenso com sucesso!");
+                carregarListaChamados();
+                if(typeof carregarResumoDashboard === 'function') carregarResumoDashboard();
+            } catch (err) { alert("❌ Erro ao suspender: " + err.message); }
+        }
+    );
 }
 
 function abrirModalFinalizarOcorrencia(id) {
@@ -1518,24 +1540,47 @@ async function salvarEdicaoTreinamento() {
 
 async function cancelarTreinamento(id) {
     const motivo = prompt("⚠️ Atenção: Por favor, digite o motivo do cancelamento deste treinamento:");
-    
     if (motivo === null) return; 
-    if (motivo.trim() === "") return alert("O motivo é obrigatório para cancelar!");
+    if (motivo.trim() === "") return alert("⚠️ O motivo é obrigatório para cancelar!");
 
-    try {
-        const { error } = await supabase.from('treinamentos').update({
-            status: 'Cancelado',
-            motivo_cancelamento: motivo
-        }).eq('id', id);
-        
-        if (error) throw error;
+    perguntar(
+        "Cancelar Treinamento", 
+        "Confirmar o cancelamento deste treinamento na agenda?", 
+        "perigo", 
+        async () => {
+            try {
+                const { error } = await supabase.from('treinamentos').update({
+                    status: 'Cancelado',
+                    motivo_cancelamento: motivo
+                }).eq('id', id);
+                
+                if (error) throw error;
 
-        alert("Treinamento cancelado com sucesso!");
-        carregarListaTreinamentos();
-        if(typeof carregarResumoDashboard === 'function') carregarResumoDashboard();
-    } catch (err) {
-        alert("Erro ao cancelar treinamento: " + err.message);
-    }
+                alert("✅ Treinamento cancelado com sucesso!");
+                carregarListaTreinamentos();
+                if(typeof carregarResumoDashboard === 'function') carregarResumoDashboard();
+            } catch (err) { alert("❌ Erro ao cancelar: " + err.message); }
+        }
+    );
+}
+
+async function alterarStatusTreinamentoExt(id, novoStatus) {
+    let tipoModal = novoStatus === 'Cancelado' ? 'perigo' : 'info';
+
+    perguntar(
+        "Alterar Solicitação (Site)", 
+        `Confirma a mudança de status desta requisição para "${novoStatus}"?`, 
+        tipoModal, 
+        async () => {
+            try {
+                const { error } = await supabase.from('solicitacoes_treinamento').update({ status: novoStatus }).eq('id', id);
+                if (error) throw error;
+                
+                alert(`✅ Solicitação alterada para ${novoStatus}!`);
+                carregarSolicitacoesTreinamento();
+            } catch (err) { alert("❌ Erro ao atualizar Treinamento: " + err.message); }
+        }
+    );
 }
 
 async function abrirModalFinalizarTreinamento(id) {
@@ -1822,42 +1867,42 @@ async function salvarEdicaoUsuario() {
 
 async function redefinirSenhaUsuario(userId, cpfUsuario) {
     if (!cpfUsuario || cpfUsuario.length < 4) {
-        return alert("Erro: O usuário não possui um CPF cadastrado ou válido para gerar a senha.");
+        return alert("❌ Erro: O usuário não possui um CPF válido para gerar a senha.");
     }
-
     const cpfNumeros = cpfUsuario.replace(/\D/g, ""); 
     const novaSenha = cpfNumeros.substring(0, 4);
 
-    if (!confirm(`A nova senha deste usuário será os 4 primeiros dígitos do CPF (${novaSenha}). Confirmar operação?`)) {
-        return;
-    }
-    
-    try {
-        const { error } = await supabase.rpc('admin_redefinir_senha', { 
-            p_user_id: userId, 
-            p_nova_senha: novaSenha 
-        });
-
-        if (error) throw error;
-        
-        alert(`Sucesso! A senha foi redefinida para: ${novaSenha}`);
-    } catch (err) {
-        alert("Erro ao redefinir senha: " + err.message);
-    }
+    perguntar(
+        "Redefinir Senha", 
+        `A nova senha será os 4 primeiros dígitos do CPF (${novaSenha}). Confirmar operação?`, 
+        "aviso", 
+        async () => {
+            try {
+                const { error } = await supabase.rpc('admin_redefinir_senha', { p_user_id: userId, p_nova_senha: novaSenha });
+                if (error) throw error;
+                alert(`✅ Sucesso! A senha foi redefinida para: ${novaSenha}`);
+            } catch (err) {
+                alert("❌ Erro ao redefinir senha: " + err.message);
+            }
+        }
+    );
 }
 
 async function deletarUsuario(userId) {
-    if (!confirm("Tem certeza que deseja excluir este usuário permanentemente?")) return;
-
-    try {
-        const { error } = await supabase.from('profiles').delete().eq('id', userId);
-        if (error) throw error;
-        
-        alert("Usuário removido!");
-        carregarTabelaUsuarios();
-    } catch (err) {
-        alert("Erro ao excluir: " + err.message);
-    }
+    perguntar(
+        "Excluir Usuário", 
+        "Tem certeza que deseja excluir este usuário permanentemente do sistema?", 
+        "perigo", 
+        async () => {
+            try {
+                const { error } = await supabase.from('profiles').delete().eq('id', userId);
+                if (error) throw error;
+                
+                alert("✅ Usuário removido do sistema!");
+                carregarTabelaUsuarios();
+            } catch (err) { alert("❌ Erro ao excluir: " + err.message); }
+        }
+    );
 }
 
 // ==========================================
@@ -2242,23 +2287,24 @@ async function visualizarPlantao(idPlantao) {
 async function confirmarVistoPlantao() {
     const idPlantao = document.getElementById('visto_plantao_id').value;
     
-    if (!confirm("Tem certeza que deseja aplicar o visto da supervisão? Este plantão será arquivado e sairá do painel pendente.")) return;
-    
-    try {
-        const { error } = await supabase.from('plantoes').update({ visto_supervisao: true }).eq('id', idPlantao);
-        if (error) throw error;
-        
-        alert("Visto registrado com sucesso!");
-        fecharModal('modal-ver-plantao');
-        
-        carregarResumoDashboard(); 
-        if(typeof carregarPlantoesAdmin === 'function') carregarPlantoesAdmin();
-        
-    } catch (err) {
-        alert("Erro ao dar visto: " + err.message);
-    }
+    perguntar(
+        "Confirmar Visto", 
+        "Deseja aplicar o visto da supervisão? Este plantão sairá do painel pendente.", 
+        "sucesso", 
+        async () => {
+            try {
+                const { error } = await supabase.from('plantoes').update({ visto_supervisao: true }).eq('id', idPlantao);
+                if (error) throw error;
+                
+                alert("✅ Visto registrado com sucesso!");
+                fecharModal('modal-ver-plantao');
+                
+                if (typeof carregarResumoDashboard === 'function') carregarResumoDashboard(); 
+                if (typeof carregarPlantoesAdmin === 'function') carregarPlantoesAdmin();
+            } catch (err) { alert("❌ Erro ao dar visto: " + err.message); }
+        }
+    );
 }
-
 // ==========================================
 // ABA: INVENTÁRIO
 // ==========================================
@@ -2405,28 +2451,42 @@ async function carregarInventario() {
 
 async function alterarStatusInventario(id) {
     const novoStatus = prompt("Digite o novo status exato (Em uso, Em estoque, Danificado):");
-    if(!novoStatus) return;
+    if (novoStatus === null) return;
     
-    // Validação para evitar que alguém digite errado
     const statusValido = ['Em uso', 'Em estoque', 'Danificado'].includes(novoStatus);
-    if(!statusValido) return alert("Status inválido. Respeite as letras maiúsculas e minúsculas.");
+    if (!statusValido) return alert("❌ Status inválido. Respeite as letras maiúsculas e minúsculas.");
 
-    try {
-        const { error } = await supabase.from('inventario').update({ status: novoStatus }).eq('id', id);
-        if (error) throw error;
-        alert("Status do equipamento atualizado!");
-        carregarInventario();
-    } catch (err) { alert("Erro ao atualizar: " + err.message); }
+    perguntar(
+        "Alterar Status", 
+        `Confirmar a mudança do status do equipamento para "${novoStatus}"?`, 
+        "aviso", 
+        async () => {
+            try {
+                const { error } = await supabase.from('inventario').update({ status: novoStatus }).eq('id', id);
+                if (error) throw error;
+                
+                alert("✅ Status atualizado com sucesso!");
+                carregarInventario();
+            } catch (err) { alert("❌ Erro ao atualizar: " + err.message); }
+        }
+    );
 }
 
 async function deletarEquipamento(id) {
-    if (!confirm("Tem certeza que deseja excluir este equipamento definitivamente da base?")) return;
-    try {
-        const { error } = await supabase.from('inventario').delete().eq('id', id);
-        if (error) throw error;
-        alert("Equipamento removido!");
-        carregarInventario();
-    } catch (err) { alert("Erro ao remover: " + err.message); }
+    perguntar(
+        "Excluir Equipamento", 
+        "Tem certeza que deseja excluir este equipamento definitivamente do estoque?", 
+        "perigo", 
+        async () => {
+            try {
+                const { error } = await supabase.from('inventario').delete().eq('id', id);
+                if (error) throw error;
+                
+                alert("✅ Equipamento removido do inventário!");
+                carregarInventario();
+            } catch (err) { alert("❌ Erro ao remover: " + err.message); }
+        }
+    );
 }
 
 // ==========================================
@@ -2593,47 +2653,91 @@ async function carregarCadastros() {
     } catch (err) { console.error("Erro ao carregar cadastros:", err); }
 }
 async function alterarStatusCadastro(id, novoStatus) {
-    if(!confirm(`Confirma a mudança de status para "${novoStatus}"?`)) return;
+    let tipoModal = novoStatus === 'Realizado' ? 'sucesso' : (novoStatus === 'Aguardando' ? 'aviso' : 'info');
+    
+    perguntar(
+        "Status do Cadastro (TIMED)", 
+        `Confirma a mudança de status deste usuário para "${novoStatus}"?`, 
+        tipoModal, 
+        async () => {
+            try {
+                let updateData = { status: novoStatus };
+                if (novoStatus === 'Realizado') {
+                    if (typeof window.usuarioAtual !== 'undefined' && window.usuarioAtual) {
+                        updateData.realizado_por_nome = window.usuarioAtual.nome;
+                        updateData.realizado_por_email = window.usuarioAtual.email;
+                        updateData.data_realizado = new Date().toISOString();
+                    }
+                } else {
+                    updateData.realizado_por_nome = null;
+                    updateData.realizado_por_email = null;
+                    updateData.data_realizado = null;
+                }
 
-    try {
-        let updateData = { status: novoStatus };
-
-        if (novoStatus === 'Realizado') {
-            if (typeof window.usuarioAtual !== 'undefined' && window.usuarioAtual) {
-                updateData.realizado_por_nome = window.usuarioAtual.nome;
-                updateData.realizado_por_email = window.usuarioAtual.email;
-                updateData.data_realizado = new Date().toISOString();
-            }
-        } else {
-            updateData.realizado_por_nome = null;
-            updateData.realizado_por_email = null;
-            updateData.data_realizado = null;
+                const { error } = await supabase.from('solicitacoes_cadastro').update(updateData).eq('id', id);
+                if (error) throw error;
+                
+                alert(`✅ Status atualizado para ${novoStatus}!`);
+                carregarCadastros();
+            } catch (err) { alert("❌ Erro ao atualizar status: " + err.message); }
         }
-
-        const { error } = await supabase.from('solicitacoes_cadastro').update(updateData).eq('id', id);
-        if (error) throw error;
-        
-        carregarCadastros();
-    } catch (err) { alert("Erro ao atualizar status: " + err.message); }
+    );
 }
 
-function abrirModalObsCadastro(id, obsAtual) {
-    document.getElementById('obs_cad_id').value = id;
-    document.getElementById('obs_cad_texto').value = obsAtual && obsAtual !== 'undefined' ? obsAtual : '';
-    abrirModal('modal-obs-cadastro');
+async function alterarStatusAD(id, novoStatus) {
+    let tipoModal = novoStatus === 'Realizado' ? 'sucesso' : 'info';
+
+    perguntar(
+        "Status da Solicitação (AD)", 
+        `Confirma a mudança do AD para "${novoStatus}"?`, 
+        tipoModal, 
+        async () => {
+            try {
+                let updateData = { status: novoStatus };
+                if (novoStatus === 'Realizado' && typeof window.usuarioAtual !== 'undefined' && window.usuarioAtual) {
+                    updateData.realizado_por_nome = window.usuarioAtual.nome;
+                } else if (novoStatus === 'Pendente') {
+                    updateData.realizado_por_nome = null;
+                    updateData.motivo_cancelamento = null; 
+                }
+
+                const { error } = await supabase.from('solicitacoes_ad').update(updateData).eq('id', id);
+                if (error) throw error;
+                
+                alert(`✅ AD marcado como ${novoStatus}!`);
+                carregarSolicitacoesAD();
+            } catch (err) { alert("❌ Erro ao atualizar AD: " + err.message); }
+        }
+    );
 }
 
-async function salvarObsCadastro() {
-    const id = document.getElementById('obs_cad_id').value;
-    const obs = document.getElementById('obs_cad_texto').value;
+async function darBaixaAD(id) {
+    const motivo = prompt("⚠️ Atenção: Por favor, digite o motivo da baixa (cancelamento) da criação deste AD:");
+    if (motivo === null) return; 
+    if (motivo.trim() === "") return alert("⚠️ O motivo é obrigatório para dar baixa!");
 
-    try {
-        const { error } = await supabase.from('solicitacoes_cadastro').update({ observacao: obs }).eq('id', id);
-        if (error) throw error;
-        
-        fecharModal('modal-obs-cadastro');
-        carregarCadastros();
-    } catch (err) { alert("Erro ao salvar observação: " + err.message); }
+    perguntar(
+        "Baixa em Solicitação AD", 
+        "Tem certeza que deseja cancelar e arquivar esta solicitação?", 
+        "perigo", 
+        async () => {
+            try {
+                let updateData = { 
+                    status: 'Cancelado',
+                    motivo_cancelamento: motivo
+                };
+                if (typeof window.usuarioAtual !== 'undefined' && window.usuarioAtual) {
+                    updateData.realizado_por_nome = window.usuarioAtual.nome;
+                }
+
+                const { error } = await supabase.from('solicitacoes_ad').update(updateData).eq('id', id);
+                if (error) throw error;
+
+                alert("✅ Solicitação de AD baixada com sucesso!");
+                carregarSolicitacoesAD();
+            } catch (err) { alert("❌ Erro ao dar baixa: " + err.message); }
+        }
+    );
 }
 // ==========================================
 // FUNÇÕES FALTANTES: SOLICITAÇÕES AD E TREINAMENTOS (EXTERNOS)
