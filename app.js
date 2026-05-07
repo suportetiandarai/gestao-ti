@@ -2750,34 +2750,6 @@ async function darBaixaAD(id) {
     );
 }
 
-async function darBaixaAD(id) {
-    const motivo = prompt("⚠️ Atenção: Por favor, digite o motivo da baixa (cancelamento) da criação deste AD:");
-    if (motivo === null) return; 
-    if (motivo.trim() === "") return alert("⚠️ O motivo é obrigatório para dar baixa!");
-
-    perguntar(
-        "Baixa em Solicitação AD", 
-        "Tem certeza que deseja cancelar e arquivar esta solicitação?", 
-        "perigo", 
-        async () => {
-            try {
-                let updateData = { 
-                    status: 'Cancelado',
-                    motivo_cancelamento: motivo
-                };
-                if (typeof window.usuarioAtual !== 'undefined' && window.usuarioAtual) {
-                    updateData.realizado_por_nome = window.usuarioAtual.nome;
-                }
-
-                const { error } = await supabase.from('solicitacoes_ad').update(updateData).eq('id', id);
-                if (error) throw error;
-
-                alert("✅ Solicitação de AD baixada com sucesso!");
-                carregarSolicitacoesAD();
-            } catch (err) { alert("❌ Erro ao dar baixa: " + err.message); }
-        }
-    );
-}
 // ==========================================
 // FUNÇÕES FALTANTES: SOLICITAÇÕES AD E TREINAMENTOS (EXTERNOS)
 // ==========================================
@@ -2962,12 +2934,20 @@ async function carregarSolicitacoesTreinamento() {
 }
 
 async function alterarStatusTreinamentoExt(id, novoStatus) {
-    if(!confirm(`Confirma a mudança de status para "${novoStatus}"?`)) return;
+    let tipoModal = novoStatus === 'Cancelado' ? 'perigo' : 'info';
 
-    try {
-        const { error } = await supabase.from('solicitacoes_treinamento').update({ status: novoStatus }).eq('id', id);
-        if (error) throw error;
-        
-        carregarSolicitacoesTreinamento();
-    } catch (err) { alert("Erro ao atualizar Treinamento: " + err.message); }
+    perguntar(
+        "Alterar Solicitação (Site)", 
+        `Confirma a mudança desta requisição para "${novoStatus}"?`, 
+        tipoModal, 
+        async () => {
+            try {
+                const { error } = await supabase.from('solicitacoes_treinamento').update({ status: novoStatus }).eq('id', id);
+                if (error) throw error;
+                
+                alert(`✅ Solicitação movida para ${novoStatus}!`);
+                carregarSolicitacoesTreinamento();
+            } catch (err) { alert("❌ Erro ao atualizar Treinamento: " + err.message); }
+        }
+    );
 }
