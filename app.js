@@ -277,19 +277,47 @@ function atualizarInterfaceTecnicos() {
 
 
 // ==========================================
-// ABA 1: SALVAR PLANTÃO
+// ABA 1: SALVAR PLANTÃO E VALIDAÇÕES
 // ==========================================
+
+// 🟢 FUNÇÃO AUXILIAR: Verifica se o quadro de assinatura está em branco (Se o usuário desenhou algo)
+function isCanvasVazio(canvas) {
+    const context = canvas.getContext('2d');
+    const pixelBuffer = new Uint32Array(
+        context.getImageData(0, 0, canvas.width, canvas.height).data.buffer
+    );
+    // Verifica se algum pixel foi alterado pelo usuário (diferente de 0)
+    return !pixelBuffer.some(color => color !== 0);
+}
+
 async function salvarPlantao() {
+    // 1. CAPTURA DOS CAMPOS OBRIGATÓRIOS
+    const horaAssumiu = document.getElementById('p_hora_assumiu').value;
+    const horaLargou = document.getElementById('p_hora_largou').value;
+    const canvas = document.getElementById('canvas-plantao');
+
+    // 🟢 VALIDAÇÃO ESTRITA: HORA (Impede de prosseguir se estiver vazio)
+    if (!horaAssumiu || !horaLargou) {
+        return alert("⚠️ CAMPO OBRIGATÓRIO: Por favor, preencha o horário que assumiu e o horário que largou o plantão.");
+    }
+
+    // 🟢 VALIDAÇÃO ESTRITA: ASSINATURA (Impede de prosseguir se o quadro estiver em branco)
+    if (isCanvasVazio(canvas)) {
+        return alert("⚠️ ASSINATURA OBRIGATÓRIA: O plantão não pode ser registrado sem a sua assinatura digital.");
+    }
+
     try {
+        console.log("Iniciando salvamento do plantão...");
+
         // 1. Faz upload da assinatura
-        const urlAssinatura = await uploadAssinatura(document.getElementById('canvas-plantao'), 'plantao');
+        const urlAssinatura = await uploadAssinatura(canvas, 'plantao');
 
         // 2. Coleta os dados 
         const dados = {
             usuario_id: typeof usuarioAtual !== 'undefined' && usuarioAtual ? usuarioAtual.id : null,
             tecnicos_plantao: tecnicosNoPlantao.map(t => t.nome).join(', '), // Nomes da equipe adicionados
-            hora_assumiu: document.getElementById('p_hora_assumiu').value,
-            hora_largou: document.getElementById('p_hora_largou').value,
+            hora_assumiu: horaAssumiu,
+            hora_largou: horaLargou,
             emails_resp: document.getElementById('p_emails').checked,
             motivo_emails: document.getElementById('p_motivo_emails').value,
             chamados_pend: document.getElementById('p_chamados').checked,
@@ -297,7 +325,7 @@ async function salvarPlantao() {
             forms_zerado: document.getElementById('p_forms').checked,
             motivo_forms: document.getElementById('p_motivo_forms').value,
             
-            // NOVO: FORMS DE TREINAMENTO
+            // FORMS DE TREINAMENTO
             forms_treinamento: document.getElementById('p_forms_treinamento').checked,
             motivo_treinamento: document.getElementById('p_motivo_treinamento').value,
             
@@ -317,7 +345,7 @@ async function salvarPlantao() {
 
         if (error) throw error;
 
-        alert('Plantão registrado com sucesso!');
+        alert('✅ Plantão registrado com sucesso!');
         
         // 4. Limpa tudo para o próximo plantão
         document.getElementById('form-plantao').reset();
@@ -327,10 +355,9 @@ async function salvarPlantao() {
 
     } catch (err) {
         console.error(err);
-        alert('Erro ao salvar: Verifique se preencheu os horários e assinou.');
+        alert('❌ Erro ao salvar: Ocorreu um problema na conexão com o banco de dados.');
     }
 }
-
 // ==========================================
 // ABA 2: CHAVES
 // ==========================================
