@@ -2488,23 +2488,37 @@ async function salvarEquipamento() {
 // 🟢 Abre o modal de edição e preenche os dados (Exclusivo Admin)
 async function abrirModalEditarEquipamento(id) {
     try {
+        // 1. Busca os dados do equipamento que você clicou
         const { data: e, error } = await supabase.from('inventario').select('*').eq('id', id).single();
         if (error) throw error;
 
-        // Preenche os campos do modal de edição
+        // 2. Busca a lista de tipos cadastrados na tabela 'tipos_equipamento'
+        const { data: tipos, error: errTipos } = await supabase.from('tipos_equipamento').select('nome').order('nome');
+        if (errTipos) throw errTipos;
+
+        // 3. Preenche o select de tipos com as opções e seleciona o tipo atual do equipamento
+        const selectTipo = document.getElementById('edit_inv_tipo');
+        selectTipo.innerHTML = '<option value="">Selecione...</option>' + 
+            tipos.map(t => `
+                <option value="${t.nome}" ${t.nome === e.tipo ? 'selected' : ''}>
+                    ${t.nome}
+                </option>
+            `).join('');
+
+        // 4. Preenche os outros campos de texto
         document.getElementById('edit_inv_id').value = e.id;
-        document.getElementById('edit_inv_tipo').value = e.tipo;
         document.getElementById('edit_inv_marca').value = e.marca;
         document.getElementById('edit_inv_modelo').value = e.modelo;
         document.getElementById('edit_inv_serie').value = e.numero_serie;
         document.getElementById('edit_inv_setor').value = e.setor || '';
         
-        // Lógica de Prédio e Andar na Edição
+        // 5. Preenche Prédio e atualiza os Andares automaticamente
         document.getElementById('edit_inv_predio').value = e.predio || '';
-        // Dispara a atualização dos andares antes de selecionar o valor gravado
         atualizarAndares('edit_inv_predio', 'edit_inv_andar', e.andar || '');
 
+        // 6. Abre o modal
         abrirModal('modal-editar-equipamento');
+
     } catch (err) {
         alert("❌ Erro ao carregar dados para edição: " + err.message);
     }
@@ -2930,4 +2944,83 @@ async function carregarSolicitacoesTreinamento() {
             }).join('') : '<tr><td colspan="5" style="text-align: center; color: #7f8c8d; padding: 20px;">Nenhuma solicitação encontrada.</td></tr>';
         }
     } catch (err) { console.error("Erro ao carregar solicitações de treinamento:", err); }
+}
+// 🟢 Abre o modal e carrega a lista de toners para edição
+async function abrirModalGerenciarToner() {
+    try {
+        const { data: toners, error } = await supabase
+            .from('cadastro_toner')
+            .select('*')
+            .order('modelo_toner', { ascending: true });
+
+        if (error) throw error;
+
+        const tbody = document.getElementById('tabela-gerenciar-toner-corpo');
+        tbody.innerHTML = '';
+
+        toners.forEach(t => {
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td style="font-weight: bold;">${t.modelo_toner}</td>
+                <td style="font-size: 12px; color: #64748b;">${t.impressora_compativel || '-'}</td>
+                <td style="text-align: center;">
+                    <span class="badge" style="background: ${t.quantidade_atual <= 1 ? '#fee2e2; color: #991b1b' : '#f1f5f9; color: #475569'}">
+                        ${t.quantidade_atual} UN
+                    </span>
+                </td>
+                <td>
+                    <input type="number" id="input-qtd-${t.id}" value="${t.quantidade_atual}" min="0" 
+                           style="width: 80px; padding: 5px; margin-bottom: 0; text-align: center;">
+                </td>
+                <td>
+                    <button class="btn-success btn-sm" onclick="salvarNovaQuantidadeToner('${t.id}', '${t.modelo_toner}')">
+                        💾 Salvar
+                    </button>
+                </td>
+            `;
+            tbody.appendChild(tr);
+        });
+
+        abrirModal('modal-gerenciar-toner');
+    } catch (err) {
+        alert("❌ Erro ao carregar estoque: " + err.message);
+    }
+}
+
+// 🟢 Salva a nova quantidade informada no banco de dados
+async function salvarNovaQuantidadeToner(id, modelo) {
+    const novaQtd = document.getElementById(`input-qtd-${id}`).value;
+
+    if (novaQtd === '' || novaQtd < 0) {
+        return alert("⚠️ Por favor, informe uma quantidade válida.");
+    }
+
+    perguntar(
+        "Atualizar Estoque", 
+        `Deseja alterar a quantidade de ${modelo} para ${novaQtd} unidades?`, 
+        "aviso", 
+        async () => {
+            try {
+                const { error } = await supabase
+                    .from('cadastro_toner')
+                    .update({ quantidade_atual: parseInt(novaQtd) })
+                    .eq('id', id);
+
+                if (error) throw error;
+
+                alert(`✅ Estoque de ${modelo} atualizado!`);
+                
+                // Recarrega as informações sem fechar o modal para o usuário continuar editando outros
+                carregarListaToners(); // Atualiza a aba principal de Toners
+                carregarResumoDashboard(); // Atualiza o Dashboard
+                
+                // Opcional: Recarregar a lista do próprio modal para atualizar o visual
+                const { data: toners } = await supabase.from('cadastro_toner').select('*').order('modelo_toner');
+                abrirModalGerenciarToner(); 
+
+            } catch (err) {
+                alert("❌ Erro ao salvar alteração: " + err.message);
+            }
+        }
+    );
 }
