@@ -941,28 +941,6 @@ async function cancelarOcorrencia(id) {
     );
 }
 
-async function suspenderChamado(id) {
-    const motivo = prompt("⚠️ Atenção: Por favor, digite o motivo da suspensão deste chamado:");
-    if (motivo === null) return; 
-    if (motivo.trim() === "") return alert("⚠️ O motivo é obrigatório para suspender o chamado!");
-    
-    perguntar(
-        "Suspender Chamado", 
-        "Confirmar a suspensão deste chamado Simpress?", 
-        "aviso", 
-        async () => {
-            try {
-                const { error } = await supabase.from('chamado_simpress').update({ status: 'Suspenso', observacao: motivo }).eq('id', id);
-                if (error) throw error;
-                
-                alert("✅ Chamado suspenso com sucesso!");
-                carregarListaChamados();
-                if(typeof carregarResumoDashboard === 'function') carregarResumoDashboard();
-            } catch (err) { alert("❌ Erro ao suspender: " + err.message); }
-        }
-    );
-}
-
 function abrirModalFinalizarOcorrencia(id) {
     document.getElementById('f_ocorrencia_id').value = id;
     limparCanvas('canvas-finalizar-ocorrencia');
@@ -1081,16 +1059,23 @@ async function carregarListaChamados() {
 async function suspenderChamado(id) {
     const motivo = prompt("⚠️ Atenção: Por favor, digite o motivo da suspensão deste chamado:");
     if (motivo === null) return; 
-    if (motivo.trim() === "") return alert("O motivo é obrigatório para suspender o chamado!");
+    if (motivo.trim() === "") return alert("⚠️ O motivo é obrigatório para suspender o chamado!");
     
-    try {
-        const { error } = await supabase.from('chamado_simpress').update({ status: 'Suspenso', observacao: motivo }).eq('id', id);
-        if (error) throw error;
-        
-        alert("Chamado suspenso com sucesso!");
-        carregarListaChamados();
-        if(typeof carregarResumoDashboard === 'function') carregarResumoDashboard();
-    } catch (err) { alert("Erro ao suspender chamado: " + err.message); }
+    perguntar(
+        "Suspender Chamado", 
+        "Confirmar a suspensão deste chamado Simpress?", 
+        "aviso", 
+        async () => {
+            try {
+                const { error } = await supabase.from('chamado_simpress').update({ status: 'Suspenso', observacao: motivo }).eq('id', id);
+                if (error) throw error;
+                
+                alert("✅ Chamado suspenso com sucesso!");
+                carregarListaChamados();
+                if(typeof carregarResumoDashboard === 'function') carregarResumoDashboard();
+            } catch (err) { alert("❌ Erro ao suspender: " + err.message); }
+        }
+    );
 }
 
 window.verificarEnterFiltroChamado = function(event) {
@@ -1628,13 +1613,12 @@ async function salvarTreinamentoConcluido() {
         if(typeof carregarResumoDashboard === 'function') carregarResumoDashboard();
     } catch (err) { alert("Erro: " + err.message); }
 }
+
 // ==========================================
 // ABA CONFIGURAÇÕES (SOMENTE OPERACIONAL)
 // ==========================================
-
 async function carregarMeusDados() {
     try {
-        // Vai direto na fonte sem depender de variável global
         const { data: authData, error: authErr } = await supabase.auth.getUser();
         if (authErr || !authData.user) return;
 
@@ -1646,7 +1630,6 @@ async function carregarMeusDados() {
 
         if (perfilErr) throw perfilErr;
 
-        // Preenche os campos na marra
         document.getElementById('meu_email').value = perfil.email || '';
         document.getElementById('meu_nome').value = perfil.nome || '';
         document.getElementById('meu_celular').value = perfil.celular || '';
@@ -1666,7 +1649,6 @@ async function salvarMeusDados() {
     if (!nome || !email) return alert("Nome e E-mail são obrigatórios.");
 
     try {
-        // Confirma a sessão antes de salvar
         const { data: authData } = await supabase.auth.getUser();
         if (!authData.user) return alert("Sessão expirada. Faça login novamente.");
 
@@ -1681,7 +1663,6 @@ async function salvarMeusDados() {
 
         alert("Seus dados foram atualizados com sucesso!");
         
-        // Atualiza a variável global
         if (typeof usuarioAtual !== 'undefined') {
             usuarioAtual.email = email;
             usuarioAtual.nome = nome;
@@ -1689,7 +1670,6 @@ async function salvarMeusDados() {
             usuarioAtual.cpf = cpf;
         }
         
-        // Atualiza o nome exibido no Header
         const userNameHeader = document.getElementById('user-name');
         if (userNameHeader) {
             userNameHeader.innerText = `Olá, ${nome.split(' ')[0]}`; 
@@ -1709,9 +1689,7 @@ async function salvarMinhaSenha() {
     if (senha1.length < 6) return alert("A nova senha deve ter pelo menos 6 caracteres.");
 
     try {
-        // A função de mudar a própria senha usa o modulo auth do supabase
         const { error } = await supabase.auth.updateUser({ password: senha1 });
-        
         if (error) throw error;
 
         alert("Senha alterada com segurança! Na próxima vez, use a nova senha.");
@@ -1725,7 +1703,6 @@ async function salvarMinhaSenha() {
 // ==========================================
 // ADMIN: FUNÇÕES DE CADASTRO E USUÁRIOS
 // ==========================================
-
 async function adminCriarUsuario() {
     const nome = document.getElementById('cad_nome').value;
     const turno = document.getElementById('cad_turno').value;
@@ -1908,7 +1885,6 @@ async function deletarUsuario(userId) {
 // ==========================================
 // ADMIN: FUNÇÕES DE CADASTRO BASE
 // ==========================================
-
 async function adminCadastrarChave() {
     const nome = document.getElementById('cad_chave_nome').value;
     const cor = document.getElementById('cad_chave_cor').value;
@@ -1986,8 +1962,6 @@ async function adminCadastrarSimpress() {
 // ==========================================
 // TELA INICIAL E AUDITORIA DE PLANTÕES (ADMIN)
 // ==========================================
-
-// 🟢 FUNÇÃO AUXILIAR: Remove o "T" do banco e arruma o formato DD/MM/AAAA às HH:MM
 function formatarDataCrua(dataIso) {
     if (!dataIso) return '-';
     if (!dataIso.includes('T')) return dataIso;
@@ -2211,79 +2185,6 @@ async function visualizarPlantao(idPlantao) {
     } catch (err) { alert("Erro ao buscar detalhes do plantão: " + err.message); }
 }
 
-async function carregarPlantoesAdmin() {
-    try {
-        const { data: plantoes } = await supabase.from('plantoes').select('*').eq('visto_supervisao', false).order('created_at', { ascending: false });
-        const adminPlantoes = document.getElementById('admin-plantoes-lista');
-        if (adminPlantoes) {
-            adminPlantoes.innerHTML = plantoes && plantoes.length 
-                ? plantoes.map(p => `
-                    <tr>
-                        <td>${new Date(p.created_at).toLocaleDateString('pt-BR')}</td>
-                        <td>Das ${p.hora_assumiu} às ${p.hora_largou}</td>
-                        <td><button class="btn-primary btn-sm" style="background: #3498db;" onclick="visualizarPlantao('${p.id}')">👁️ Abrir Ficha de Visto</button></td>
-                    </tr>
-                `).join('') 
-                : '<tr><td colspan="3" style="text-align: center;">✅ Nada para auditar.</td></tr>';
-        }
-    } catch (err) {
-        console.error("Erro ao carregar Plantões no Admin:", err.message);
-    }
-}
-
-async function visualizarPlantao(idPlantao) {
-    try {
-        const { data: p, error } = await supabase.from('plantoes').select('*').eq('id', idPlantao).single();
-        if (error) throw error;
-
-        const conteudo = document.getElementById('detalhes-plantao-conteudo');
-        
-        // Incluí a visualização dos Técnicos da Equipe caso existam
-        conteudo.innerHTML = `
-            <div style="background: #f8f9fa; padding: 10px; border-radius: 5px; margin-bottom: 15px;">
-                <strong>Data de Registro:</strong> ${new Date(p.created_at).toLocaleDateString('pt-BR')} às ${new Date(p.created_at).toLocaleTimeString('pt-BR')}<br>
-                <strong>Turno do Técnico:</strong> ${p.hora_assumiu} às ${p.hora_largou}<br>
-                <strong>Técnicos na Equipe:</strong> ${p.tecnicos_plantao || 'Nenhum / Plantão Sozinho'}
-            </div>
-            
-            <p>📧 <strong>E-mails todos respondidos?</strong> <span style="color: ${p.emails_resp ? 'green' : 'red'}; font-weight: bold;">${p.emails_resp ? 'Sim' : 'Não'}</span> <br> 
-            <span style="color: #555;">${p.motivo_emails ? `↳ Obs: ${p.motivo_emails}` : ''}</span></p>
-
-            <p>🖨️ <strong>Há chamados pendentes?</strong> <span style="color: ${p.chamados_pend ? 'red' : 'green'}; font-weight: bold;">${p.chamados_pend ? 'Sim' : 'Não'}</span> <br> 
-            <span style="color: #555;">${p.motivo_chamados ? `↳ Obs: ${p.motivo_chamados}` : ''}</span></p>
-
-            <p>📝 <strong>MS Forms zerado?</strong> <span style="color: ${p.forms_zerado ? 'green' : 'red'}; font-weight: bold;">${p.forms_zerado ? 'Sim' : 'Não'}</span> <br> 
-            <span style="color: #555;">${p.motivo_forms ? `↳ Obs: ${p.motivo_forms}` : ''}</span></p>
-
-            <p>📚 <strong>Forms de Treinamentos zerado?</strong> <span style="color: ${p.forms_treinamento ? 'green' : 'red'}; font-weight: bold;">${p.forms_treinamento ? 'Sim' : 'Não'}</span> <br> 
-            <span style="color: #555;">${p.motivo_treinamento ? `↳ Obs: ${p.motivo_treinamento}` : ''}</span></p>
-
-            <p>💻 <strong>Todas as máquinas funcionando?</strong> <span style="color: ${p.maquinas_func ? 'green' : 'red'}; font-weight: bold;">${p.maquinas_func ? 'Sim' : 'Não'}</span> <br> 
-            <span style="color: #555;">${p.motivo_maquinas ? `↳ Obs: ${p.motivo_maquinas}` : ''}</span></p>
-
-            <p>🪑 <strong>Cadeiras nos lugares?</strong> <span style="color: ${p.cadeiras_lugar ? 'green' : 'red'}; font-weight: bold;">${p.cadeiras_lugar ? 'Sim' : 'Não'}</span> <br> 
-            <span style="color: #555;">${p.motivo_cadeiras ? `↳ Obs: ${p.motivo_cadeiras}` : ''}</span></p>
-
-            <p>📺 <strong>Painel de TV em operation?</strong> <span style="color: ${p.painel_tv ? 'green' : 'red'}; font-weight: bold;">${p.painel_tv ? 'Sim' : 'Não'}</span> <br> 
-            <span style="color: #555;">${p.motivo_tv ? `↳ Obs: ${p.motivo_tv}` : ''}</span></p>
-
-            <p>⚠️ <strong>Houve ocorrências no plantão?</strong> <span style="color: ${p.ocorrencias ? 'red' : 'green'}; font-weight: bold;">${p.ocorrencias ? 'Sim' : 'Não'}</span> <br> 
-            <span style="color: #555;">${p.motivo_ocorrencias ? `↳ Obs: ${p.motivo_ocorrencias}` : ''}</span></p>
-
-            <div style="margin-top: 15px;">
-                <strong>✍️ Assinatura do Técnico:</strong><br>
-                <img src="${p.assinatura_url}" style="max-width: 250px; height: auto; border: 1px solid #ccc; border-radius: 4px; background: #fff; margin-top: 5px;">
-            </div>
-        `;
-
-        document.getElementById('visto_plantao_id').value = idPlantao;
-        abrirModal('modal-ver-plantao');
-
-    } catch (err) {
-        alert("Erro ao buscar detalhes do plantão: " + err.message);
-    }
-}
-
 async function confirmarVistoPlantao() {
     const idPlantao = document.getElementById('visto_plantao_id').value;
     
@@ -2305,12 +2206,12 @@ async function confirmarVistoPlantao() {
         }
     );
 }
+
 // ==========================================
 // ABA: INVENTÁRIO
 // ==========================================
 async function abrirModalNovoEquipamento() {
     try {
-        // Puxa as categorias que criamos no Supabase
         const { data, error } = await supabase.from('tipos_equipamento').select('nome').order('nome');
         if (!error) {
             const sel = document.getElementById('inv_tipo');
@@ -2334,7 +2235,7 @@ async function salvarNovoTipoEquipamento() {
         alert("Novo tipo adicionado com sucesso!");
         document.getElementById('cad_tipo_nome').value = '';
         fecharModal('modal-novo-tipo');
-        abrirModalNovoEquipamento(); // Atualiza a lista na mesma hora
+        abrirModalNovoEquipamento(); 
     } catch (err) {
         alert("Erro: Este tipo talvez já exista. " + err.message);
     }
@@ -2369,7 +2270,6 @@ async function salvarEquipamento() {
     }
 }
 
-// 🟢 NOVAS FUNÇÕES PARA OS FILTROS DO INVENTÁRIO
 async function carregarTiposFiltro() {
     try {
         const { data, error } = await supabase.from('tipos_equipamento').select('nome').order('nome');
@@ -2385,16 +2285,14 @@ function limparFiltrosInventario() {
     document.getElementById('filtro_inv_tipo').value = '';
     document.getElementById('filtro_inv_status').value = '';
     document.getElementById('filtro_inv_serie').value = '';
-    carregarInventario(); // Recarrega a tabela mostrando todos
+    carregarInventario(); 
 }
 
 function verificarEnterFiltro(event) {
-    // Permite que o técnico aperte Enter no teclado para buscar, sem precisar clicar no botão
     if (event.key === 'Enter') {
         carregarInventario();
     }
 }
-
 
 async function carregarInventario() {
     const filtroTipo = document.getElementById('filtro_inv_tipo').value;
@@ -2402,30 +2300,17 @@ async function carregarInventario() {
     const filtroSerie = document.getElementById('filtro_inv_serie').value.trim();
 
     try {
-        // Inicia a query pegando todos os itens
         let query = supabase.from('inventario').select('*').order('created_at', { ascending: false });
 
-        // Se o usuário selecionou Tipo, filtra por Tipo
-        if (filtroTipo) {
-            query = query.eq('tipo', filtroTipo);
-        }
-        
-        // Se selecionou Status, filtra por Status
-        if (filtroStatus) {
-            query = query.eq('status', filtroStatus);
-        }
-        
-        // Se digitou Número de Série, usa "ilike" para achar mesmo que seja um pedaço do número
-        if (filtroSerie) {
-            query = query.ilike('numero_serie', `%${filtroSerie}%`);
-        }
+        if (filtroTipo) query = query.eq('tipo', filtroTipo);
+        if (filtroStatus) query = query.eq('status', filtroStatus);
+        if (filtroSerie) query = query.ilike('numero_serie', `%${filtroSerie}%`);
 
         const { data, error } = await query;
         if (error) throw error;
 
         const tbody = document.getElementById('lista-inventario-aba');
         if(tbody) {
-            // Operador ternário elegante para mostrar mensagem caso os filtros não achem nada
             tbody.innerHTML = data.length > 0 ? data.map(e => {
                 let corStatus = '#3498db'; // Azul para estoque
                 if (e.status === 'Em uso') corStatus = '#2ecc71'; // Verde
@@ -2632,7 +2517,6 @@ async function carregarCadastros() {
                             </div>
                         </td>
 
-                        <!-- 🟢 ESTRUTURA VISUAL EXATAMENTE IGUAL A DO AD (COMPACTA) -->
                         <td style="width: 120px; min-width: 110px;">
                             <div style="margin-bottom: 4px;">
                                 <span style="background-color: ${corStatus}; color: white; padding: 4px; border-radius: 4px; font-size: 10px; font-weight: bold; display: block; width: 100%; text-align: center;">${c.status}</span>
@@ -2652,6 +2536,7 @@ async function carregarCadastros() {
         }
     } catch (err) { console.error("Erro ao carregar cadastros:", err); }
 }
+
 async function alterarStatusCadastro(id, novoStatus) {
     let tipoModal = novoStatus === 'Realizado' ? 'sucesso' : (novoStatus === 'Aguardando' ? 'aviso' : 'info');
     
@@ -2684,66 +2569,29 @@ async function alterarStatusCadastro(id, novoStatus) {
     );
 }
 
-async function alterarStatusAD(id, novoStatus) {
-    let tipoModal = novoStatus === 'Realizado' ? 'sucesso' : 'info';
-
-    perguntar(
-        "Status da Solicitação (AD)", 
-        `Confirma a mudança do AD para "${novoStatus}"?`, 
-        tipoModal, 
-        async () => {
-            try {
-                let updateData = { status: novoStatus };
-                if (novoStatus === 'Realizado' && typeof window.usuarioAtual !== 'undefined' && window.usuarioAtual) {
-                    updateData.realizado_por_nome = window.usuarioAtual.nome;
-                } else if (novoStatus === 'Pendente') {
-                    updateData.realizado_por_nome = null;
-                    updateData.motivo_cancelamento = null; 
-                }
-
-                const { error } = await supabase.from('solicitacoes_ad').update(updateData).eq('id', id);
-                if (error) throw error;
-                
-                alert(`✅ AD marcado como ${novoStatus}!`);
-                carregarSolicitacoesAD();
-            } catch (err) { alert("❌ Erro ao atualizar AD: " + err.message); }
-        }
-    );
+function abrirModalObsCadastro(id, obsAtual) {
+    document.getElementById('obs_cad_id').value = id;
+    document.getElementById('obs_cad_texto').value = obsAtual && obsAtual !== 'undefined' ? obsAtual : '';
+    abrirModal('modal-obs-cadastro');
 }
 
-async function darBaixaAD(id) {
-    const motivo = prompt("⚠️ Atenção: Por favor, digite o motivo da baixa (cancelamento) da criação deste AD:");
-    if (motivo === null) return; 
-    if (motivo.trim() === "") return alert("⚠️ O motivo é obrigatório para dar baixa!");
+async function salvarObsCadastro() {
+    const id = document.getElementById('obs_cad_id').value;
+    const obs = document.getElementById('obs_cad_texto').value;
 
-    perguntar(
-        "Baixa em Solicitação AD", 
-        "Tem certeza que deseja cancelar e arquivar esta solicitação?", 
-        "perigo", 
-        async () => {
-            try {
-                let updateData = { 
-                    status: 'Cancelado',
-                    motivo_cancelamento: motivo
-                };
-                if (typeof window.usuarioAtual !== 'undefined' && window.usuarioAtual) {
-                    updateData.realizado_por_nome = window.usuarioAtual.nome;
-                }
-
-                const { error } = await supabase.from('solicitacoes_ad').update(updateData).eq('id', id);
-                if (error) throw error;
-
-                alert("✅ Solicitação de AD baixada com sucesso!");
-                carregarSolicitacoesAD();
-            } catch (err) { alert("❌ Erro ao dar baixa: " + err.message); }
-        }
-    );
+    try {
+        const { error } = await supabase.from('solicitacoes_cadastro').update({ observacao: obs }).eq('id', id);
+        if (error) throw error;
+        
+        fecharModal('modal-obs-cadastro');
+        carregarCadastros();
+    } catch (err) { alert("Erro ao salvar observação: " + err.message); }
 }
+
 // ==========================================
 // FUNÇÕES FALTANTES: SOLICITAÇÕES AD E TREINAMENTOS (EXTERNOS)
 // ==========================================
 
-// --- 1. GESTÃO DE SOLICITAÇÕES DE LOGIN AD ---
 function verificarEnterAD(event) {
     if (event.key === 'Enter') carregarSolicitacoesAD();
 }
@@ -2818,48 +2666,61 @@ async function carregarSolicitacoesAD() {
         }
     } catch (err) { console.error("Erro ao carregar AD:", err); }
 }
+
 async function alterarStatusAD(id, novoStatus) {
-    if(!confirm(`Confirma a mudança de status para "${novoStatus}"?`)) return;
+    let tipoModal = novoStatus === 'Realizado' ? 'sucesso' : 'info';
 
-    try {
-        let updateData = { status: novoStatus };
+    perguntar(
+        "Status da Solicitação (AD)", 
+        `Confirma a mudança do AD para "${novoStatus}"?`, 
+        tipoModal, 
+        async () => {
+            try {
+                let updateData = { status: novoStatus };
+                if (novoStatus === 'Realizado' && typeof window.usuarioAtual !== 'undefined' && window.usuarioAtual) {
+                    updateData.realizado_por_nome = window.usuarioAtual.nome;
+                } else if (novoStatus === 'Pendente') {
+                    updateData.realizado_por_nome = null;
+                    updateData.motivo_cancelamento = null; 
+                }
 
-        if (novoStatus === 'Realizado' && typeof window.usuarioAtual !== 'undefined' && window.usuarioAtual) {
-            updateData.realizado_por_nome = window.usuarioAtual.nome;
-        } else if (novoStatus === 'Pendente') {
-            updateData.realizado_por_nome = null;
-            updateData.motivo_cancelamento = null; 
+                const { error } = await supabase.from('solicitacoes_ad').update(updateData).eq('id', id);
+                if (error) throw error;
+                
+                alert(`✅ AD marcado como ${novoStatus}!`);
+                carregarSolicitacoesAD();
+            } catch (err) { alert("❌ Erro ao atualizar AD: " + err.message); }
         }
-
-        const { error } = await supabase.from('solicitacoes_ad').update(updateData).eq('id', id);
-        if (error) throw error;
-        
-        carregarSolicitacoesAD();
-    } catch (err) { alert("Erro ao atualizar AD: " + err.message); }
+    );
 }
 
 async function darBaixaAD(id) {
-    const motivo = prompt("⚠️ Atenção: Por favor, digite o motivo da baixa (cancelamento) desta criação de AD:");
-    
+    const motivo = prompt("⚠️ Atenção: Por favor, digite o motivo da baixa (cancelamento) da criação deste AD:");
     if (motivo === null) return; 
-    if (motivo.trim() === "") return alert("O motivo é obrigatório para dar baixa!");
+    if (motivo.trim() === "") return alert("⚠️ O motivo é obrigatório para dar baixa!");
 
-    try {
-        let updateData = { 
-            status: 'Cancelado',
-            motivo_cancelamento: motivo
-        };
+    perguntar(
+        "Baixa em Solicitação AD", 
+        "Tem certeza que deseja cancelar e arquivar esta solicitação?", 
+        "perigo", 
+        async () => {
+            try {
+                let updateData = { 
+                    status: 'Cancelado',
+                    motivo_cancelamento: motivo
+                };
+                if (typeof window.usuarioAtual !== 'undefined' && window.usuarioAtual) {
+                    updateData.realizado_por_nome = window.usuarioAtual.nome;
+                }
 
-        if (typeof window.usuarioAtual !== 'undefined' && window.usuarioAtual) {
-            updateData.realizado_por_nome = window.usuarioAtual.nome;
+                const { error } = await supabase.from('solicitacoes_ad').update(updateData).eq('id', id);
+                if (error) throw error;
+
+                alert("✅ Solicitação de AD baixada com sucesso!");
+                carregarSolicitacoesAD();
+            } catch (err) { alert("❌ Erro ao dar baixa: " + err.message); }
         }
-
-        const { error } = await supabase.from('solicitacoes_ad').update(updateData).eq('id', id);
-        if (error) throw error;
-
-        alert("Solicitação baixada com sucesso!");
-        carregarSolicitacoesAD();
-    } catch (err) { alert("Erro ao dar baixa: " + err.message); }
+    );
 }
 
 // --- 2. GESTÃO DE SOLICITAÇÕES DE TREINAMENTO (VINDAS DO SITE) ---
@@ -2923,12 +2784,20 @@ async function carregarSolicitacoesTreinamento() {
 }
 
 async function alterarStatusTreinamentoExt(id, novoStatus) {
-    if(!confirm(`Confirma a mudança de status para "${novoStatus}"?`)) return;
+    let tipoModal = novoStatus === 'Cancelado' ? 'perigo' : 'info';
 
-    try {
-        const { error } = await supabase.from('solicitacoes_treinamento').update({ status: novoStatus }).eq('id', id);
-        if (error) throw error;
-        
-        carregarSolicitacoesTreinamento();
-    } catch (err) { alert("Erro ao atualizar Treinamento: " + err.message); }
+    perguntar(
+        "Alterar Solicitação (Site)", 
+        `Confirma a mudança de status desta requisição para "${novoStatus}"?`, 
+        tipoModal, 
+        async () => {
+            try {
+                const { error } = await supabase.from('solicitacoes_treinamento').update({ status: novoStatus }).eq('id', id);
+                if (error) throw error;
+                
+                alert(`✅ Solicitação alterada para ${novoStatus}!`);
+                carregarSolicitacoesTreinamento();
+            } catch (err) { alert("❌ Erro ao atualizar Treinamento: " + err.message); }
+        }
+    );
 }
