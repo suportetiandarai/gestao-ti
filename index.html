@@ -32,7 +32,7 @@
                 <button class="tab-btn active" onclick="abrirAba('aba-inicio')">🏠 Início</button>
                 <button class="tab-btn" onclick="abrirAba('aba-plantao')">📋 Passagem de Plantão</button>
                 <button class="tab-btn" onclick="abrirAba('aba-chaves')">🔑 Chaves</button>
-                <button class="tab-btn" onclick="abrirAba('aba-ocorrencias')">⚠️ Ocorrências</button>
+                <button class="tab-btn" onclick="abrirAba('aba-ocorrencias')">⚠️ Ocorrências Pendentes</button>
                 <button class="tab-btn" onclick="abrirAba('aba-toner')">🖨️ Toner/Simpress</button>
                 <button class="tab-btn" onclick="abrirAba('aba-treinamentos')">📚 Treinamentos Agendados</button>
                 <button class="tab-btn" onclick="abrirAba('aba-solicita-treinamento')">🎓 Solicitações Treinamento</button>
@@ -177,7 +177,7 @@
 
                                 <div class="checkbox-group mt-10">
                                     <input type="checkbox" id="p_forms" checked onchange="toggleCondicionalCheckbox(this, 'div_m_forms', false)">
-                                    <label for="p_forms">Forms de cadastro está zerado?</label>
+                                    <label for="p_forms">Cadastro está zerado?</label>
                                 </div>
                                 <div id="div_m_forms" class="condicional hidden">
                                     <label>Quais e quantos são? Motivo de não ter zerado:</label>
@@ -186,10 +186,10 @@
 
                                 <div class="checkbox-group mt-10">
                                     <input type="checkbox" id="p_forms_treinamento" checked onchange="toggleCondicionalCheckbox(this, 'div_m_treinamento', false)">
-                                    <label for="p_forms_treinamento">Forms de Treinamentos zerado?</label>
+                                    <label for="p_forms_treinamento">Treinamentos Agendados?</label>
                                 </div>
                                 <div id="div_m_treinamento" class="condicional hidden">
-                                    <label>Motivo de não ter zerado os treinamentos:</label>
+                                    <label>Motivo de não ter agendado os treinamentos:</label>
                                     <textarea id="p_motivo_treinamento"></textarea>
                                 </div>
 
