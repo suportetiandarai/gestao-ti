@@ -2847,22 +2847,3 @@ async function carregarSolicitacoesTreinamento() {
         }
     } catch (err) { console.error("Erro ao carregar solicitações de treinamento:", err); }
 }
-
-async function alterarStatusTreinamentoExt(id, novoStatus) {
-    let tipoModal = novoStatus === 'Cancelado' ? 'perigo' : 'info';
-
-    perguntar(
-        "Alterar Solicitação (Site)", 
-        `Confirma a mudança desta requisição para "${novoStatus}"?`, 
-        tipoModal, 
-        async () => {
-            try {
-                const { error } = await supabase.from('solicitacoes_treinamento').update({ status: novoStatus }).eq('id', id);
-                if (error) throw error;
-                
-                alert(`✅ Solicitação movida para ${novoStatus}!`);
-                carregarSolicitacoesTreinamento();
-            } catch (err) { alert("❌ Erro ao atualizar Treinamento: " + err.message); }
-        }
-    );
-}
