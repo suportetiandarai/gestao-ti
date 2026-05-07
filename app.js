@@ -158,6 +158,17 @@ window.fazerLogout = async function() {
     window.location.reload(); 
 };
 
+// 🟢 ATUALIZAÇÃO AUTOMÁTICA DO DASHBOARD (LOOP DE 5 SEGUNDOS)
+setInterval(() => {
+    // Só executa a atualização se a aba Início estiver na tela
+    const abaInicio = document.getElementById('aba-inicio');
+    const estaLogado = document.getElementById('app-wrapper').offsetParent !== null;
+
+    if (estaLogado && abaInicio && !abaInicio.classList.contains('hidden')) {
+        carregarResumoDashboard();
+    }
+}, 5000); // Coloquei 5000 (5 segundos) para ficar suave e não sobrecarregar o Supabase!
+
 // ==========================================
 // TROCA DE ABAS E MODAIS
 // ==========================================
