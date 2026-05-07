@@ -33,7 +33,7 @@
                 <button class="tab-btn" onclick="abrirAba('aba-plantao')">📋 Passagem de Plantão</button>
                 <button class="tab-btn" onclick="abrirAba('aba-chaves')">🔑 Chaves</button>
                 <button class="tab-btn" onclick="abrirAba('aba-ocorrencias')">⚠️ Ocorrências</button>
-                <button class="tab-btn" onclick="abrirAba('aba-toner')">🖨️ Toner/Chamados</button>
+                <button class="tab-btn" onclick="abrirAba('aba-toner')">🖨️ Toner/Simpress</button>
                 <button class="tab-btn" onclick="abrirAba('aba-treinamentos')">📚 Treinamentos Agendados</button>
                 <button class="tab-btn" onclick="abrirAba('aba-solicita-treinamento')">🎓 Solicitações Treinamento</button>
                 <button class="tab-btn" onclick="abrirAba('aba-solicitacoes-ad')">💻 Solicitações AD</button>
@@ -1025,9 +1025,31 @@
                 <label style="display: block; margin-bottom: 5px; font-weight: bold; font-size: 14px;">Foto da Página de Teste (Assinada):</label>
                 <input type="file" id="tt_foto" accept="image/*" required>
                 
-                <input type="text" id="tt_setor" placeholder="Setor (Ex: Recepção, CTI)" required>
-                <input type="text" id="tt_andar" placeholder="Andar" required>
-                <input type="text" id="tt_predio" placeholder="Prédio" required>
+                <div class="form-row" style="display: flex; gap: 15px; margin-bottom: 12px; margin-top: 10px;">
+                    <div class="form-group" style="flex: 1;">
+                        <label>Prédio:</label>
+                        <select id="tt_predio" onchange="atualizarAndares('tt_predio', 'tt_andar')" required>
+                            <option value="">Selecione...</option>
+                            <option value="UPI">UPI</option>
+                            <option value="UPE">UPE</option>
+                            <option value="PIMAG">PIMAG</option>
+                            <option value="RADIOTERAPIA">RADIOTERAPIA</option>
+                            <option value="TRAUMA">TRAUMA</option>
+                            <option value="CASA ROSA">CASA ROSA</option>
+                        </select>
+                    </div>
+                    <div class="form-group" style="flex: 1;">
+                        <label>Andar:</label>
+                        <select id="tt_andar" required>
+                            <option value="">Selecione o prédio...</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="form-group" style="margin-bottom: 12px;">
+                    <label>Setor:</label>
+                    <input type="text" id="tt_setor" placeholder="Ex: Recepção, Posto 3, CTI..." required>
+                </div>
                 
                 <div class="signature-section mt-10">
                     <label>Sua Assinatura:</label>
