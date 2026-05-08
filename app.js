@@ -1228,12 +1228,24 @@ function abrirModalTrocaToner(idToner) {
     abrirModal('modal-troca-toner');
 }
 
-function abrirModalAtenderChamado(idChamado) {
+// 🟢 Abre o Modal e carrega a lista de Técnicos
+async function abrirModalAtenderChamado(idChamado) {
     document.getElementById('ac_chamado_id').value = idChamado;
     limparCanvas('canvas-atender-chamado');
+    
+    try {
+        const { data, error } = await supabase.from('profiles').select('id, nome').order('nome');
+        if (!error) {
+            const sel = document.getElementById('ac_tecnico');
+            sel.innerHTML = '<option value="">Selecione o Técnico...</option>' + 
+                            data.map(u => `<option value="${u.nome}">${u.nome}</option>`).join('');
+        }
+    } catch (e) { 
+        console.error("Erro ao carregar técnicos:", e); 
+    }
+
     abrirModal('modal-atender-chamado');
 }
-
 async function salvarTrocaToner() {
     const tonerId = document.getElementById('tt_toner_id').value;
     const inputFoto = document.getElementById('tt_foto');
