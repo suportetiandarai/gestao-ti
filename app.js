@@ -2034,40 +2034,170 @@ async function adminCadastrarToner() {
     } catch (err) { alert('Erro: ' + err.message); }
 }
 
+// 🟢 SALVAR NOVO CHAMADO SIMPRESS (Sem data manual, local unificado)
 async function adminCadastrarSimpress() {
     const numero = document.getElementById('cad_sim_numero').value;
     const modelo = document.getElementById('cad_sim_modelo').value;
     const serie = document.getElementById('cad_sim_serie').value;
-    const local = document.getElementById('cad_sim_local').value;
+    const predio = document.getElementById('cad_sim_predio').value;
+    const andar = document.getElementById('cad_sim_andar').value;
+    const setor = document.getElementById('cad_sim_setor').value;
 
-    if(!numero || !modelo || !serie || !local) return alert('Preencha todos os campos!');
+    if (!numero || !modelo || !serie || !predio || !andar || !setor) {
+        return alert("⚠️ Por favor, preencha todos os campos obrigatórios.");
+    }
+
+    // Junta as 3 informações num formato padronizado
+    const localizacaoCompleta = `${predio} / ${setor} (${andar})`;
 
     try {
-        const { error } = await supabase.from('chamado_simpress').insert([
-            { 
-                numero_chamado: numero, 
-                modelo_impressora: modelo, 
-                numero_serie: serie, 
-                setor_localizada: local,
-                status: 'Aberto' 
-            }
-        ]);
-        
+        const { error } = await supabase.from('chamado_simpress').insert([{
+            numero_chamado: numero,
+            modelo_impressora: modelo,
+            numero_serie: serie,
+            setor_localizada: localizacaoCompleta,
+            status: 'Aberto'
+            // O Supabase gera automaticamente a data de abertura (created_at)
+        }]);
+
         if (error) throw error;
-        
-        alert('Chamado Simpress registrado com sucesso!');
+
+        alert("✅ Chamado Simpress registrado com sucesso!");
         fecharModal('modal-simpress');
+        document.getElementById('form-cad-simpress').reset();
         
-        document.getElementById('cad_sim_numero').value = '';
-        document.getElementById('cad_sim_modelo').value = '';
-        document.getElementById('cad_sim_serie').value = '';
-        document.getElementById('cad_sim_local').value = '';
-
         carregarListaChamados();
-
-    } catch (err) { alert('Erro ao salvar chamado: ' + err.message); }
+        if(typeof carregarResumoDashboard === 'function') carregarResumoDashboard();
+    } catch (err) { alert("❌ Erro ao abrir chamado: " + err.message); }
 }
 
+// 🟢 CARREGAR LISTA DE CHAMADOS ABERTOS (Com data corrigida)
+async function carregarListaChamados() {
+    try {
+        const { data, error } = await supabase.from('chamado_simpress').select('*').eq('status', 'Aberto').order('id', { ascending: false });
+        if (error) throw error;
+
+        const tbody = document.getElementById('lista-chamados-aba');
+        if(tbody) {
+            tbody.innerHTML = data.length > 0 ? data.map(c => {
+                // Formatação blindada da data de abertura
+                const dataAberta = c.created_at ? new Date(c.created_at).toLocaleDateString('pt-BR') : '-';
+                let corStatus = '#f39c12'; 
+
+                let botoesAcao = `
+                    <div style="display: flex; gap: 4px; flex-wrap: nowrap; justify-content: center;">
+                        <button class="btn-success btn-sm" style="flex: 1; margin: 0; padding: 5px 2px; font-size: 11px;" onclick="abrirModalAtenderChamado('${c.id}')">✔️ Atender</button>
+                        <button class="btn-danger btn-sm" style="flex: 1; margin: 0; padding: 5px 2px; font-size: 11px;" onclick="suspenderChamado('${c.id}')">⏸️ Suspender</button>
+                    </div>
+                `;
+
+                return `
+                    <tr>
+                        <td style="font-size: 12px;"><strong>${c.numero_chamado}</strong><br><small style="color: #64748b;">Abertura: ${dataAberta}</small></td>
+                        <td style="font-size: 12px;">${c.modelo_impressora} <br><small>Série: ${c.numero_serie}</small></td>
+                        <td style="font-size: 12px;">${c.setor_localizada}</td>
+                        <td style="width: 140px; min-width: 140px;">
+                            <div style="margin-bottom: 6px;">
+                                <span style="background-color: ${corStatus}; color: white; padding: 5px; border-radius: 4px; font-size: 11px; font-weight: bold; display: block; width: 100%; text-align: center;">${c.status}</span>
+                            </div>
+                            ${botoesAcao}
+                        </td>
+                    </tr>
+                `;
+            }).join('') : '<tr><td colspan="4" style="text-align: center; color: #7f8c8d; padding: 20px;">Nenhum chamado aberto.</td></tr>';
+        }
+
+        if(typeof carregarHistoricoChamados === 'function') carregarHistoricoChamados();
+    } catch (err) { console.error("Erro ao carregar chamados:", err.message); }
+}
+
+// 🟢 RENDERIZAR TABELA DO HISTÓRICO
+function renderizarTabelaHistoricoChamados() {
+    const tbody = document.getElementById('lista-historico-chamados-aba');
+    const spanPagina = document.getElementById('span-pagina-historico-chamado');
+    if (!tbody) return;
+
+    const totalPaginas = Math.ceil(dadosHistoricoChamados.length / itensPorPaginaChamado) || 1;
+    if (spanPagina) spanPagina.innerText = `Página ${paginaAtualChamado} de ${totalPaginas}`;
+
+    const inicio = (paginaAtualChamado - 1) * itensPorPaginaChamado;
+    const fim = inicio + itensPorPaginaChamado;
+    const itensPagina = dadosHistoricoChamados.slice(inicio, fim);
+
+    tbody.innerHTML = itensPagina.length > 0 ? itensPagina.map(c => {
+        const dataAbertura = c.created_at ? new Date(c.created_at).toLocaleDateString('pt-BR') : '-';
+        // Pega a data de resolução que vamos salvar no banco de dados automaticamente
+        const dataRes = c.data_resolucao ? new Date(c.data_resolucao).toLocaleDateString('pt-BR') : '-';
+        
+        let corStatus = c.status === 'Atendido' ? '#2ecc71' : '#e74c3c';
+
+        return `
+            <tr>
+                <td style="font-size: 12px;"><strong>${c.numero_chamado}</strong><br><small style="color: #64748b;">Abertura: ${dataAbertura}</small></td>
+                <td style="font-size: 12px;">${c.modelo_impressora} <br><small>Série: ${c.numero_serie}</small></td>
+                <td style="font-size: 12px;">${c.setor_localizada}</td>
+                <td style="width: 140px; min-width: 140px;">
+                    <div style="margin-bottom: 6px;">
+                        <span style="background-color: ${corStatus}; color: white; padding: 5px; border-radius: 4px; font-size: 11px; font-weight: bold; display: block; width: 100%; text-align: center;">${c.status}</span>
+                    </div>
+                    ${c.observacao ? `<div style="margin-top: 6px; font-size: 10px; color: #475569; background: #f1f5f9; padding: 4px; border-radius: 4px; text-align: center; line-height: 1.3;"><strong>Obs:</strong> ${c.observacao}</div>` : ''}
+                </td>
+                <td style="font-size: 11px;">
+                    <strong>${c.tecnico_acompanhante || '-'}</strong><br>
+                    <small style="color: #64748b;">Resolução: ${dataRes}</small>
+                </td>
+            </tr>
+        `;
+    }).join('') : '<tr><td colspan="5" style="text-align: center; color: #7f8c8d; padding: 20px;">Nenhum registro encontrado no histórico.</td></tr>';
+}
+
+// 🟢 FUNÇÕES QUE GRAVAM A DATA DE RESOLUÇÃO AUTOMATICAMENTE
+async function salvarAtendimentoChamado() {
+    const id = document.getElementById('ac_chamado_id').value;
+    const solucao = document.getElementById('ac_solucao').value;
+    const temObs = document.getElementById('ac_tem_obs').checked;
+    const obs = temObs ? document.getElementById('ac_obs_texto').value : '';
+    const tecnico = document.getElementById('ac_tecnico').value;
+    const canvas = document.getElementById('canvas-atender-chamado');
+
+    if (!solucao || !tecnico) return alert("Preencha a solução e o técnico.");
+    if (isCanvasVazio(canvas)) return alert("Assinatura obrigatória.");
+
+    try {
+        const sigUrl = await uploadAssinatura(canvas, 'simpress');
+        
+        const { error } = await supabase.from('chamado_simpress').update({
+            status: 'Atendido',
+            observacao: solucao + (obs ? ` | Obs: ${obs}` : ''),
+            tecnico_acompanhante: tecnico,
+            assinatura_tecnico_url: sigUrl,
+            data_resolucao: new Date().toISOString() // 🟢 Grava a data e hora exata do clique
+        }).eq('id', id);
+
+        if (error) throw error;
+        
+        alert("✅ Chamado atendido!");
+        fecharModal('modal-atender-chamado');
+        carregarListaChamados();
+    } catch (err) { alert("❌ Erro: " + err.message); }
+}
+
+async function suspenderChamado(id) {
+    pedirMotivo("Suspender Chamado", "Digite o motivo da suspensão deste chamado Simpress:", "Descreva a pendência...", "aviso", async (motivo) => {
+        try {
+            const { error } = await supabase.from('chamado_simpress').update({ 
+                status: 'Suspenso', 
+                observacao: motivo,
+                data_resolucao: new Date().toISOString() // 🟢 Grava a data e hora exata do clique
+            }).eq('id', id);
+            
+            if (error) throw error;
+            
+            alert("✅ Chamado suspenso com sucesso!");
+            carregarListaChamados();
+        } catch (err) { alert("❌ Erro ao suspender: " + err.message); }
+    });
+}
 // ==========================================
 // TELA INICIAL E AUDITORIA DE PLANTÕES (ADMIN)
 // ==========================================
