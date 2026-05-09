@@ -1530,11 +1530,11 @@ function renderizarTabelaHistorico() {
         const dataFormatada = new Date(t.data_hora).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }).replace(',', ' às');
         let corStatus = t.status === 'Concluído' ? '#2ecc71' : '#e74c3c';
         
-        // 🟢 LÓGICA DA DATA: Puxa a data exata da resolução
+        // 🟢 LÓGICA DA DATA DE RESOLUÇÃO
         const dataFim = t.data_resolucao || t.updated_at;
         const dataFinalizacao = dataFim ? new Date(dataFim).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' }) : 'Sem data';
         
-        // 🟢 LÓGICA DO TÉCNICO: Mostra o nome e a data (Se não tiver nome, avisa que não foi informado)
+        // 🟢 NOME DO TÉCNICO + DATA (Alinhado ao centro, corrigido o erro de duplicidade)
         const nomeTecnico = t.responsavel_conclusao || 'Não informado';
         let responsavel = `<span style="font-size: 11px; display: block; text-align: center;"><strong>${nomeTecnico}</strong><br><small style="color: #64748b;">${dataFinalizacao}</small></span>`;
 
@@ -1625,44 +1625,37 @@ async function salvarEdicaoTreinamento() {
     }
 }
 
-// 🟢 CANCELAR TREINAMENTO (Com Motivo e Data Automática)
+
 // 🟢 CANCELAR TREINAMENTO (Com Motivo, Técnico e Data)
 async function cancelarTreinamento(id) {
     pedirMotivo(
         "Cancelar Agendamento", 
-        "Motivo do cancelamento deste treinamento:", 
-        "Ex: Colaborador faltou, erro de agendamento...", 
+        "Digite o motivo do cancelamento deste treinamento:", 
+        "Motivo...", 
         "perigo", 
         async (motivo) => {
             
-            // 🟢 Pede o nome de quem está cancelando
+            // 🟢 Pede o nome de quem está cancelando para gravar no histórico
             let nomeTecnico = prompt("Digite o nome do Técnico que está cancelando:");
-            if (!nomeTecnico) nomeTecnico = 'Sistema / Não informado';
+            if (!nomeTecnico) nomeTecnico = 'Não informado';
 
             try {
-                let updateData = { 
-                    status: 'Cancelado', 
+                const { error } = await supabase.from('treinamentos').update({
+                    status: 'Cancelado',
                     motivo_cancelamento: motivo,
-                    responsavel_conclusao: nomeTecnico, // Salva o técnico
-                    data_resolucao: new Date().toISOString() // Salva a hora
-                };
+                    responsavel_conclusao: nomeTecnico, // 🟢 Salva o técnico
+                    data_resolucao: new Date().toISOString() // 🟢 Salva a hora exata
+                }).eq('id', id);
                 
-                const { error } = await supabase.from('treinamentos').update(updateData).eq('id', id);
                 if (error) throw error;
 
-                const { data: treinamento } = await supabase.from('treinamentos').select('solicitacao_id').eq('id', id).single();
-                if (treinamento && treinamento.solicitacao_id) {
-                    await supabase.from('solicitacoes_treinamento')
-                        .update({ status: 'Cancelado' })
-                        .eq('id', treinamento.solicitacao_id);
-                }
-
                 alert("✅ Treinamento cancelado e enviado para o histórico!");
+                carregarListaTreinamentos();
                 
-                if (typeof carregarListaTreinamentos === 'function') carregarListaTreinamentos();
-                if (typeof carregarHistoricoTreinamentos === 'function') carregarHistoricoTreinamentos();
-                if (typeof carregarResumoDashboard === 'function') carregarResumoDashboard();
-
+                // 🟢 Agora ele recarrega o histórico automático!
+                if(typeof carregarHistoricoTreinamentos === 'function') carregarHistoricoTreinamentos();
+                if(typeof carregarResumoDashboard === 'function') carregarResumoDashboard();
+                
             } catch (err) { alert("❌ Erro ao cancelar: " + err.message); }
         }
     );
