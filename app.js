@@ -1529,7 +1529,15 @@ function renderizarTabelaHistorico() {
     tbody.innerHTML = itensPagina.length > 0 ? itensPagina.map(t => {
         const dataFormatada = new Date(t.data_hora).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }).replace(',', ' às');
         let corStatus = t.status === 'Concluído' ? '#2ecc71' : '#e74c3c';
-        let responsavel = t.responsavel_conclusao ? `<span style="font-size: 11px;"><strong>${t.responsavel_conclusao}</strong></span>` : '-';
+        
+        // 🟢 LÓGICA DA DATA DE RESOLUÇÃO
+        const dataFim = t.data_resolucao || t.updated_at;
+        const dataFinalizacao = dataFim ? new Date(dataFim).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' }) : '';
+        
+        // 🟢 NOME DO TÉCNICO + DATA (Alinhado ao centro)
+        let responsavel = t.responsavel_conclusao 
+            ? `<span style="font-size: 11px; display: block; text-align: center;"><strong>${t.responsavel_conclusao}</strong><br><small style="color: #64748b;">${dataFinalizacao}</small></span>` 
+            : '<span style="display: block; text-align: center;">-</span>';
 
         return `
             <tr>
@@ -1549,7 +1557,6 @@ function renderizarTabelaHistorico() {
         `;
     }).join('') : '<tr><td colspan="5" style="text-align: center; color: #7f8c8d; padding: 20px;">Nenhum registro encontrado no histórico.</td></tr>';
 }
-
 function mudarPaginaHistorico(direcao) {
     const totalPaginas = Math.ceil(dadosHistoricoTr.length / itensPorPaginaTr) || 1;
     paginaAtualHistorico += direcao;
@@ -1690,7 +1697,8 @@ async function salvarTreinamentoConcluido() {
         await supabase.from('treinamentos').update({
             status: 'Concluído',
             responsavel_conclusao: tecnico,
-            assinatura_url: sigUrl
+            assinatura_url: sigUrl,
+            data_resolucao: new Date().toISOString() // 🟢 FORÇA O REGISTRO EXATO DA HORA AQUI
         }).eq('id', id);
 
         if (treinamento && treinamento.solicitacao_id) {
