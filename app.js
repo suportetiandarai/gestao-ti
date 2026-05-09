@@ -2952,6 +2952,10 @@ async function carregarCadastros() {
         }
     } catch (err) { console.error("Erro ao carregar Cadastros:", err); }
 }
+// ==========================================
+// FUNÇÕES DE STATUS (CADASTROS E AD)
+// ==========================================
+
 async function alterarStatusCadastro(id, novoStatus) {
     let tipoModal = novoStatus === 'Realizado' ? 'sucesso' : (novoStatus === 'Aguardando' ? 'aviso' : 'info');
     
@@ -2966,12 +2970,13 @@ async function alterarStatusCadastro(id, novoStatus) {
                     if (typeof window.usuarioAtual !== 'undefined' && window.usuarioAtual) {
                         updateData.realizado_por_nome = window.usuarioAtual.nome;
                         updateData.realizado_por_email = window.usuarioAtual.email;
-                        updateData.data_realizado = new Date().toISOString();
+                        // 🟢 Força o registro exato da hora na coluna correta
+                        updateData.data_resolucao = new Date().toISOString(); 
                     }
                 } else {
                     updateData.realizado_por_nome = null;
                     updateData.realizado_por_email = null;
-                    updateData.data_realizado = null;
+                    updateData.data_resolucao = null; 
                 }
 
                 const { error } = await supabase.from('solicitacoes_cadastro').update(updateData).eq('id', id);
@@ -2996,9 +3001,12 @@ async function alterarStatusAD(id, novoStatus) {
                 let updateData = { status: novoStatus };
                 if (novoStatus === 'Realizado' && typeof window.usuarioAtual !== 'undefined' && window.usuarioAtual) {
                     updateData.realizado_por_nome = window.usuarioAtual.nome;
+                    // 🟢 Força o registro exato da hora
+                    updateData.data_resolucao = new Date().toISOString();
                 } else if (novoStatus === 'Pendente') {
                     updateData.realizado_por_nome = null;
                     updateData.motivo_cancelamento = null; 
+                    updateData.data_resolucao = null;
                 }
 
                 const { error } = await supabase.from('solicitacoes_ad').update(updateData).eq('id', id);
@@ -3019,7 +3027,13 @@ async function darBaixaAD(id) {
         "perigo", 
         async (motivo) => {
             try {
-                let updateData = { status: 'Cancelado', motivo_cancelamento: motivo };
+                // 🟢 Adicionada a hora exata da baixa
+                let updateData = { 
+                    status: 'Cancelado', 
+                    motivo_cancelamento: motivo,
+                    data_resolucao: new Date().toISOString() 
+                };
+                
                 if (typeof window.usuarioAtual !== 'undefined' && window.usuarioAtual) {
                     updateData.realizado_por_nome = window.usuarioAtual.nome;
                 }
@@ -3032,7 +3046,6 @@ async function darBaixaAD(id) {
         }
     );
 }
-
 // ==========================================
 // FUNÇÕES FALTANTES: SOLICITAÇÕES AD E TREINAMENTOS (EXTERNOS)
 // ==========================================
