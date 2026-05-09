@@ -1530,14 +1530,13 @@ function renderizarTabelaHistorico() {
         const dataFormatada = new Date(t.data_hora).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }).replace(',', ' às');
         let corStatus = t.status === 'Concluído' ? '#2ecc71' : '#e74c3c';
         
-        // 🟢 LÓGICA DA DATA DE RESOLUÇÃO
+        // 🟢 LÓGICA DA DATA: Puxa a data exata da resolução
         const dataFim = t.data_resolucao || t.updated_at;
-        const dataFinalizacao = dataFim ? new Date(dataFim).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' }) : '';
+        const dataFinalizacao = dataFim ? new Date(dataFim).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' }) : 'Sem data';
         
-        // 🟢 NOME DO TÉCNICO + DATA (Alinhado ao centro)
-        let responsavel = t.responsavel_conclusao 
-            ? `<span style="font-size: 11px; display: block; text-align: center;"><strong>${t.responsavel_conclusao}</strong><br><small style="color: #64748b;">${dataFinalizacao}</small></span>` 
-            : '<span style="display: block; text-align: center;">-</span>';
+        // 🟢 LÓGICA DO TÉCNICO: Mostra o nome e a data (Se não tiver nome, avisa que não foi informado)
+        const nomeTecnico = t.responsavel_conclusao || 'Não informado';
+        let responsavel = `<span style="font-size: 11px; display: block; text-align: center;"><strong>${nomeTecnico}</strong><br><small style="color: #64748b;">${dataFinalizacao}</small></span>`;
 
         return `
             <tr>
@@ -1627,30 +1626,30 @@ async function salvarEdicaoTreinamento() {
 }
 
 // 🟢 CANCELAR TREINAMENTO (Com Motivo e Data Automática)
+// 🟢 CANCELAR TREINAMENTO (Com Motivo, Técnico e Data)
 async function cancelarTreinamento(id) {
     pedirMotivo(
         "Cancelar Agendamento", 
         "Motivo do cancelamento deste treinamento:", 
-        "Ex: Colaborador faltou, erro de agendamento, etc...", 
+        "Ex: Colaborador faltou, erro de agendamento...", 
         "perigo", 
         async (motivo) => {
+            
+            // 🟢 Pede o nome de quem está cancelando
+            let nomeTecnico = prompt("Digite o nome do Técnico que está cancelando:");
+            if (!nomeTecnico) nomeTecnico = 'Sistema / Não informado';
+
             try {
                 let updateData = { 
                     status: 'Cancelado', 
                     motivo_cancelamento: motivo,
-                    data_resolucao: new Date().toISOString() // 🟢 FORÇA O REGISTRO EXATO DA HORA AQUI
+                    responsavel_conclusao: nomeTecnico, // Salva o técnico
+                    data_resolucao: new Date().toISOString() // Salva a hora
                 };
                 
-                // Registra o nome de quem executou o cancelamento
-                if (typeof window.usuarioAtual !== 'undefined' && window.usuarioAtual) {
-                    updateData.responsavel_conclusao = window.usuarioAtual.nome;
-                }
-
-                // 1. Atualiza o status na tabela de treinamentos
                 const { error } = await supabase.from('treinamentos').update(updateData).eq('id', id);
                 if (error) throw error;
 
-                // 2. Se esse treinamento veio de uma solicitação, muda o status dela também para não ficar pendente
                 const { data: treinamento } = await supabase.from('treinamentos').select('solicitacao_id').eq('id', id).single();
                 if (treinamento && treinamento.solicitacao_id) {
                     await supabase.from('solicitacoes_treinamento')
@@ -1660,7 +1659,6 @@ async function cancelarTreinamento(id) {
 
                 alert("✅ Treinamento cancelado e enviado para o histórico!");
                 
-                // Atualiza as tabelas da tela instantaneamente
                 if (typeof carregarListaTreinamentos === 'function') carregarListaTreinamentos();
                 if (typeof carregarHistoricoTreinamentos === 'function') carregarHistoricoTreinamentos();
                 if (typeof carregarResumoDashboard === 'function') carregarResumoDashboard();
