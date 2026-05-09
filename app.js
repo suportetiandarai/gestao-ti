@@ -1149,8 +1149,9 @@ async function carregarListaChamados() {
             tbody.innerHTML = data.length > 0 ? data.map(c => {
                 let corStatus = '#f39c12'; 
                 
-                // Evita erro se a data não existir
-                const dataAberta = c.created_at ? new Date(c.created_at).toLocaleDateString('pt-BR') : '-';
+                // 🟢 TRAVA DE SEGURANÇA: Procura a data na coluna original ou na coluna nova
+                const dataBase = c.created_at || c.data_abertura; 
+                const dataAberta = dataBase ? new Date(dataBase).toLocaleDateString('pt-BR') : '-';
 
                 let botoesAcao = `
                     <div style="display: flex; gap: 4px; flex-wrap: nowrap; justify-content: center;">
@@ -1161,7 +1162,7 @@ async function carregarListaChamados() {
 
                 return `
                     <tr>
-                        <td style="font-size: 12px;"><strong>${c.numero_chamado}</strong><br><small>Abertura: ${dataAberta}</small></td>
+                        <td style="font-size: 12px;"><strong>${c.numero_chamado}</strong><br><small style="color: #64748b;">Abertura: ${dataAberta}</small></td>
                         <td style="font-size: 12px;">${c.modelo_impressora} <br><small>Série: ${c.numero_serie}</small></td>
                         <td style="font-size: 12px;">${c.setor_localizada}</td>
                         <td style="width: 140px; min-width: 140px;">
@@ -1194,12 +1195,16 @@ function renderizarTabelaHistoricoChamados() {
     const itensPagina = dadosHistoricoChamados.slice(inicio, fim);
 
     tbody.innerHTML = itensPagina.length > 0 ? itensPagina.map(c => {
-        const dataC = c.created_at ? new Date(c.created_at).toLocaleDateString('pt-BR') : '-';
+        // 🟢 TRAVA DE SEGURANÇA NA DATA DE ABERTURA E RESOLUÇÃO
+        const dataBaseAberta = c.created_at || c.data_abertura;
+        const dataAbertura = dataBaseAberta ? new Date(dataBaseAberta).toLocaleDateString('pt-BR') : '-';
+        const dataRes = c.data_resolucao ? new Date(c.data_resolucao).toLocaleDateString('pt-BR') : '-';
+        
         let corStatus = c.status === 'Atendido' ? '#2ecc71' : '#e74c3c';
 
         return `
             <tr>
-                <td style="font-size: 12px;"><strong>${c.numero_chamado}</strong><br><small>${dataC}</small></td>
+                <td style="font-size: 12px;"><strong>${c.numero_chamado}</strong><br><small style="color: #64748b;">Abertura: ${dataAbertura}</small></td>
                 <td style="font-size: 12px;">${c.modelo_impressora} <br><small>Série: ${c.numero_serie}</small></td>
                 <td style="font-size: 12px;">${c.setor_localizada}</td>
                 <td style="width: 140px; min-width: 140px;">
@@ -1208,7 +1213,10 @@ function renderizarTabelaHistoricoChamados() {
                     </div>
                     ${c.observacao ? `<div style="margin-top: 6px; font-size: 10px; color: #475569; background: #f1f5f9; padding: 4px; border-radius: 4px; text-align: center; line-height: 1.3;"><strong>Obs:</strong> ${c.observacao}</div>` : ''}
                 </td>
-                <td style="font-size: 11px;">${c.tecnico_acompanhante || '-'}</td>
+                <td style="font-size: 11px;">
+                    <strong>${c.tecnico_acompanhante || '-'}</strong><br>
+                    <small style="color: #64748b;">Resolução: ${dataRes}</small>
+                </td>
             </tr>
         `;
     }).join('') : '<tr><td colspan="5" style="text-align: center; color: #7f8c8d; padding: 20px;">Nenhum registro encontrado no histórico.</td></tr>';
