@@ -1005,18 +1005,58 @@
     </div>
 
     <div id="modal-simpress" class="modal">
-        <div class="modal-content">
-            <span class="close-modal" onclick="fecharModal('modal-simpress')">&times;</span>
-            <h3>Registrar Chamado Simpress</h3>
-            <form>
-                <input type="text" id="cad_sim_numero" placeholder="Número do Chamado" required>
-                <input type="text" id="cad_sim_modelo" placeholder="Modelo da Impressora" required>
-                <input type="text" id="cad_sim_serie" placeholder="Número de Série" required>
-                <input type="text" id="cad_sim_local" placeholder="Localização da Impressora (Setor)" required>
-                <button type="button" class="btn-success mt-20" onclick="adminCadastrarSimpress()">Abrir Chamado</button>
-            </form>
-        </div>
+    <div class="modal-content">
+        <span class="close-modal" onclick="fecharModal('modal-simpress')">&times;</span>
+        <h3>Registrar Chamado Simpress</h3>
+        <form id="form-cad-simpress">
+            
+            <div class="form-row" style="display: flex; gap: 15px; margin-bottom: 15px; flex-wrap: wrap;">
+                <div class="form-group" style="flex: 1; min-width: 150px;">
+                    <label>Nº do Chamado:</label>
+                    <input type="text" id="cad_sim_numero" placeholder="Ex: INC12345" required>
+                </div>
+                <div class="form-group" style="flex: 1; min-width: 150px;">
+                    <label>Modelo:</label>
+                    <input type="text" id="cad_sim_modelo" placeholder="Ex: Lexmark MS431" required>
+                </div>
+            </div>
+
+            <div class="form-row" style="display: flex; gap: 15px; margin-bottom: 15px; flex-wrap: wrap;">
+                <div class="form-group" style="flex: 1; min-width: 150px;">
+                    <label>Série (S/N):</label>
+                    <input type="text" id="cad_sim_serie" placeholder="Número de Série" required>
+                </div>
+                <div class="form-group" style="flex: 1; min-width: 150px;">
+                    <label>Prédio:</label>
+                    <select id="cad_sim_predio" onchange="atualizarAndares('cad_sim_predio', 'cad_sim_andar')" required>
+                        <option value="">Selecione...</option>
+                        <option value="UPI">UPI</option>
+                        <option value="UPE">UPE</option>
+                        <option value="PIMAG">PIMAG</option>
+                        <option value="RADIOTERAPIA">RADIOTERAPIA</option>
+                        <option value="TRAUMA">TRAUMA</option>
+                        <option value="CASA ROSA">CASA ROSA</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="form-row" style="display: flex; gap: 15px; margin-bottom: 15px; flex-wrap: wrap;">
+                <div class="form-group" style="flex: 1; min-width: 150px;">
+                    <label>Andar:</label>
+                    <select id="cad_sim_andar" required>
+                        <option value="">Selecione o prédio...</option>
+                    </select>
+                </div>
+                <div class="form-group" style="flex: 1; min-width: 150px;">
+                    <label>Setor:</label>
+                    <input type="text" id="cad_sim_setor" placeholder="Ex: Recepção, Posto 2..." required>
+                </div>
+            </div>
+
+            <button type="button" class="btn-success mt-20" onclick="adminCadastrarSimpress()">Abrir Chamado</button>
+        </form>
     </div>
+</div>
 
     <div id="modal-troca-toner" class="modal">
         <div class="modal-content">
