@@ -2042,7 +2042,7 @@ async function adminCadastrarToner() {
     } catch (err) { alert('Erro: ' + err.message); }
 }
 
-// 🟢 SALVAR NOVO CHAMADO SIMPRESS (Sem data manual, local unificado)
+// 🟢 SALVAR NOVO CHAMADO SIMPRESS (Enviando a data forçada pelo código)
 async function adminCadastrarSimpress() {
     const numero = document.getElementById('cad_sim_numero').value;
     const modelo = document.getElementById('cad_sim_modelo').value;
@@ -2064,8 +2064,8 @@ async function adminCadastrarSimpress() {
             modelo_impressora: modelo,
             numero_serie: serie,
             setor_localizada: localizacaoCompleta,
-            status: 'Aberto'
-            // O Supabase gera automaticamente a data de abertura (created_at)
+            status: 'Aberto',
+            created_at: new Date().toISOString()
         }]);
 
         if (error) throw error;
