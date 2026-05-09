@@ -2880,11 +2880,16 @@ async function carregarCadastros() {
                     linkConselho = '<span style="color: #7f8c8d; font-size: 11px; font-weight: bold; display: block;">(Isento de Conselho)</span>';
                 }
 
-                const realizadoPor = c.realizado_por_nome ? `<span style="font-size: 11px;"><strong>${c.realizado_por_nome}</strong><br><span style="color: #64748b;">${c.realizado_por_email}</span></span>` : '-';
+                // 🟢 LÓGICA ATUALIZADA: Nome + Data/Hora (Sem e-mail)
+                const dataFim = c.data_resolucao || c.updated_at;
+                const dataFinalizacao = dataFim ? new Date(dataFim).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' }) : '';
+                const realizadoPor = (c.status === 'Realizado' && c.realizado_por_nome) 
+                    ? `<span style="font-size: 11px; text-align: center; display: block;"><strong>${c.realizado_por_nome}</strong><br><small style="color: #64748b;">${dataFinalizacao}</small></span>` 
+                    : '<span style="text-align: center; display: block;">-</span>';
                 
                 let dataNascFormatada = c.data_nascimento && c.data_nascimento.includes('-') ? c.data_nascimento.split('-').reverse().join('/') : c.data_nascimento;
                 
-                // 🟢 BLINDAGEM DO TEXTO: Codifica a observação para não quebrar o HTML do botão
+                // BLINDAGEM DO TEXTO: Codifica a observação para não quebrar o HTML do botão
                 const obsSegura = c.observacao ? encodeURIComponent(c.observacao) : '';
                 
                 const isAdmin = typeof window.usuarioAtual !== 'undefined' && window.usuarioAtual && window.usuarioAtual.role === 'admin';
@@ -2945,7 +2950,7 @@ async function carregarCadastros() {
                 `;
             }).join('') : '<tr><td colspan="7" style="text-align: center; color: #7f8c8d; padding: 20px;">Nenhuma solicitação pendente encontrada.</td></tr>';
         }
-    } catch (err) { console.error("Erro ao carregar cadastros:", err); }
+    } catch (err) { console.error("Erro ao carregar Cadastros:", err); }
 }
 async function alterarStatusCadastro(id, novoStatus) {
     let tipoModal = novoStatus === 'Realizado' ? 'sucesso' : (novoStatus === 'Aguardando' ? 'aviso' : 'info');
@@ -3057,9 +3062,12 @@ async function carregarSolicitacoesAD() {
                 if (c.status === 'Realizado') corStatus = '#2ecc71'; 
                 if (c.status === 'Cancelado') corStatus = '#e74c3c'; 
 
-                const realizadoPor = c.realizado_por_nome 
-                    ? `<span style="font-size: 11px;"><strong>${c.realizado_por_nome}</strong></span>`
-                    : '-';
+                // 🟢 LÓGICA ATUALIZADA: Nome + Data/Hora (Sem e-mail)
+                const dataFimAD = c.data_resolucao || c.updated_at;
+                const dataFinalizacaoAD = dataFimAD ? new Date(dataFimAD).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' }) : '';
+                const realizadoPor = (c.status === 'Realizado' && c.realizado_por_nome) 
+                    ? `<span style="font-size: 11px; text-align: center; display: block;"><strong>${c.realizado_por_nome}</strong><br><small style="color: #64748b;">${dataFinalizacaoAD}</small></span>` 
+                    : '<span style="text-align: center; display: block;">-</span>';
 
                 const isAdmin = typeof window.usuarioAtual !== 'undefined' && window.usuarioAtual && window.usuarioAtual.role === 'admin';
 
@@ -3100,14 +3108,13 @@ async function carregarSolicitacoesAD() {
                             ${c.status === 'Cancelado' && c.motivo_cancelamento ? `<div style="margin-top: 6px; font-size: 10px; color: #475569; background: #f1f5f9; padding: 4px; border-radius: 4px; text-align: center; line-height: 1.3;"><strong>Motivo:</strong> ${c.motivo_cancelamento}</div>` : ''}
                         </td>
                         
-                        <td style="font-size: 11px;">${realizadoPor}</td>
+                        <td>${realizadoPor}</td>
                     </tr>
                 `;
             }).join('') : '<tr><td colspan="6" style="text-align: center; color: #7f8c8d; padding: 20px;">Nenhuma solicitação de AD encontrada.</td></tr>';
         }
     } catch (err) { console.error("Erro ao carregar AD:", err); }
 }
-
 // --- 2. GESTÃO DE SOLICITAÇÕES DE TREINAMENTO (VINDAS DO SITE) ---
 async function carregarSolicitacoesTreinamento() {
     const status = document.getElementById('filtro_sol_tr_status').value;
