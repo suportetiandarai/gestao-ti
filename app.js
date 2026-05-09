@@ -1626,43 +1626,46 @@ async function salvarEdicaoTreinamento() {
     }
 }
 
+// 🟢 CANCELAR TREINAMENTO (Com Motivo e Data Automática)
 async function cancelarTreinamento(id) {
     pedirMotivo(
         "Cancelar Agendamento", 
-        "Digite o motivo do cancelamento deste treinamento:", 
-        "Motivo...", 
+        "Motivo do cancelamento deste treinamento:", 
+        "Ex: Colaborador faltou, erro de agendamento, etc...", 
         "perigo", 
         async (motivo) => {
             try {
-                const { error } = await supabase.from('treinamentos').update({
-                    status: 'Cancelado',
-                    motivo_cancelamento: motivo
-                }).eq('id', id);
-                if (error) throw error;
+                let updateData = { 
+                    status: 'Cancelado', 
+                    motivo_cancelamento: motivo,
+                    data_resolucao: new Date().toISOString() // 🟢 FORÇA O REGISTRO EXATO DA HORA AQUI
+                };
                 
-                alert("✅ Treinamento cancelado na agenda!");
-                carregarListaTreinamentos();
-                if(typeof carregarResumoDashboard === 'function') carregarResumoDashboard();
+                // Registra o nome de quem executou o cancelamento
+                if (typeof window.usuarioAtual !== 'undefined' && window.usuarioAtual) {
+                    updateData.responsavel_conclusao = window.usuarioAtual.nome;
+                }
+
+                // 1. Atualiza o status na tabela de treinamentos
+                const { error } = await supabase.from('treinamentos').update(updateData).eq('id', id);
+                if (error) throw error;
+
+                // 2. Se esse treinamento veio de uma solicitação, muda o status dela também para não ficar pendente
+                const { data: treinamento } = await supabase.from('treinamentos').select('solicitacao_id').eq('id', id).single();
+                if (treinamento && treinamento.solicitacao_id) {
+                    await supabase.from('solicitacoes_treinamento')
+                        .update({ status: 'Cancelado' })
+                        .eq('id', treinamento.solicitacao_id);
+                }
+
+                alert("✅ Treinamento cancelado e enviado para o histórico!");
+                
+                // Atualiza as tabelas da tela instantaneamente
+                if (typeof carregarListaTreinamentos === 'function') carregarListaTreinamentos();
+                if (typeof carregarHistoricoTreinamentos === 'function') carregarHistoricoTreinamentos();
+                if (typeof carregarResumoDashboard === 'function') carregarResumoDashboard();
+
             } catch (err) { alert("❌ Erro ao cancelar: " + err.message); }
-        }
-    );
-}
-
-async function alterarStatusTreinamentoExt(id, novoStatus) {
-    let tipoModal = novoStatus === 'Cancelado' ? 'perigo' : 'info';
-
-    perguntar(
-        "Confirma a baixa da Solicitação", 
-        `Confirma a mudança desta requisição para "${novoStatus}"?`, 
-        tipoModal, 
-        async () => {
-            try {
-                const { error } = await supabase.from('solicitacoes_treinamento').update({ status: novoStatus }).eq('id', id);
-                if (error) throw error;
-                
-                alert(`✅ Solicitação movida para ${novoStatus}!`);
-                carregarSolicitacoesTreinamento();
-            } catch (err) { alert("❌ Erro ao atualizar Treinamento: " + err.message); }
         }
     );
 }
@@ -1687,31 +1690,42 @@ async function salvarTreinamentoConcluido() {
     const id = document.getElementById('ft_treinamento_id').value;
     const tecnico = document.getElementById('ft_tecnico').value;
 
-    if (!tecnico) return alert("Selecione o técnico responsável.");
+    if (!tecnico) return alert("⚠️ Selecione o técnico responsável.");
 
     try {
         const { data: treinamento } = await supabase.from('treinamentos').select('solicitacao_id').eq('id', id).single();
 
         const sigUrl = await uploadAssinatura(document.getElementById('canvas-finalizar-treinamento'), 'conclusao_treinamento');
 
-        await supabase.from('treinamentos').update({
+        // 🟢 ATUALIZAÇÃO COM TRAVA DE ERRO (Agora o sistema avisa se o banco barrar)
+        const { error: errUpdate } = await supabase.from('treinamentos').update({
             status: 'Concluído',
             responsavel_conclusao: tecnico,
             assinatura_url: sigUrl,
-            data_resolucao: new Date().toISOString() // 🟢 FORÇA O REGISTRO EXATO DA HORA AQUI
+            data_resolucao: new Date().toISOString()
         }).eq('id', id);
 
+        if (errUpdate) throw errUpdate;
+
+        // Se houver uma solicitação atrelada, dá baixa nela também
         if (treinamento && treinamento.solicitacao_id) {
             await supabase.from('solicitacoes_treinamento')
                 .update({ status: 'Realizado' })
                 .eq('id', treinamento.solicitacao_id);
         }
 
-        alert("Treinamento finalizado!");
+        alert("✅ Treinamento finalizado com sucesso!");
         fecharModal('modal-finalizar-treinamento');
+        
+        // 🟢 ATUALIZA AS DUAS TABELAS IMEDIATAMENTE
         carregarListaTreinamentos();
+        if(typeof carregarHistoricoTreinamentos === 'function') carregarHistoricoTreinamentos();
         if(typeof carregarResumoDashboard === 'function') carregarResumoDashboard();
-    } catch (err) { alert("Erro: " + err.message); }
+
+    } catch (err) { 
+        console.error("Detalhe do erro:", err);
+        alert("❌ Erro ao finalizar: " + err.message); 
+    }
 }
 // ==========================================
 // ABA CONFIGURAÇÕES (SOMENTE OPERACIONAL)
