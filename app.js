@@ -697,7 +697,7 @@ async function salvarNovoTipoEquipamento() {
 }
 
 async function salvarEquipamento() {
-    const tipo = document.getElementById('inv_tipo').value; const marca = document.getElementById('inv_marca').value; const modelo = document.getElementById('inv_modelo').value; const serie = document.getElementById('inv_serie').value; const status = document.getElementById('inv_status').value; const predio = document.getElementById('inv_predio').value; const andar = document.getElementById('inv_andar').value; const setor = document.getElementById('inv_setor').value;
+    const tipo = document.getElementById('inv_tipo').value; const marca = document.getElementById('inv_marca').value; const modelo = document.getElementById('inv_modelo').value; const serie = document.getElementById('inv_serie').value; const status = document.getElementById('inv_status').value; const predio = document.getElementById('inv_predio').value; const andar = document.getElementById('inv_andar').value; const setor = document.getElementById('inv_setor').value;const patrimonio = document.getElementById('inv_patrimonio').value;
     if(!tipo || !marca || !modelo || !serie || !status || !predio || !andar) return alert("⚠️ Por favor, preencha todos os campos obrigatórios, incluindo Prédio e Andar.");
     try {
         const { error } = await supabase.from('inventario').insert([{ tipo, marca, modelo, numero_serie: serie, status, predio, andar, setor }]);
@@ -729,7 +729,16 @@ async function carregarInventario() {
                 let corStatus = '#3498db'; if (e.status === 'Em uso') corStatus = '#2ecc71'; if (e.status === 'Danificado') corStatus = '#e74c3c'; 
                 let botoesAcao = `<button class="btn-primary btn-sm" style="background: #f39c12;" onclick="alterarStatusInventario('${e.id}')">🔄 Status</button>`;
                 if (isAdmin) botoesAcao += `<button class="btn-primary btn-sm" style="background: #8e44ad;" onclick="abrirModalEditarEquipamento('${e.id}')">✏️ Editar</button><button class="btn-danger btn-sm" onclick="deletarEquipamento('${e.id}')">🗑️ Excluir</button>`;
-                return `<tr><td><strong>${e.tipo}</strong></td><td>${e.marca}<br><small>${e.modelo}</small></td><td>${e.numero_serie}</td><td>${e.predio || '-'} / ${e.setor || '-'} <br><small>(${e.andar || '-'})</small></td><td><span style="background-color: ${corStatus}; color: white; padding: 4px 8px; border-radius: 4px; font-size: 12px; font-weight: bold;">${e.status}</span></td><td><div style="display: flex; gap: 5px;">${botoesAcao}</div></td></tr>`;
+                return `
+    <tr>
+        <td><strong>${e.tipo}</strong></td>
+        <td>${e.marca}<br><small>${e.modelo}</small></td>
+        <td>${e.numero_serie}</td>
+        <td><span class="badge-patrimonio">${e.patrimonio || '-'}</span></td> <td>${e.predio || '-'} / ${e.setor || '-'}</td>
+        <td><span style="background-color: ${corStatus}; color: white; padding: 4px 8px; border-radius: 4px; font-size: 12px; font-weight: bold;">${e.status}</span></td>
+        <td><div style="display: flex; gap: 5px;">${botoesAcao}</div></td>
+    </tr>
+`;
             }).join('') : '<tr><td colspan="6" style="text-align: center; color: #7f8c8d;">Nenhum equipamento encontrado.</td></tr>';
         }
     } catch (err) { console.error("Erro ao carregar inventário:", err); }
@@ -741,7 +750,7 @@ async function abrirModalEditarEquipamento(id) {
         if (error) throw error;
         const { data: tipos } = await supabase.from('tipos_equipamento').select('nome').order('nome');
         document.getElementById('edit_inv_tipo').innerHTML = '<option value="">Selecione...</option>' + tipos.map(t => `<option value="${t.nome}" ${t.nome === e.tipo ? 'selected' : ''}>${t.nome}</option>`).join('');
-        document.getElementById('edit_inv_id').value = e.id; document.getElementById('edit_inv_marca').value = e.marca; document.getElementById('edit_inv_modelo').value = e.modelo; document.getElementById('edit_inv_serie').value = e.numero_serie; document.getElementById('edit_inv_setor').value = e.setor || ''; document.getElementById('edit_inv_predio').value = e.predio || '';
+        document.getElementById('edit_inv_id').value = e.id; document.getElementById('edit_inv_marca').value = e.marca; document.getElementById('edit_inv_modelo').value = e.modelo; document.getElementById('edit_inv_serie').value = e.numero_serie; document.getElementById('edit_inv_setor').value = e.setor || ''; document.getElementById('edit_inv_predio').value = e.predio || '';document.getElementById('edit_inv_patrimonio').value = e.patrimonio || '';
         atualizarAndares('edit_inv_predio', 'edit_inv_andar', e.andar || '');
         abrirModal('modal-editar-equipamento');
     } catch (err) { alert("❌ Erro ao carregar dados para edição: " + err.message); }
@@ -749,7 +758,7 @@ async function abrirModalEditarEquipamento(id) {
 
 async function salvarEdicaoEquipamento() {
     const id = document.getElementById('edit_inv_id').value;
-    const dadosAtualizados = { tipo: document.getElementById('edit_inv_tipo').value, marca: document.getElementById('edit_inv_marca').value, modelo: document.getElementById('edit_inv_modelo').value, numero_serie: document.getElementById('edit_inv_serie').value, predio: document.getElementById('edit_inv_predio').value, andar: document.getElementById('edit_inv_andar').value, setor: document.getElementById('edit_inv_setor').value };
+    const dadosAtualizados = { tipo: document.getElementById('edit_inv_tipo').value, marca: document.getElementById('edit_inv_marca').value, modelo: document.getElementById('edit_inv_modelo').value, numero_serie: document.getElementById('edit_inv_serie').value, predio: document.getElementById('edit_inv_predio').value, andar: document.getElementById('edit_inv_andar').value, setor: document.getElementById('edit_inv_setor').value };patrimonio: document.getElementById('edit_inv_patrimonio').value
     try {
         const { error } = await supabase.from('inventario').update(dadosAtualizados).eq('id', id);
         if (error) throw error;
