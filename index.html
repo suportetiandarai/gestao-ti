@@ -1497,6 +1497,87 @@
         </div>
     </div>
 </div>
+
+    <div id="modal-exportacao" class="modal hidden">
+    <div class="modal-content" style="max-width: 550px;">
+        <div class="modal-header">
+            <h2>📊Exportação de Relatórios</h2>
+            <button class="close-btn" onclick="fecharModal('modal-exportacao')">×</button>
+        </div>
+        <div class="modal-body">
+            <p style="font-size: 13px; color: #64748b; margin-bottom: 15px; text-align: center;">
+                Selecione o módulo e o formato desejado:
+            </p>
+            
+            <table class="table-export" style="width: 100%; border-collapse: collapse; font-size: 13px;">
+                <thead>
+                    <tr style="border-bottom: 2px solid #e2e8f0; text-align: left;">
+                        <th style="padding: 10px;">Módulo</th>
+                        <th style="padding: 10px; text-align: center;">Formato</th>
+                    </tr>
+                </thead>
+                <tbody id="lista-opcoes-exportacao">
+                    <tr style="border-bottom: 1px solid #f1f5f9;">
+                        <td style="padding: 10px;">Auditoria de Plantões</td>
+                        <td style="padding: 10px; display: flex; gap: 5px; justify-content: center;">
+                            <button class="btn-sm" style="background: #34495e; color: white;" onclick="prepararExportacao('aba-admin', 'Relatorio_Plantoes')">PDF</button>
+                            <button class="btn-sm" style="background: #27ae60; color: white;" onclick="exportarParaCSV('plantoes', 'Dados_Plantoes')">CSV</button>
+                        </td>
+                    </tr>
+                    <tr style="border-bottom: 1px solid #f1f5f9;">
+                        <td style="padding: 10px;">Controle de Chaves</td>
+                        <td style="padding: 10px; display: flex; gap: 5px; justify-content: center;">
+                            <button class="btn-sm" style="background: #34495e; color: white;" onclick="prepararExportacao('aba-chaves', 'Relatorio_Chaves')">PDF</button>
+                            <button class="btn-sm" style="background: #27ae60; color: white;" onclick="exportarParaCSV('movimentacao_chaves', 'Dados_Chaves')">CSV</button>
+                        </td>
+                    </tr>
+                    <tr style="border-bottom: 1px solid #f1f5f9;">
+                        <td style="padding: 10px;">Ocorrências</td>
+                        <td style="padding: 10px; display: flex; gap: 5px; justify-content: center;">
+                            <button class="btn-sm" style="background: #34495e; color: white;" onclick="prepararExportacao('aba-ocorrencias', 'Relatorio_Ocorrencias')">PDF</button>
+                            <button class="btn-sm" style="background: #27ae60; color: white;" onclick="exportarParaCSV('ocorrencias', 'Dados_Ocorrencias')">CSV</button>
+                        </td>
+                    </tr>
+                    <tr style="border-bottom: 1px solid #f1f5f9;">
+                        <td style="padding: 10px;">Troca de Toners</td>
+                        <td style="padding: 10px; display: flex; gap: 5px; justify-content: center;">
+                            <button class="btn-sm" style="background: #34495e; color: white;" onclick="prepararExportacao('aba-toner', 'Relatorio_Toner')">PDF</button>
+                            <button class="btn-sm" style="background: #27ae60; color: white;" onclick="exportarParaCSV('registro_troca_toner', 'Dados_Consumo_Toner')">CSV</button>
+                        </td>
+                    </tr>
+                    <tr style="border-bottom: 1px solid #f1f5f9;">
+                        <td style="padding: 10px;">Treinamentos</td>
+                        <td style="padding: 10px; display: flex; gap: 5px; justify-content: center;">
+                            <button class="btn-sm" style="background: #34495e; color: white;" onclick="prepararExportacao('aba-treinamentos', 'Relatorio_Treinamentos')">PDF</button>
+                            <button class="btn-sm" style="background: #27ae60; color: white;" onclick="exportarParaCSV('treinamentos', 'Dados_Treinamentos')">CSV</button>
+                        </td>
+                    </tr>
+                    <tr style="border-bottom: 1px solid #f1f5f9;">
+                        <td style="padding: 10px;">Solicitações AD</td>
+                        <td style="padding: 10px; display: flex; gap: 5px; justify-content: center;">
+                            <button class="btn-sm" style="background: #34495e; color: white;" onclick="prepararExportacao('aba-solicitacoes-ad', 'Relatorio_AD')">PDF</button>
+                            <button class="btn-sm" style="background: #27ae60; color: white;" onclick="exportarParaCSV('solicitacoes_ad', 'Dados_Login_AD')">CSV</button>
+                        </td>
+                    </tr>
+                    <tr style="border-bottom: 1px solid #f1f5f9;">
+                        <td style="padding: 10px;">Solicitações TIMED</td>
+                        <td style="padding: 10px; display: flex; gap: 5px; justify-content: center;">
+                            <button class="btn-sm" style="background: #34495e; color: white;" onclick="prepararExportacao('aba-cadastros', 'Relatorio_TIMED')">PDF</button>
+                            <button class="btn-sm" style="background: #27ae60; color: white;" onclick="exportarParaCSV('solicitacoes_cadastro', 'Dados_TIMED')">CSV</button>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td style="padding: 10px;">Inventário</td>
+                        <td style="padding: 10px; display: flex; gap: 5px; justify-content: center;">
+                            <button class="btn-sm" style="background: #34495e; color: white;" onclick="prepararExportacao('aba-inventario', 'Relatorio_Inventario')">PDF</button>
+                            <button class="btn-sm" style="background: #27ae60; color: white;" onclick="exportarParaCSV('inventario', 'Dados_Estoque')">CSV</button>
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
     
     
     <div id="toast-container" class="toast-container"></div>
