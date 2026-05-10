@@ -730,16 +730,25 @@ async function carregarInventario() {
                 let botoesAcao = `<button class="btn-primary btn-sm" style="background: #f39c12;" onclick="alterarStatusInventario('${e.id}')">🔄 Status</button>`;
                 if (isAdmin) botoesAcao += `<button class="btn-primary btn-sm" style="background: #8e44ad;" onclick="abrirModalEditarEquipamento('${e.id}')">✏️ Editar</button><button class="btn-danger btn-sm" onclick="deletarEquipamento('${e.id}')">🗑️ Excluir</button>`;
                 return `
-    <tr>
-        <td><strong>${e.tipo}</strong></td>
-        <td>${e.marca}<br><small>${e.modelo}</small></td>
-        <td>${e.numero_serie}</td>
-        <td><span class="badge-patrimonio">${e.patrimonio || '-'}</span></td> <td>${e.predio || '-'} / ${e.setor || '-'}</td>
-        <td><span style="background-color: ${corStatus}; color: white; padding: 4px 8px; border-radius: 4px; font-size: 12px; font-weight: bold;">${e.status}</span></td>
-        <td><div style="display: flex; gap: 5px;">${botoesAcao}</div></td>
-    </tr>
-`;
-            }).join('') : '<tr><td colspan="6" style="text-align: center; color: #7f8c8d;">Nenhum equipamento encontrado.</td></tr>';
+        <tr>
+            <td><strong>${e.tipo}</strong></td>
+            <td>${e.marca}<br><small>${e.modelo}</small></td>
+            <td>${e.numero_serie}</td>
+            
+            <td style="font-weight: bold; color: #1e293b;">
+                ${e.patrimonio || '-'}
+            </td>
+
+            <td>${e.predio || '-'} / ${e.setor || '-'} <br><small>(${e.andar || '-'})</small></td>
+            <td><span style="background-color: ${corStatus}; color: white; padding: 4px 8px; border-radius: 4px; font-size: 11px; font-weight: bold;">${e.status}</span></td>
+            <td>
+                <div style="display: flex; gap: 5px;">
+                    ${botoesAcao}
+                </div>
+            </td>
+        </tr>
+    `;
+}).join('') : '<tr><td colspan="7" style="text-align: center; color: #7f8c8d; padding: 20px;">Nenhum equipamento encontrado.</td></tr>';
         }
     } catch (err) { console.error("Erro ao carregar inventário:", err); }
 }
