@@ -589,12 +589,71 @@ async function salvarEdicaoOcorrencia() {
 
 async function cancelarOcorrencia(id) {
     pedirMotivo("Cancelar Ocorrência", "Digite o motivo do cancelamento desta ocorrência:", "Motivo da baixa...", "perigo", async (motivo) => {
+        
+        let nomeTecnico = 'Sistema';
+        if (typeof window.usuarioAtual !== 'undefined' && window.usuarioAtual) nomeTecnico = window.usuarioAtual.nome;
+
         try {
-            const { error } = await supabase.from('ocorrencias').update({ status: 'Cancelada', motivo_cancelamento: motivo }).eq('id', id);
+            const { error } = await supabase.from('ocorrencias').update({ 
+                status: 'Cancelada', 
+                motivo_cancelamento: motivo,
+                quem_solucionou: nomeTecnico, // Grava o nome de quem cancelou
+                data_finalizacao: new Date().toISOString() // Grava a data
+            }).eq('id', id);
+            
             if (error) throw error;
-            alert("✅ Ocorrência cancelada com sucesso!"); carregarListaOcorrencias(); if(typeof carregarResumoDashboard === 'function') carregarResumoDashboard();
+            
+            alert("✅ Ocorrência cancelada com sucesso!"); 
+            carregarListaOcorrencias(); 
+            if(typeof carregarResumoDashboard === 'function') carregarResumoDashboard();
         } catch (err) { alert("❌ Erro ao cancelar: " + err.message); }
     });
+}
+
+// 🟢 ATUALIZADO: Histórico de Ocorrências (Mostrando quem cancelou)
+function renderizarTabelaHistoricoOc() {
+    const tbody = document.getElementById('lista-historico-ocorrencias-aba');
+    const spanPagina = document.getElementById('span-pagina-historico-oc');
+    if (!tbody) return;
+
+    const totalPaginas = Math.ceil(dadosHistoricoOc.length / itensPorPaginaOc) || 1;
+    if (spanPagina) spanPagina.innerText = `Página ${paginaAtualOc} de ${totalPaginas}`;
+
+    const inicio = (paginaAtualOc - 1) * itensPorPaginaOc;
+    const fim = inicio + itensPorPaginaOc;
+    const itensPagina = dadosHistoricoOc.slice(inicio, fim);
+
+    tbody.innerHTML = itensPagina.length > 0 ? itensPagina.map(o => {
+        const dataC = new Date(o.created_at).toLocaleDateString('pt-BR');
+        let corStatus = o.status === 'Solucionada' ? '#2ecc71' : '#e74c3c';
+
+        // Puxa a data do cancelamento ou finalização
+        const dataFim = o.data_finalizacao || o.updated_at;
+        const dataFinalFormatada = dataFim ? new Date(dataFim).toLocaleDateString('pt-BR') : '';
+
+        return `
+            <tr>
+                <td style="font-size: 12px;"><strong>${o.descricao}</strong><br><small style="color: #7f8c8d;">Data Abert.: ${dataC}</small></td>
+                <td style="font-size: 12px;">${o.responsavel_abertura}</td>
+                
+                <td style="width: 140px; min-width: 140px;">
+                    <div style="margin-bottom: 6px;">
+                        <span style="background-color: ${corStatus}; color: white; padding: 5px; border-radius: 4px; font-size: 11px; font-weight: bold; display: block; width: 100%; text-align: center;">${o.status}</span>
+                    </div>
+                    
+                    <div style="display: flex; justify-content: center;">
+                        <button class="btn-primary btn-sm" style="background: #3498db; width: 100%; margin: 0; padding: 5px 2px; font-size: 11px;" onclick="abrirModalVerOcorrencia('${o.id}')">👁️ Ver Detalhes</button>
+                    </div>
+                    
+                    ${o.status === 'Cancelada' && o.motivo_cancelamento ? `
+                    <div style="margin-top: 6px; font-size: 10px; color: #475569; background: #f1f5f9; padding: 4px; border-radius: 4px; text-align: center; line-height: 1.3;">
+                        <strong>Motivo:</strong> ${o.motivo_cancelamento}<br>
+                        <span style="color: #94a3b8; font-size: 9px;">Baixa por: ${o.quem_solucionou || 'Sistema'} em ${dataFinalFormatada}</span>
+                    </div>` : ''}
+                </td>
+            </tr>
+        `;
+    }).join('') : '<tr><td colspan="3" style="text-align: center; color: #7f8c8d; padding: 20px;">Nenhum registro encontrado no histórico.</td></tr>'; 
 }
 
 function abrirModalFinalizarOcorrencia(id) {
@@ -842,11 +901,26 @@ async function salvarAtendimentoChamado() {
     } catch (err) { alert("❌ Erro: " + err.message); }
 }
 
+
 async function suspenderChamado(id) {
     pedirMotivo("Suspender Chamado", "Digite o motivo da suspensão deste chamado Simpress:", "Descreva a pendência...", "aviso", async (motivo) => {
+        
+        let nomeTecnico = 'Sistema';
+        if (typeof window.usuarioAtual !== 'undefined' && window.usuarioAtual) nomeTecnico = window.usuarioAtual.nome;
+
         try {
-            const { error } = await supabase.from('chamado_simpress').update({ status: 'Suspenso', observacao: motivo, data_resolucao: new Date().toISOString() }).eq('id', id);
-            if (error) throw error; alert("✅ Chamado suspenso com sucesso!"); carregarListaChamados(); if(typeof carregarResumoDashboard === 'function') carregarResumoDashboard();
+            const { error } = await supabase.from('chamado_simpress').update({ 
+                status: 'Suspenso', 
+                observacao: motivo,
+                tecnico_acompanhante: nomeTecnico, // Grava o nome ocultamente
+                data_resolucao: new Date().toISOString() // Grava a hora do clique
+            }).eq('id', id);
+            
+            if (error) throw error; 
+            
+            alert("✅ Chamado suspenso com sucesso!"); 
+            carregarListaChamados(); 
+            if(typeof carregarResumoDashboard === 'function') carregarResumoDashboard();
         } catch (err) { alert("❌ Erro ao suspender: " + err.message); }
     });
 }
@@ -954,16 +1028,50 @@ async function salvarEdicaoTreinamento() {
     } catch (err) { alert("Erro ao salvar edição do treinamento: " + err.message); }
 }
 
+// 🟢 CANCELAR TREINAMENTO (Com Motivo, Técnico Automático e Data)
 async function cancelarTreinamento(id) {
-    pedirMotivo("Cancelar Agendamento", "Digite o motivo do cancelamento deste treinamento:", "Motivo...", "perigo", async (motivo) => {
-        let nomeTecnico = prompt("Digite o nome do Técnico que está cancelando:");
-        if (!nomeTecnico) nomeTecnico = 'Não informado';
-        try {
-            const { error } = await supabase.from('treinamentos').update({ status: 'Cancelado', motivo_cancelamento: motivo, responsavel_conclusao: nomeTecnico, data_resolucao: new Date().toISOString() }).eq('id', id);
-            if (error) throw error;
-            alert("✅ Treinamento cancelado e enviado para o histórico!"); carregarListaTreinamentos(); if(typeof carregarHistoricoTreinamentos === 'function') carregarHistoricoTreinamentos(); if(typeof carregarResumoDashboard === 'function') carregarResumoDashboard();
-        } catch (err) { alert("❌ Erro ao cancelar: " + err.message); }
-    });
+    pedirMotivo(
+        "Cancelar Agendamento", 
+        "Digite o motivo do cancelamento deste treinamento:", 
+        "Ex: Faltou, erro de agendamento...", 
+        "perigo", 
+        async (motivo) => {
+            
+            // 🟢 Puxa o nome do técnico logado AUTOMATICAMENTE!
+            let nomeTecnico = 'Sistema / Não informado';
+            if (typeof window.usuarioAtual !== 'undefined' && window.usuarioAtual) {
+                nomeTecnico = window.usuarioAtual.nome;
+            }
+
+            try {
+                // 1. Atualiza o status do treinamento
+                const { error } = await supabase.from('treinamentos').update({ 
+                    status: 'Cancelado', 
+                    motivo_cancelamento: motivo, 
+                    responsavel_conclusao: nomeTecnico, // Salva o nome automático
+                    data_resolucao: new Date().toISOString() // Salva a hora exata
+                }).eq('id', id);
+                
+                if (error) throw error;
+
+                // 2. Dá baixa na solicitação original que veio do site (se houver)
+                const { data: treinamento } = await supabase.from('treinamentos').select('solicitacao_id').eq('id', id).single();
+                if (treinamento && treinamento.solicitacao_id) {
+                    await supabase.from('solicitacoes_treinamento')
+                        .update({ status: 'Cancelado' })
+                        .eq('id', treinamento.solicitacao_id);
+                }
+
+                alert("✅ Treinamento cancelado e enviado para o histórico!"); 
+                
+                // 3. Atualiza todas as tabelas instantaneamente
+                if (typeof carregarListaTreinamentos === 'function') carregarListaTreinamentos(); 
+                if (typeof carregarHistoricoTreinamentos === 'function') carregarHistoricoTreinamentos(); 
+                if (typeof carregarResumoDashboard === 'function') carregarResumoDashboard();
+                
+            } catch (err) { alert("❌ Erro ao cancelar: " + err.message); }
+        }
+    );
 }
 
 async function abrirModalFinalizarTreinamento(id) {
@@ -988,14 +1096,31 @@ async function salvarTreinamentoConcluido() {
     } catch (err) { console.error("Detalhe do erro:", err); alert("❌ Erro ao finalizar: " + err.message); }
 }
 
+// 🟢 CANCELAR/DESFAZER SOLICITAÇÕES DO SITE (Automático)
 async function alterarStatusTreinamentoExt(id, novoStatus) {
     let acao = novoStatus === 'Cancelado' ? 'dar baixa e cancelar esta solicitação' : 'desfazer e retornar para Pendente';
     let tipoModal = novoStatus === 'Cancelado' ? 'perigo' : 'aviso';
+    
     perguntar("Atualizar Solicitação", `Confirma ${acao}?`, tipoModal, async () => {
+        
+        let nomeTecnico = 'Sistema';
+        if (typeof window.usuarioAtual !== 'undefined' && window.usuarioAtual) nomeTecnico = window.usuarioAtual.nome;
+
         try {
-            const { error } = await supabase.from('solicitacoes_treinamento').update({ status: novoStatus }).eq('id', id);
+            let updateData = { status: novoStatus };
+            
+            // Se for baixar, grava quem deu a baixa. Se for desfazer (voltar pra agenda), ele só volta o status.
+            if (novoStatus === 'Cancelado') {
+                updateData.data_resolucao = new Date().toISOString();
+                // A tabela solicitacoes_treinamento pode não exibir, mas fica guardado no banco!
+            }
+
+            const { error } = await supabase.from('solicitacoes_treinamento').update(updateData).eq('id', id);
             if (error) throw error;
-            alert(`✅ Solicitação atualizada para: ${novoStatus}`); carregarSolicitacoesTreinamento();
+            
+            alert(`✅ Solicitação atualizada para: ${novoStatus}`); 
+            carregarSolicitacoesTreinamento();
+            
             if (typeof carregarListaTreinamentos === 'function') carregarListaTreinamentos();
         } catch (err) { alert("❌ Erro ao atualizar solicitação: " + err.message); }
     });
@@ -1074,12 +1199,27 @@ async function alterarStatusAD(id, novoStatus) {
     });
 }
 
+// 🟢 DAR BAIXA NO AD (Automático)
 async function darBaixaAD(id) {
     pedirMotivo("Baixa em Criação de AD", "Motivo do cancelamento desta criação de usuário:", "Descreva o motivo...", "perigo", async (motivo) => {
+        
+        let nomeTecnico = 'Sistema';
+        if (typeof window.usuarioAtual !== 'undefined' && window.usuarioAtual) nomeTecnico = window.usuarioAtual.nome;
+
         try {
-            let updateData = { status: 'Cancelado', motivo_cancelamento: motivo, data_resolucao: new Date().toISOString() };
-            if (typeof window.usuarioAtual !== 'undefined' && window.usuarioAtual) updateData.realizado_por_nome = window.usuarioAtual.nome;
-            const { error } = await supabase.from('solicitacoes_ad').update(updateData).eq('id', id); if (error) throw error; alert("✅ Solicitação de AD baixada e arquivada!"); carregarSolicitacoesAD();
+            let updateData = { 
+                status: 'Cancelado', 
+                motivo_cancelamento: motivo, 
+                realizado_por_nome: nomeTecnico, // Grava o nome ocultamente
+                data_resolucao: new Date().toISOString() // Grava a hora exata
+            };
+            
+            const { error } = await supabase.from('solicitacoes_ad').update(updateData).eq('id', id); 
+            
+            if (error) throw error; 
+            
+            alert("✅ Solicitação de AD baixada e arquivada!"); 
+            carregarSolicitacoesAD();
         } catch (err) { alert("❌ Erro ao dar baixa: " + err.message); }
     });
 }
