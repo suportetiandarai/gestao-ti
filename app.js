@@ -753,25 +753,53 @@ async function carregarInventario() {
     } catch (err) { console.error("Erro ao carregar inventário:", err); }
 }
 
+// 🟢 ABRE O MODAL E PREENCHE OS DADOS CORRETAMENTE
 async function abrirModalEditarEquipamento(id) {
     try {
         const { data: e, error } = await supabase.from('inventario').select('*').eq('id', id).single();
         if (error) throw error;
+        
         const { data: tipos } = await supabase.from('tipos_equipamento').select('nome').order('nome');
+        
         document.getElementById('edit_inv_tipo').innerHTML = '<option value="">Selecione...</option>' + tipos.map(t => `<option value="${t.nome}" ${t.nome === e.tipo ? 'selected' : ''}>${t.nome}</option>`).join('');
-        document.getElementById('edit_inv_id').value = e.id; document.getElementById('edit_inv_marca').value = e.marca; document.getElementById('edit_inv_modelo').value = e.modelo; document.getElementById('edit_inv_serie').value = e.numero_serie; document.getElementById('edit_inv_setor').value = e.setor || ''; document.getElementById('edit_inv_predio').value = e.predio || '';document.getElementById('edit_inv_patrimonio').value = e.patrimonio || '';
+        
+        document.getElementById('edit_inv_id').value = e.id; 
+        document.getElementById('edit_inv_marca').value = e.marca; 
+        document.getElementById('edit_inv_modelo').value = e.modelo; 
+        document.getElementById('edit_inv_serie').value = e.numero_serie; 
+        document.getElementById('edit_inv_setor').value = e.setor || ''; 
+        document.getElementById('edit_inv_predio').value = e.predio || '';
+        document.getElementById('edit_inv_patrimonio').value = e.patrimonio || ''; // Adicionado corretamente
+        
         atualizarAndares('edit_inv_predio', 'edit_inv_andar', e.andar || '');
+        
         abrirModal('modal-editar-equipamento');
     } catch (err) { alert("❌ Erro ao carregar dados para edição: " + err.message); }
 }
 
+// 🟢 SALVA A EDIÇÃO SEM ERRO DE SINTAXE
 async function salvarEdicaoEquipamento() {
     const id = document.getElementById('edit_inv_id').value;
-    const dadosAtualizados = { tipo: document.getElementById('edit_inv_tipo').value, marca: document.getElementById('edit_inv_marca').value, modelo: document.getElementById('edit_inv_modelo').value, numero_serie: document.getElementById('edit_inv_serie').value, predio: document.getElementById('edit_inv_predio').value, andar: document.getElementById('edit_inv_andar').value, setor: document.getElementById('edit_inv_setor').value };patrimonio: document.getElementById('edit_inv_patrimonio').value
+    
+    // Agora o patrimônio está corretamente DENTRO das chaves {}
+    const dadosAtualizados = { 
+        tipo: document.getElementById('edit_inv_tipo').value, 
+        marca: document.getElementById('edit_inv_marca').value, 
+        modelo: document.getElementById('edit_inv_modelo').value, 
+        numero_serie: document.getElementById('edit_inv_serie').value, 
+        predio: document.getElementById('edit_inv_predio').value, 
+        andar: document.getElementById('edit_inv_andar').value, 
+        setor: document.getElementById('edit_inv_setor').value,
+        patrimonio: document.getElementById('edit_inv_patrimonio').value
+    };
+
     try {
         const { error } = await supabase.from('inventario').update(dadosAtualizados).eq('id', id);
         if (error) throw error;
-        alert("✅ Equipamento atualizado com sucesso!"); fecharModal('modal-editar-equipamento'); carregarInventario();
+        
+        alert("✅ Equipamento atualizado com sucesso!"); 
+        fecharModal('modal-editar-equipamento'); 
+        carregarInventario();
     } catch (err) { alert("❌ Erro ao atualizar equipamento: " + err.message); }
 }
 
