@@ -1475,83 +1475,99 @@ async function adminCadastrarSimpress() {
 }
 
 // ==========================================
-// 🟢 EXPORTAÇÃO INTELIGENTE: PDF E CSV
+// EXPORTAÇÃO PDF ORGANIZADO E CSV LIMPO
 // ==========================================
 
 async function exportarPDF() { abrirModal('modal-exportacao'); }
 
-// 🟢 FUNÇÃO 1: Exportar em PDF (Mantida a lógica landscape de alta qualidade)
+// PDF: Corrigido para garantir que a aba esteja visível e o arquivo baixe
 function prepararExportacao(idAba, nomeArquivo) {
     fecharModal('modal-exportacao');
-    window.mostrarAviso("⏳ Gerando PDF de alta resolução...", "aviso");
+    window.mostrarAviso("⏳ Gerando relatório visual... Aguarde.", "aviso");
+    
+    // Garante que a aba abra antes de "tirar a foto"
     abrirAba(idAba);
 
+    // Damos um tempo maior (2 segundos) para o navegador renderizar tudo
     setTimeout(() => {
         const elemento = document.getElementById(idAba);
+        if (!elemento) return alert("Erro: Aba não encontrada.");
+
         const dataHoje = new Date().toLocaleDateString('pt-BR').replace(/\//g, '-');
-        const nomeCompleto = `${nomeArquivo}_${dataHoje}.pdf`;
+        const nomeCompleto = `${nomeArquivo}_${dataHoje}`;
 
         const opt = {
-            margin: [7, 7, 7, 7],
-            filename: nomeCompleto,
-            image: { type: 'jpeg', quality: 0.98 },
-            html2canvas: { scale: 2, useCORS: true },
-            jsPDF: { unit: 'mm', format: 'a4', orientation: 'landscape' }
+            margin:       [10, 10, 10, 10],
+            filename:     nomeCompleto + '.pdf',
+            image:        { type: 'jpeg', quality: 0.98 },
+            html2canvas:  { scale: 2, useCORS: true, logging: false, letterRendering: true },
+            jsPDF:        { unit: 'mm', format: 'a4', orientation: 'landscape' }
         };
 
+        // EXECUTAR GERAÇÃO
         html2pdf().set(opt).from(elemento).save().then(() => {
-            window.mostrarAviso(`✅ PDF baixado com sucesso!`, "sucesso");
+            window.mostrarAviso("✅ PDF baixado com sucesso!", "sucesso");
+        }).catch(err => {
+            console.error("Erro PDF:", err);
+            alert("Erro ao gerar PDF. Verifique o console.");
         });
-    }, 1200);
+    }, 2000);
 }
 
-// 🟢 FUNÇÃO 2: Exportar em CSV (Planilha Excel)
+// 🟢 CSV: Corrigido para "Modo Humano" (Limpa códigos e organiza pro Excel)
 async function exportarParaCSV(tabelaSupabase, nomeArquivo) {
     fecharModal('modal-exportacao');
-    window.mostrarAviso("⏳ Consultando banco e preparando planilha...", "aviso");
+    window.mostrarAviso("⏳ Limpando dados e organizando planilha...", "aviso");
 
     try {
-        // Busca TODOS os dados da tabela, sem limites de paginação da tela
         const { data, error } = await supabase.from(tabelaSupabase).select('*').order('created_at', { ascending: false });
-        
         if (error) throw error;
-        if (!data || data.length === 0) return alert("⚠️ Não há dados registrados para este módulo ainda.");
+        if (!data || data.length === 0) return alert("⚠️ Sem dados para exportar.");
 
-        // Cabeçalhos: Pega as chaves do primeiro objeto
-        const headers = Object.keys(data[0]);
+        // 1. LISTA DE COLUNAS "LIXO" PARA ESCONDER (IDs e links de assinatura que poluem o Excel)
+        const colunasIgnorar = ['id', 'usuario_id', 'assinatura_url', 'assinatura_tecnico_url', 'assinatura_fechamento_url', 'assinatura_abertura_url', 'foto_documento_url', 'foto_conselho_url', 'foto_teste_url', 'foto_url', 'solicitacao_id'];
+
+        // 2. FILTRAR CABEÇALHOS (Apenas o que é texto legível)
+        const headers = Object.keys(data[0]).filter(h => !colunasIgnorar.includes(h));
         
-        // Constrói o corpo do CSV
+        // 3. CONSTRUIR O CORPO (Usando Ponto e Vírgula para o Excel Brasileiro)
         const csvRows = [];
-        csvRows.push(headers.join(',')); // Linha 1: Títulos
+        csvRows.push(headers.map(h => h.toUpperCase()).join(';')); // Títulos em maiúsculo
 
         for (const row of data) {
             const values = headers.map(header => {
-                const val = row[header] === null ? '' : row[header];
-                // Escapa vírgulas e aspas para não quebrar o Excel
-                return `"${String(val).replace(/"/g, '""')}"`;
+                let val = row[header];
+                
+                // Formata datas para o padrão brasileiro dentro do Excel
+                if (header.includes('at') || header.includes('data') || header.includes('hora')) {
+                    if (val) val = new Date(val).toLocaleString('pt-BR');
+                }
+
+                // Trata valores nulos e limpa aspas
+                val = val === null ? '' : String(val).replace(/"/g, '""');
+                return `"${val}"`; 
             });
-            csvRows.push(values.join(','));
+            csvRows.push(values.join(';'));
         }
 
         const csvContent = csvRows.join('\n');
         
-        // Cria o arquivo para download
-        const blob = new Blob(["\ufeff" + csvContent], { type: 'text/csv;charset=utf-8;' }); // \ufeff ajuda o Excel a ler caracteres especiais (acentos)
+        // 4. DOWNLOAD COM CODIFICAÇÃO PARA EXCEL (BOM UTF-8)
+        const blob = new Blob(["\ufeff" + csvContent], { type: 'text/csv;charset=utf-8;' });
         const url = URL.createObjectURL(blob);
         const link = document.createElement("a");
-        
         const dataHoje = new Date().toLocaleDateString('pt-BR').replace(/\//g, '-');
+        
         link.setAttribute("href", url);
         link.setAttribute("download", `${nomeArquivo}_${dataHoje}.csv`);
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
 
-        window.mostrarAviso("✅ Planilha baixada! Abra no Excel.", "sucesso");
+        window.mostrarAviso("✅ Planilha organizada baixada!", "sucesso");
 
     } catch (err) {
-        console.error("Erro na exportação CSV:", err);
-        alert("❌ Falha ao gerar planilha: " + err.message);
+        alert("❌ Erro no CSV: " + err.message);
     }
 }
 
