@@ -1348,21 +1348,90 @@ async function darBaixaAD(id) {
 
 async function carregarSolicitacoesTreinamento() {
     const status = document.getElementById('filtro_sol_tr_status').value;
+
     try {
         let query = supabase.from('solicitacoes_treinamento').select('*').order('created_at', { ascending: false });
+
         if (status) query = query.eq('status', status);
-        const { data, error } = await query; if (error) throw error;
+
+        const { data, error } = await query;
+        if (error) throw error;
+
         const tbody = document.getElementById('lista-solicita-treinamento-aba');
-        if (tbody) tbody.innerHTML = data.length > 0 ? data.map(t => {
-            let corStatus = '#f39c12'; if (t.status === 'Agendado' || t.status === 'Realizado') corStatus = '#2ecc71'; if (t.status === 'Cancelado') corStatus = '#e74c3c'; 
-            const setorFormatado = t.setor || t.cargo || '-'; const contatoFormatado = t.telefone || t.celular || '-'; const isAdmin = typeof window.usuarioAtual !== 'undefined' && window.usuarioAtual && window.usuarioAtual.role === 'admin';
-            let botoesAcao = '';
-            if (t.status === 'Pendente' || !t.status) { botoesAcao = `<button class="btn-success btn-sm" style="flex: 1; margin: 0; padding: 5px 2px; font-size: 11px;" onclick="prepararAgendamento('${t.id}', '${t.nome_solicitante || t.nome || ''}', '${t.telefone || t.celular || ''}', '${t.tema || ''}')">📅 Agendar</button><button class="btn-danger btn-sm" style="flex: 1; margin: 0; padding: 5px 2px; font-size: 11px;" onclick="alterarStatusTreinamentoExt('${t.id}', 'Cancelado')">❌ Baixa</button>`; } else { if (isAdmin) { botoesAcao = `<button class="btn-primary btn-sm" style="background: #e67e22; flex: 1; margin: 0; padding: 5px 2px; font-size: 11px;" onclick="alterarStatusTreinamentoExt('${t.id}', 'Pendente')">↩️ Desfazer</button>`; } }
-            return `<tr><td style="font-size: 12px; min-width: 80px;">${new Date(t.created_at).toLocaleDateString('pt-BR')} <br><small style="color:#64748b;">${new Date(t.created_at).toLocaleTimeString('pt-BR')}</small></td><td style="font-size: 12px;"><strong>${t.nome_solicitante || t.nome || '-'}</strong><br><small>${contatoFormatado}</small></td><td style="font-size: 12px;">${setorFormatado}</td><td style="font-size: 12px;"><strong>${t.tema || '-'}</strong></td><td style="width: 140px; min-width: 140px;"><div style="margin-bottom: 6px;"><span style="background-color: ${corStatus}; color: white; padding: 5px; border-radius: 4px; font-size: 11px; font-weight: bold; display: block; width: 100%; text-align: center;">${t.status || 'Pendente'}</span></div><div style="display: flex; gap: 4px; flex-wrap: nowrap; justify-content: center;">${botoesAcao}</div></td></tr>`;
-        }).join('') : '<tr><td colspan="5" style="text-align: center; color: #7f8c8d; padding: 20px;">Nenhuma solicitação encontrada.</td></tr>';
+        if (tbody) {
+            tbody.innerHTML = data.length > 0 ? data.map(t => {
+                let corStatus = '#f39c12'; // Pendente
+                if (t.status === 'Agendado' || t.status === 'Realizado') corStatus = '#2ecc71'; 
+                if (t.status === 'Cancelado') corStatus = '#e74c3c'; 
+
+                const setorFormatado = t.setor || t.cargo || '-';
+                const contatoFormatado = t.telefone || t.celular || '-';
+                const isAdmin = typeof window.usuarioAtual !== 'undefined' && window.usuarioAtual && window.usuarioAtual.role === 'admin';
+
+                // 🟢 Formata a Data Desejada (que o usuário preencheu no site)
+                const dataSugerida = t.data_desejada ? new Date(t.data_desejada).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' }) : 'Não informada';
+
+                let botoesAcao = '';
+                if (t.status === 'Pendente' || !t.status) {
+                    // 🟢 Botão Agendar agora leva a data_desejada também
+                    botoesAcao = `
+                        <button class="btn-success btn-sm" style="flex: 1; margin: 0; padding: 5px 2px; font-size: 11px;" 
+                            onclick="prepararAgendamento('${t.id}', '${t.nome_solicitante || t.nome || ''}', '${t.telefone || t.celular || ''}', '${t.tema || ''}', '${t.data_desejada || ''}')">
+                            📅 Agendar
+                        </button>
+                        <button class="btn-danger btn-sm" style="flex: 1; margin: 0; padding: 5px 2px; font-size: 11px;" onclick="alterarStatusTreinamentoExt('${t.id}', 'Cancelado')">❌ Baixa</button>
+                    `;
+                } else {
+                    if (isAdmin) {
+                        botoesAcao = `
+                            <button class="btn-primary btn-sm" style="background: #e67e22; flex: 1; margin: 0; padding: 5px 2px; font-size: 11px;" onclick="alterarStatusTreinamentoExt('${t.id}', 'Pendente')">↩️ Desfazer</button>
+                        `;
+                    }
+                }
+
+                return `
+                    <tr>
+                        <td style="font-size: 12px; min-width: 80px;">${new Date(t.created_at).toLocaleDateString('pt-BR')} <br><small style="color:#64748b;">${new Date(t.created_at).toLocaleTimeString('pt-BR')}</small></td>
+                        <td style="font-size: 12px;"><strong>${t.nome_solicitante || t.nome || '-'}</strong><br><small>${contatoFormatado}</small></td>
+                        <td style="font-size: 12px;">${setorFormatado}</td>
+                        <td style="font-size: 12px;">
+                            <strong>${t.tema || '-'}</strong><br>
+                            <small style="color: #3498db; font-weight: bold;">🗓️ Sugestão: ${dataSugerida}</small>
+                        </td>
+                        
+                        <td style="width: 140px; min-width: 140px;">
+                            <div style="margin-bottom: 6px;">
+                                <span style="background-color: ${corStatus}; color: white; padding: 5px; border-radius: 4px; font-size: 11px; font-weight: bold; display: block; width: 100%; text-align: center;">${t.status || 'Pendente'}</span>
+                            </div>
+                            
+                            <div style="display: flex; gap: 4px; flex-wrap: nowrap; justify-content: center;">
+                                ${botoesAcao}
+                            </div>
+                        </td>
+                    </tr>
+                `;
+            }).join('') : '<tr><td colspan="5" style="text-align: center; color: #7f8c8d; padding: 20px;">Nenhuma solicitação encontrada.</td></tr>';
+        }
     } catch (err) { console.error("Erro ao carregar solicitações de treinamento:", err); }
 }
 
+// 🟢 Atualizar também a função prepararAgendamento para receber a data
+window.prepararAgendamento = function(id, nome, telefone, tema, dataSugerida) {
+    idSolicitacaoEmAndamento = id; 
+    document.getElementById('tr_colaborador').value = nome; 
+    document.getElementById('tr_telefone').value = telefone; 
+    document.getElementById('tr_tema').value = tema; 
+    
+    // Se existir data sugerida, preenche o campo de data e hora do agendamento
+    if (dataSugerida && document.getElementById('tr_data_hora')) {
+        // Converte para o formato que o input datetime-local aceita (YYYY-MM-DDTHH:MM)
+        const dataFormatada = dataSugerida.substring(0, 16);
+        document.getElementById('tr_data_hora').value = dataFormatada;
+    }
+    
+    abrirAba('aba-treinamentos'); 
+    document.getElementById('tr_predio').focus();
+};
 
 // ==========================================
 // 🟢 11. CONFIGURAÇÕES, ADMIN E BASE
