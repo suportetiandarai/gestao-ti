@@ -1239,21 +1239,78 @@ async function darBaixaCadastro(id) {
 
 function verificarEnterAD(event) { if (event.key === 'Enter') carregarSolicitacoesAD(); }
 async function carregarSolicitacoesAD() {
-    const status = document.getElementById('filtro_ad_status').value; const nome = document.getElementById('filtro_ad_nome').value.trim();
+    const status = document.getElementById('filtro_ad_status').value;
+    const nome = document.getElementById('filtro_ad_nome').value.trim();
+
     try {
         let query = supabase.from('solicitacoes_ad').select('*').order('created_at', { ascending: false });
-        if (status) query = query.eq('status', status); if (nome) query = query.ilike('nome_completo', `%${nome}%`);
-        const { data, error } = await query; if (error) throw error;
+
+        if (status) query = query.eq('status', status);
+        if (nome) query = query.ilike('nome_completo', `%${nome}%`);
+
+        const { data, error } = await query;
+        if (error) throw error;
+
         const tbody = document.getElementById('lista-ad-aba');
-        if (tbody) tbody.innerHTML = data.length > 0 ? data.map(c => {
-            let corStatus = '#f39c12'; if (c.status === 'Realizado') corStatus = '#2ecc71'; if (c.status === 'Cancelado') corStatus = '#e74c3c'; 
-            const dataFimAD = c.data_resolucao || c.updated_at; const dataFinalizacaoAD = dataFimAD ? new Date(dataFimAD).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' }) : '';
-            const realizadoPor = (c.status === 'Realizado' && c.realizado_por_nome) ? `<span style="font-size: 11px; text-align: center; display: block;"><strong>${c.realizado_por_nome}</strong><br><small style="color: #64748b;">${dataFinalizacaoAD}</small></span>` : '<span style="text-align: center; display: block;">-</span>';
-            const isAdmin = typeof window.usuarioAtual !== 'undefined' && window.usuarioAtual && window.usuarioAtual.role === 'admin';
-            let botoesAcao = '';
-            if (c.status !== 'Realizado' && c.status !== 'Cancelado') { botoesAcao = `<button class="btn-success btn-sm" style="flex: 1; margin: 0; padding: 5px 2px; font-size: 11px;" onclick="alterarStatusAD('${c.id}', 'Realizado')">✔️ Finalizar</button><button class="btn-danger btn-sm" style="flex: 1; margin: 0; padding: 5px 2px; font-size: 11px;" onclick="darBaixaAD('${c.id}')">❌ Baixa</button>`; } else { if (isAdmin) { botoesAcao = `<button class="btn-primary btn-sm" style="background: #e67e22; flex: 1; margin: 0; padding: 5px 2px; font-size: 11px;" onclick="alterarStatusAD('${c.id}', 'Pendente')">↩️ Desfazer</button>`; } }
-            return `<tr><td style="font-size: 12px; min-width: 80px;">${new Date(c.created_at).toLocaleDateString('pt-BR')} <br><small style="color:#64748b;">${new Date(c.created_at).toLocaleTimeString('pt-BR')}</small></td><td style="font-size: 12px;"><strong>${c.nome_completo}</strong></td><td style="font-size: 12px;">${c.cpf || '-'}</td><td style="font-size: 12px;">📧 ${c.email || '-'}<br>📱 ${c.telefone || '-'}</td><td style="width: 140px; min-width: 140px;"><div style="margin-bottom: 6px;"><span style="background-color: ${corStatus}; color: white; padding: 5px; border-radius: 4px; font-size: 11px; font-weight: bold; display: block; width: 100%; text-align: center;">${c.status || 'Pendente'}</span></div><div style="display: flex; gap: 4px; flex-wrap: nowrap; justify-content: center;">${botoesAcao}</div>${c.status === 'Cancelado' && c.motivo_cancelamento ? `<div style="margin-top: 6px; font-size: 10px; color: #475569; background: #f1f5f9; padding: 4px; border-radius: 4px; text-align: center; line-height: 1.3;"><strong>Motivo:</strong> ${c.motivo_cancelamento}</div>` : ''}</td><td>${realizadoPor}</td></tr>`;
-        }).join('') : '<tr><td colspan="6" style="text-align: center; color: #7f8c8d; padding: 20px;">Nenhuma solicitação de AD encontrada.</td></tr>';
+        if (tbody) {
+            tbody.innerHTML = data.length > 0 ? data.map(c => {
+                let corStatus = '#f39c12'; // Pendente
+                if (c.status === 'Realizado') corStatus = '#2ecc71'; 
+                if (c.status === 'Cancelado') corStatus = '#e74c3c'; 
+
+                // 🟢 LÓGICA DE DATA: Pega data_resolucao ou updated_at
+                const dataFimAD = c.data_resolucao || c.updated_at;
+                const dataFinalizacaoAD = dataFimAD ? new Date(dataFimAD).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' }) : '';
+                
+                // 🟢 LÓGICA DO TÉCNICO CORRIGIDA: Agora mostra se for Realizado OU Cancelado
+                const realizadoPor = (c.status === 'Realizado' || c.status === 'Cancelado') && c.realizado_por_nome
+                    ? `<span style="font-size: 11px; text-align: center; display: block;"><strong>${c.realizado_por_nome}</strong><br><small style="color: #64748b;">${dataFinalizacaoAD}</small></span>` 
+                    : '<span style="text-align: center; display: block;">-</span>';
+
+                const isAdmin = typeof window.usuarioAtual !== 'undefined' && window.usuarioAtual && window.usuarioAtual.role === 'admin';
+
+                let botoesAcao = '';
+                if (c.status !== 'Realizado' && c.status !== 'Cancelado') {
+                    botoesAcao = `
+                        <button class="btn-success btn-sm" style="flex: 1; margin: 0; padding: 5px 2px; font-size: 11px;" onclick="alterarStatusAD('${c.id}', 'Realizado')">✔️ Finalizar</button>
+                        <button class="btn-danger btn-sm" style="flex: 1; margin: 0; padding: 5px 2px; font-size: 11px;" onclick="darBaixaAD('${c.id}')">❌ Baixa</button>
+                    `;
+                } else {
+                    if (isAdmin) {
+                        botoesAcao = `
+                            <button class="btn-primary btn-sm" style="background: #e67e22; flex: 1; margin: 0; padding: 5px 2px; font-size: 11px;" onclick="alterarStatusAD('${c.id}', 'Pendente')">↩️ Desfazer</button>
+                        `;
+                    }
+                }
+
+                return `
+                    <tr>
+                        <td style="font-size: 12px; min-width: 80px;">${new Date(c.created_at).toLocaleDateString('pt-BR')} <br><small style="color:#64748b;">${new Date(c.created_at).toLocaleTimeString('pt-BR')}</small></td>
+                        <td style="font-size: 12px;"><strong>${c.nome_completo}</strong></td>
+                        <td style="font-size: 12px;">${c.cpf || '-'}</td>
+                        
+                        <td style="font-size: 12px;">
+                            📧 ${c.email || '-'}<br>
+                            📱 ${c.telefone || '-'}
+                        </td>
+                        
+                        <td style="width: 140px; min-width: 140px;">
+                            <div style="margin-bottom: 6px;">
+                                <span style="background-color: ${corStatus}; color: white; padding: 5px; border-radius: 4px; font-size: 11px; font-weight: bold; display: block; width: 100%; text-align: center;">${c.status || 'Pendente'}</span>
+                            </div>
+                            
+                            <div style="display: flex; gap: 4px; flex-wrap: nowrap; justify-content: center;">
+                                ${botoesAcao}
+                            </div>
+                            
+                            ${c.status === 'Cancelado' && c.motivo_cancelamento ? `<div style="margin-top: 6px; font-size: 10px; color: #475569; background: #f1f5f9; padding: 4px; border-radius: 4px; text-align: center; line-height: 1.3;"><strong>Motivo:</strong> ${c.motivo_cancelamento}</div>` : ''}
+                        </td>
+                        
+                        <td>${realizadoPor}</td>
+                    </tr>
+                `;
+            }).join('') : '<tr><td colspan="6" style="text-align: center; color: #7f8c8d; padding: 20px;">Nenhuma solicitação de AD encontrada.</td></tr>';
+        }
     } catch (err) { console.error("Erro ao carregar AD:", err); }
 }
 
@@ -1268,26 +1325,22 @@ async function alterarStatusAD(id, novoStatus) {
     });
 }
 
-// 🟢 DAR BAIXA NO AD (Automático)
+// DAR BAIXA NO AD 
 async function darBaixaAD(id) {
-    pedirMotivo("Baixa em Criação de AD", "Motivo do cancelamento desta criação de usuário:", "Descreva o motivo...", "perigo", async (motivo) => {
-        
+    pedirMotivo("Baixa em Criação de AD", "Motivo do cancelamento:", "Descreva o motivo...", "perigo", async (motivo) => {
         let nomeTecnico = 'Sistema';
         if (typeof window.usuarioAtual !== 'undefined' && window.usuarioAtual) nomeTecnico = window.usuarioAtual.nome;
 
         try {
-            let updateData = { 
+            const { error } = await supabase.from('solicitacoes_ad').update({ 
                 status: 'Cancelado', 
                 motivo_cancelamento: motivo, 
-                realizado_por_nome: nomeTecnico, // Grava o nome ocultamente
-                data_resolucao: new Date().toISOString() // Grava a hora exata
-            };
-            
-            const { error } = await supabase.from('solicitacoes_ad').update(updateData).eq('id', id); 
+                realizado_por_nome: nomeTecnico, // Verifique se o nome da coluna no banco é esse mesmo
+                data_resolucao: new Date().toISOString() 
+            }).eq('id', id); 
             
             if (error) throw error; 
-            
-            alert("✅ Solicitação de AD baixada e arquivada!"); 
+            alert("✅ Solicitação de AD baixada!"); 
             carregarSolicitacoesAD();
         } catch (err) { alert("❌ Erro ao dar baixa: " + err.message); }
     });
