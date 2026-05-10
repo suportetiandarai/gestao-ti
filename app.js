@@ -1474,6 +1474,86 @@ async function adminCadastrarSimpress() {
     try { const { error } = await supabase.from('chamado_simpress').insert([{ numero_chamado: numero, modelo_impressora: modelo, numero_serie: serie, setor_localizada: localizacaoCompleta, status: 'Aberto', created_at: new Date().toISOString() }]); if (error) throw error; alert("✅ Chamado Simpress registrado com sucesso!"); fecharModal('modal-simpress'); document.getElementById('form-cad-simpress').reset(); carregarListaChamados(); if(typeof carregarResumoDashboard === 'function') carregarResumoDashboard(); } catch (err) { alert("❌ Erro ao abrir chamado: " + err.message); }
 }
 
-async function exportarPDF() { const elementoParaExportar = document.getElementById('app-wrapper'); html2pdf().from(elementoParaExportar).save('Relatorio_Plantao.pdf'); }
+// ==========================================
+// 🟢 EXPORTAÇÃO INTELIGENTE: PDF E CSV
+// ==========================================
+
+async function exportarPDF() { abrirModal('modal-exportacao'); }
+
+// 🟢 FUNÇÃO 1: Exportar em PDF (Mantida a lógica landscape de alta qualidade)
+function prepararExportacao(idAba, nomeArquivo) {
+    fecharModal('modal-exportacao');
+    window.mostrarAviso("⏳ Gerando PDF de alta resolução...", "aviso");
+    abrirAba(idAba);
+
+    setTimeout(() => {
+        const elemento = document.getElementById(idAba);
+        const dataHoje = new Date().toLocaleDateString('pt-BR').replace(/\//g, '-');
+        const nomeCompleto = `${nomeArquivo}_${dataHoje}.pdf`;
+
+        const opt = {
+            margin: [7, 7, 7, 7],
+            filename: nomeCompleto,
+            image: { type: 'jpeg', quality: 0.98 },
+            html2canvas: { scale: 2, useCORS: true },
+            jsPDF: { unit: 'mm', format: 'a4', orientation: 'landscape' }
+        };
+
+        html2pdf().set(opt).from(elemento).save().then(() => {
+            window.mostrarAviso(`✅ PDF baixado com sucesso!`, "sucesso");
+        });
+    }, 1200);
+}
+
+// 🟢 FUNÇÃO 2: Exportar em CSV (Planilha Excel)
+async function exportarParaCSV(tabelaSupabase, nomeArquivo) {
+    fecharModal('modal-exportacao');
+    window.mostrarAviso("⏳ Consultando banco e preparando planilha...", "aviso");
+
+    try {
+        // Busca TODOS os dados da tabela, sem limites de paginação da tela
+        const { data, error } = await supabase.from(tabelaSupabase).select('*').order('created_at', { ascending: false });
+        
+        if (error) throw error;
+        if (!data || data.length === 0) return alert("⚠️ Não há dados registrados para este módulo ainda.");
+
+        // Cabeçalhos: Pega as chaves do primeiro objeto
+        const headers = Object.keys(data[0]);
+        
+        // Constrói o corpo do CSV
+        const csvRows = [];
+        csvRows.push(headers.join(',')); // Linha 1: Títulos
+
+        for (const row of data) {
+            const values = headers.map(header => {
+                const val = row[header] === null ? '' : row[header];
+                // Escapa vírgulas e aspas para não quebrar o Excel
+                return `"${String(val).replace(/"/g, '""')}"`;
+            });
+            csvRows.push(values.join(','));
+        }
+
+        const csvContent = csvRows.join('\n');
+        
+        // Cria o arquivo para download
+        const blob = new Blob(["\ufeff" + csvContent], { type: 'text/csv;charset=utf-8;' }); // \ufeff ajuda o Excel a ler caracteres especiais (acentos)
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        
+        const dataHoje = new Date().toLocaleDateString('pt-BR').replace(/\//g, '-');
+        link.setAttribute("href", url);
+        link.setAttribute("download", `${nomeArquivo}_${dataHoje}.csv`);
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+
+        window.mostrarAviso("✅ Planilha baixada! Abra no Excel.", "sucesso");
+
+    } catch (err) {
+        console.error("Erro na exportação CSV:", err);
+        alert("❌ Falha ao gerar planilha: " + err.message);
+    }
+}
+
 function mascaraCPF(cpf) { let v = cpf.value.replace(/\D/g, ""); if (v.length > 11) v = v.slice(0, 11); v = v.replace(/(\d{3})(\d)/, "$1.$2"); v = v.replace(/(\d{3})(\d)/, "$1.$2"); v = v.replace(/(\d{3})(\d{1,2})$/, "$1-$2"); cpf.value = v; }
 function mascaraTelefone(tel) { let v = tel.value.replace(/\D/g, ""); if (v.length > 11) v = v.slice(0, 11); v = v.replace(/^(\d{2})(\d)/g, "($1) $2"); v = v.replace(/(\d)(\d{4})$/, "$1-$2"); tel.value = v; }
