@@ -1134,25 +1134,70 @@ function verificarEnterCadastro(event) { if (event.key === 'Enter') carregarCada
 window.abrirModalObsCadastro = function(id, obsCodificada) { document.getElementById('obs_cad_id').value = id; document.getElementById('obs_cad_texto').value = obsCodificada && obsCodificada !== 'undefined' ? decodeURIComponent(obsCodificada) : ''; abrirModal('modal-obs-cadastro'); };
 
 async function carregarCadastros() {
-    const status = document.getElementById('filtro_cad_status').value; const nome = document.getElementById('filtro_cad_nome').value.trim();
+    const status = document.getElementById('filtro_cad_status').value; 
+    const nome = document.getElementById('filtro_cad_nome').value.trim();
     try {
         let query = supabase.from('solicitacoes_cadastro').select('*').order('created_at', { ascending: false });
-        if (status) query = query.eq('status', status); if (nome) query = query.ilike('nome', `%${nome}%`);
+        if (status) query = query.eq('status', status); 
+        if (nome) query = query.ilike('nome', `%${nome}%`);
         const { data, error } = await query; if (error) throw error;
+        
         const tbody = document.getElementById('lista-cadastros-aba');
         if (tbody) tbody.innerHTML = data.length > 0 ? data.map(c => {
-            let corStatus = c.status === 'Realizado' ? '#2ecc71' : (c.status === 'Aguardando' ? '#e74c3c' : '#f39c12'); 
+            
+            // 🟢 LÓGICA DE CORES ATUALIZADA (Adicionado Vermelho para Cancelado)
+            let corStatus = '#f39c12'; // Pendente (Laranja)
+            if (c.status === 'Realizado') corStatus = '#2ecc71'; // Verde
+            if (c.status === 'Aguardando') corStatus = '#3498db'; // Azul (Pausa)
+            if (c.status === 'Cancelado') corStatus = '#e74c3c'; // Vermelho
+
             let linkDoc = c.foto_documento_url ? `<a href="${c.foto_documento_url}" target="_blank" style="color: #3498db; text-decoration: none; font-weight: bold; display: block; margin-bottom: 3px;">📄 Ver Documento</a>` : '';
             let linkConselho = ''; if (c.numero_conselho && c.numero_conselho.toUpperCase() !== 'ISENTO' && c.numero_conselho.toUpperCase() !== 'NÃO POSSUI') { linkConselho = c.foto_conselho_url ? `<a href="${c.foto_conselho_url}" target="_blank" style="color: #8e44ad; text-decoration: none; font-weight: bold; display: block;">🖼️ Ver Conselho</a>` : '<span style="color: #e74c3c; font-size: 11px; display: block;">Falta Foto Conselho</span>'; } else { linkConselho = '<span style="color: #7f8c8d; font-size: 11px; font-weight: bold; display: block;">(Isento de Conselho)</span>'; }
-            const dataFim = c.data_resolucao || c.updated_at; const dataFinalizacao = dataFim ? new Date(dataFim).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' }) : '';
-            const realizadoPor = (c.status === 'Realizado' && c.realizado_por_nome) ? `<span style="font-size: 11px; text-align: center; display: block;"><strong>${c.realizado_por_nome}</strong><br><small style="color: #64748b;">${dataFinalizacao}</small></span>` : '<span style="text-align: center; display: block;">-</span>';
+            
+            const dataFim = c.data_resolucao || c.updated_at; 
+            const dataFinalizacao = dataFim ? new Date(dataFim).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' }) : '';
+            const realizadoPor = (c.realizado_por_nome) ? `<span style="font-size: 11px; text-align: center; display: block;"><strong>${c.realizado_por_nome}</strong><br><small style="color: #64748b;">${dataFinalizacao}</small></span>` : '<span style="text-align: center; display: block;">-</span>';
+            
             let dataNascFormatada = c.data_nascimento && c.data_nascimento.includes('-') ? c.data_nascimento.split('-').reverse().join('/') : c.data_nascimento;
             const obsSegura = c.observacao ? encodeURIComponent(c.observacao) : '';
             const isAdmin = typeof window.usuarioAtual !== 'undefined' && window.usuarioAtual && window.usuarioAtual.role === 'admin';
+            
+            // 🟢 BOTÕES ATUALIZADOS: Adicionado botão de Baixa
             let botoesAcao = '';
-            if (c.status !== 'Realizado') { botoesAcao = `<button class="btn-success btn-sm" style="flex: 1; margin: 0; padding: 4px 2px; font-size: 10px;" onclick="alterarStatusCadastro('${c.id}', 'Realizado')">✔️ Realizado</button>${c.status === 'Pendente' ? `<button class="btn-primary btn-sm" style="background: #e74c3c; flex: 1; margin: 0; padding: 4px 2px; font-size: 10px;" onclick="alterarStatusCadastro('${c.id}', 'Aguardando')">⏳ Pausa</button>` : `<button class="btn-primary btn-sm" style="background: #3498db; flex: 1; margin: 0; padding: 4px 2px; font-size: 10px;" onclick="alterarStatusCadastro('${c.id}', 'Pendente')">▶️ Retorna</button>`}<button class="btn-primary btn-sm" style="background: #95a5a6; flex: 1; margin: 0; padding: 4px 2px; font-size: 10px;" onclick="abrirModalObsCadastro('${c.id}', '${obsSegura}')">📝 Obs</button>`; } else { if (isAdmin) { botoesAcao = `<button class="btn-primary btn-sm" style="background: #e67e22; flex: 1; margin: 0; padding: 4px 2px; font-size: 10px;" onclick="alterarStatusCadastro('${c.id}', 'Pendente')">↩️ Desfazer</button><button class="btn-primary btn-sm" style="background: #95a5a6; flex: 1; margin: 0; padding: 4px 2px; font-size: 10px;" onclick="abrirModalObsCadastro('${c.id}', '${obsSegura}')">📝 Obs</button>`; } else { botoesAcao = `<button class="btn-primary btn-sm" style="background: #95a5a6; flex: 1; margin: 0; padding: 4px 2px; font-size: 10px; width: 100%;" onclick="abrirModalObsCadastro('${c.id}', '${obsSegura}')">📝 Ver Obs</button>`; } }
-            return `<tr><td style="font-size: 12px; min-width: 80px;">${new Date(c.created_at).toLocaleDateString('pt-BR')} <br><small style="color:#64748b;">${new Date(c.created_at).toLocaleTimeString('pt-BR')}</small></td><td style="font-size: 12px;"><strong style="font-size: 13px;">${c.nome}</strong><br><span style="color:#475569;">CPF:</span> ${c.cpf || '-'}<br><span style="color:#475569;">CNS:</span> ${c.cns || '-'}<br><span style="color:#475569;">Nasc:</span> ${dataNascFormatada || '-'} | <span style="color:#475569;">Sexo:</span> ${c.sexo || '-'}</td><td style="font-size: 12px;"><strong style="color: #2c3e50;">${c.cargo || '-'}</strong><br><span style="color:#475569;">Setor:</span> ${c.setor_andar || '-'}<br><span style="color:#475569;">Espec:</span> ${c.especialidade || '-'}<br><span style="color:#475569;">Vínculo:</span> ${c.vinculo_empregaticio || '-'} <br><span style="color:#475569;">Matr:</span> ${c.matricula || '-'}</td><td style="font-size: 12px;">📧 ${c.email || '-'}<br>📱 ${c.telefone || '-'}</td><td style="font-size: 12px; min-width: 110px;"><span style="color:#475569;">Nº:</span> <strong>${c.numero_conselho || '-'}</strong><br><div style="margin-top: 5px; background: #f8f9fa; padding: 5px; border-radius: 4px; border: 1px solid #e2e8f0;">${linkDoc} ${linkConselho}</div></td><td style="width: 120px; min-width: 110px;"><div style="margin-bottom: 4px;"><span style="background-color: ${corStatus}; color: white; padding: 4px; border-radius: 4px; font-size: 10px; font-weight: bold; display: block; width: 100%; text-align: center;">${c.status}</span></div><div style="display: flex; gap: 2px; flex-wrap: wrap; justify-content: center;">${botoesAcao}</div>${c.observacao ? `<div style="margin-top: 4px; font-size: 9px; color: #475569; background: #f1f5f9; padding: 2px; border-radius: 4px; text-align: center; line-height: 1.2;"><strong>Obs:</strong> ${c.observacao}</div>` : ''}</td><td>${realizadoPor}</td></tr>`;
-        }).join('') : '<tr><td colspan="7" style="text-align: center; color: #7f8c8d; padding: 20px;">Nenhuma solicitação pendente encontrada.</td></tr>';
+            if (c.status !== 'Realizado' && c.status !== 'Cancelado') { 
+                botoesAcao = `
+                    <button class="btn-success btn-sm" style="flex: 1; margin: 0; padding: 4px 2px; font-size: 10px;" onclick="alterarStatusCadastro('${c.id}', 'Realizado')">✔️ Realizado</button>
+                    ${c.status === 'Pendente' 
+                        ? `<button class="btn-primary btn-sm" style="background: #3498db; flex: 1; margin: 0; padding: 4px 2px; font-size: 10px;" onclick="alterarStatusCadastro('${c.id}', 'Aguardando')">⏳ Pausa</button>` 
+                        : `<button class="btn-primary btn-sm" style="background: #3498db; flex: 1; margin: 0; padding: 4px 2px; font-size: 10px;" onclick="alterarStatusCadastro('${c.id}', 'Pendente')">▶️ Retorna</button>`
+                    }
+                    <button class="btn-danger btn-sm" style="flex: 1; margin: 0; padding: 4px 2px; font-size: 10px;" onclick="darBaixaCadastro('${c.id}')">❌ Baixa</button>
+                    <button class="btn-primary btn-sm" style="background: #95a5a6; flex: 1; margin: 0; padding: 4px 2px; font-size: 10px;" onclick="abrirModalObsCadastro('${c.id}', '${obsSegura}')">📝 Obs</button>
+                `; 
+            } else { 
+                if (isAdmin) { 
+                    botoesAcao = `<button class="btn-primary btn-sm" style="background: #e67e22; flex: 1; margin: 0; padding: 4px 2px; font-size: 10px;" onclick="alterarStatusCadastro('${c.id}', 'Pendente')">↩️ Desfazer</button><button class="btn-primary btn-sm" style="background: #95a5a6; flex: 1; margin: 0; padding: 4px 2px; font-size: 10px;" onclick="abrirModalObsCadastro('${c.id}', '${obsSegura}')">📝 Obs</button>`; 
+                } else { 
+                    botoesAcao = `<button class="btn-primary btn-sm" style="background: #95a5a6; flex: 1; margin: 0; padding: 4px 2px; font-size: 10px; width: 100%;" onclick="abrirModalObsCadastro('${c.id}', '${obsSegura}')">📝 Ver Obs</button>`; 
+                } 
+            }
+
+            return `
+                <tr>
+                    <td style="font-size: 12px; min-width: 80px;">${new Date(c.created_at).toLocaleDateString('pt-BR')} <br><small style="color:#64748b;">${new Date(c.created_at).toLocaleTimeString('pt-BR')}</small></td>
+                    <td style="font-size: 12px;"><strong style="font-size: 13px;">${c.nome}</strong><br><span style="color:#475569;">CPF:</span> ${c.cpf || '-'}<br><span style="color:#475569;">CNS:</span> ${c.cns || '-'}<br><span style="color:#475569;">Nasc:</span> ${dataNascFormatada || '-'}</td>
+                    <td style="font-size: 12px;"><strong style="color: #2c3e50;">${c.cargo || '-'}</strong><br><span style="color:#475569;">Setor:</span> ${c.setor_andar || '-'}</td>
+                    <td style="font-size: 12px;">📧 ${c.email || '-'}<br>📱 ${c.telefone || '-'}</td>
+                    <td style="font-size: 12px; min-width: 110px;"><strong>${c.numero_conselho || '-'}</strong><div style="margin-top: 5px; background: #f8f9fa; padding: 5px; border-radius: 4px; border: 1px solid #e2e8f0;">${linkDoc} ${linkConselho}</div></td>
+                    <td style="width: 120px; min-width: 110px;">
+                        <div style="margin-bottom: 4px;"><span style="background-color: ${corStatus}; color: white; padding: 4px; border-radius: 4px; font-size: 10px; font-weight: bold; display: block; width: 100%; text-align: center;">${c.status}</span></div>
+                        <div style="display: flex; gap: 2px; flex-wrap: wrap; justify-content: center;">${botoesAcao}</div>
+                        ${c.status === 'Cancelado' ? `<div style="margin-top: 4px; font-size: 9px; color: #475569; background: #fee2e2; padding: 2px; border-radius: 4px; text-align: center; line-height: 1.2;"><strong>Motivo:</strong> ${c.observacao || 'Não informado'}</div>` : (c.observacao ? `<div style="margin-top: 4px; font-size: 9px; color: #475569; background: #f1f5f9; padding: 2px; border-radius: 4px; text-align: center; line-height: 1.2;"><strong>Obs:</strong> ${c.observacao}</div>` : '')}
+                    </td>
+                    <td>${realizadoPor}</td>
+                </tr>
+            `;
+        }).join('') : '<tr><td colspan="7" style="text-align: center; color: #7f8c8d; padding: 20px;">Nenhuma solicitação encontrada.</td></tr>';
     } catch (err) { console.error("Erro ao carregar Cadastros:", err); }
 }
 
@@ -1165,6 +1210,30 @@ async function alterarStatusCadastro(id, novoStatus) {
             const { error } = await supabase.from('solicitacoes_cadastro').update(updateData).eq('id', id); if (error) throw error;
             alert(`✅ Status atualizado para ${novoStatus}!`); carregarCadastros();
         } catch (err) { alert("❌ Erro ao atualizar status: " + err.message); }
+    });
+}
+
+// 🟢 DAR BAIXA EM CADASTRO TIMED (Automático)
+async function darBaixaCadastro(id) {
+    pedirMotivo("Cancelar Solicitação TIMED", "Por que este cadastro está sendo cancelado?", "Ex: Dados inconsistentes, duplicidade...", "perigo", async (motivo) => {
+        
+        let nomeTecnico = 'Sistema';
+        if (typeof window.usuarioAtual !== 'undefined' && window.usuarioAtual) nomeTecnico = window.usuarioAtual.nome;
+
+        try {
+            const { error } = await supabase.from('solicitacoes_cadastro').update({ 
+                status: 'Cancelado', 
+                observacao: motivo,
+                realizado_por_nome: nomeTecnico, // Grava seu nome
+                data_resolucao: new Date().toISOString() // Grava a hora exata
+            }).eq('id', id);
+            
+            if (error) throw error;
+            
+            alert("✅ Cadastro cancelado e arquivado!"); 
+            carregarCadastros(); 
+            if(typeof carregarResumoDashboard === 'function') carregarResumoDashboard();
+        } catch (err) { alert("❌ Erro ao dar baixa: " + err.message); }
     });
 }
 
