@@ -1723,3 +1723,40 @@ async function exportarParaCSV(tabelaSupabase, nomeArquivo) {
 
 function mascaraCPF(cpf) { let v = cpf.value.replace(/\D/g, ""); if (v.length > 11) v = v.slice(0, 11); v = v.replace(/(\d{3})(\d)/, "$1.$2"); v = v.replace(/(\d{3})(\d)/, "$1.$2"); v = v.replace(/(\d{3})(\d{1,2})$/, "$1-$2"); cpf.value = v; }
 function mascaraTelefone(tel) { let v = tel.value.replace(/\D/g, ""); if (v.length > 11) v = v.slice(0, 11); v = v.replace(/^(\d{2})(\d)/g, "($1) $2"); v = v.replace(/(\d)(\d{4})$/, "$1-$2"); tel.value = v; }
+
+// ==========================================
+// 🛡️ BLINDAGEM DE FRONT-END (ANTI-CURIOSOS)
+// ==========================================
+
+// 1. Bloqueia botão direito, F12, Inspecionar e Ver Código Fonte
+document.addEventListener('contextmenu', e => e.preventDefault());
+document.addEventListener('keydown', e => {
+    if (e.key === 'F12' || 
+       (e.ctrlKey && e.shiftKey && (e.key === 'I' || e.key === 'J' || e.key === 'C')) || 
+       (e.ctrlKey && e.key === 'U')) {
+        e.preventDefault();
+        return false;
+    }
+});
+
+// 2. Armadilha de Debugger (Inferniza a vida de quem abrir o console)
+setInterval(function() {
+    const inicio = new Date().getTime();
+    debugger; // Se o console estiver aberto, o navegador trava aqui
+    const fim = new Date().getTime();
+    
+    // Se ele demorou mais de 100ms para passar da linha de cima, o painel está aberto!
+    if (fim - inicio > 100) {
+        document.body.innerHTML = "<h1 style='color:red; text-align:center; margin-top:20%;'>Acesso Negado. Atividade Suspeita Detectada.</h1>";
+        window.location.replace("about:blank"); // Expulsa o usuário
+    }
+}, 2000);
+
+// Função que neutraliza códigos maliciosos digitados pelos usuários
+window.limparTexto = function(texto) {
+    if (!texto) return '';
+    return texto.toString().replace(/[&<>'"]/g, function(tag) {
+        const chars = { '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' };
+        return chars[tag] || tag;
+    });
+};
