@@ -1386,6 +1386,7 @@ async function darBaixaAD(id) {
     });
 }
 
+// 🟢 CORRIGIDO: Exibindo Cargo e a Localização Completa (Prédio, Setor, Andar)
 async function carregarSolicitacoesTreinamento() {
     const status = document.getElementById('filtro_sol_tr_status').value;
 
@@ -1404,16 +1405,18 @@ async function carregarSolicitacoesTreinamento() {
                 if (t.status === 'Agendado' || t.status === 'Realizado') corStatus = '#2ecc71'; 
                 if (t.status === 'Cancelado') corStatus = '#e74c3c'; 
 
-                const setorFormatado = t.setor || t.cargo || '-';
+                // 🟢 MÁGICA AQUI: Puxa o cargo e a localização completa que veio do site externo
+                const cargoFormatado = t.cargo || '-';
+                const setorFormatado = t.setor_andar || t.setor || '-';
+                
                 const contatoFormatado = t.telefone || t.celular || '-';
                 const isAdmin = typeof window.usuarioAtual !== 'undefined' && window.usuarioAtual && window.usuarioAtual.role === 'admin';
 
-                // 🟢 Formata a Data Desejada (que o usuário preencheu no site)
+                // Formata a Data Desejada
                 const dataSugerida = t.data_desejada ? new Date(t.data_desejada).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' }) : 'Não informada';
 
                 let botoesAcao = '';
                 if (t.status === 'Pendente' || !t.status) {
-                    // 🟢 Botão Agendar agora leva a data_desejada também
                     botoesAcao = `
                         <button class="btn-success btn-sm" style="flex: 1; margin: 0; padding: 5px 2px; font-size: 11px;" 
                             onclick="prepararAgendamento('${t.id}', '${t.nome_solicitante || t.nome || ''}', '${t.telefone || t.celular || ''}', '${t.tema || ''}', '${t.data_desejada || ''}')">
@@ -1433,7 +1436,12 @@ async function carregarSolicitacoesTreinamento() {
                     <tr>
                         <td style="font-size: 12px; min-width: 80px;">${new Date(t.created_at).toLocaleDateString('pt-BR')} <br><small style="color:#64748b;">${new Date(t.created_at).toLocaleTimeString('pt-BR')}</small></td>
                         <td style="font-size: 12px;"><strong>${t.nome_solicitante || t.nome || '-'}</strong><br><small>${contatoFormatado}</small></td>
-                        <td style="font-size: 12px;">${setorFormatado}</td>
+                        
+                        <td style="font-size: 12px;">
+                            <strong style="color: #2c3e50;">${cargoFormatado}</strong><br>
+                            <span style="color:#475569;">Local:</span> ${setorFormatado}
+                        </td>
+                        
                         <td style="font-size: 12px;">
                             <strong>${t.tema || '-'}</strong><br>
                             <small style="color: #3498db; font-weight: bold;">🗓️ Sugestão: ${dataSugerida}</small>
