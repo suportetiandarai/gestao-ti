@@ -1386,7 +1386,7 @@ async function darBaixaAD(id) {
     });
 }
 
-// 🟢 CORRIGIDO: Exibindo Cargo e a Localização Completa (Prédio, Setor, Andar)
+// 🟢 1. ATUALIZADA: Passa a localização completa no botão "Agendar"
 async function carregarSolicitacoesTreinamento() {
     const status = document.getElementById('filtro_sol_tr_status').value;
 
@@ -1405,21 +1405,19 @@ async function carregarSolicitacoesTreinamento() {
                 if (t.status === 'Agendado' || t.status === 'Realizado') corStatus = '#2ecc71'; 
                 if (t.status === 'Cancelado') corStatus = '#e74c3c'; 
 
-                // 🟢 MÁGICA AQUI: Puxa o cargo e a localização completa que veio do site externo
                 const cargoFormatado = t.cargo || '-';
-                const setorFormatado = t.setor_andar || t.setor || '-';
-                
+                const setorFormatado = t.setor_andar || t.setor || '-'; // 🟢 Pega do novo formato do site
                 const contatoFormatado = t.telefone || t.celular || '-';
                 const isAdmin = typeof window.usuarioAtual !== 'undefined' && window.usuarioAtual && window.usuarioAtual.role === 'admin';
 
-                // Formata a Data Desejada
                 const dataSugerida = t.data_desejada ? new Date(t.data_desejada).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' }) : 'Não informada';
 
                 let botoesAcao = '';
                 if (t.status === 'Pendente' || !t.status) {
+                    // 🟢 A MÁGICA COMEÇA AQUI: Enviamos o setorFormatado pro agendamento
                     botoesAcao = `
                         <button class="btn-success btn-sm" style="flex: 1; margin: 0; padding: 5px 2px; font-size: 11px;" 
-                            onclick="prepararAgendamento('${t.id}', '${t.nome_solicitante || t.nome || ''}', '${t.telefone || t.celular || ''}', '${t.tema || ''}', '${t.data_desejada || ''}')">
+                            onclick="prepararAgendamento('${t.id}', '${t.nome_solicitante || t.nome || ''}', '${t.telefone || t.celular || ''}', '${t.tema || ''}', '${t.data_desejada || ''}', '${setorFormatado}')">
                             📅 Agendar
                         </button>
                         <button class="btn-danger btn-sm" style="flex: 1; margin: 0; padding: 5px 2px; font-size: 11px;" onclick="alterarStatusTreinamentoExt('${t.id}', 'Cancelado')">❌ Baixa</button>
@@ -1436,22 +1434,18 @@ async function carregarSolicitacoesTreinamento() {
                     <tr>
                         <td style="font-size: 12px; min-width: 80px;">${new Date(t.created_at).toLocaleDateString('pt-BR')} <br><small style="color:#64748b;">${new Date(t.created_at).toLocaleTimeString('pt-BR')}</small></td>
                         <td style="font-size: 12px;"><strong>${t.nome_solicitante || t.nome || '-'}</strong><br><small>${contatoFormatado}</small></td>
-                        
                         <td style="font-size: 12px;">
                             <strong style="color: #2c3e50;">${cargoFormatado}</strong><br>
                             <span style="color:#475569;">Local:</span> ${setorFormatado}
                         </td>
-                        
                         <td style="font-size: 12px;">
                             <strong>${t.tema || '-'}</strong><br>
                             <small style="color: #3498db; font-weight: bold;">🗓️ Sugestão: ${dataSugerida}</small>
                         </td>
-                        
                         <td style="width: 140px; min-width: 140px;">
                             <div style="margin-bottom: 6px;">
                                 <span style="background-color: ${corStatus}; color: white; padding: 5px; border-radius: 4px; font-size: 11px; font-weight: bold; display: block; width: 100%; text-align: center;">${t.status || 'Pendente'}</span>
                             </div>
-                            
                             <div style="display: flex; gap: 4px; flex-wrap: nowrap; justify-content: center;">
                                 ${botoesAcao}
                             </div>
@@ -1463,20 +1457,59 @@ async function carregarSolicitacoesTreinamento() {
     } catch (err) { console.error("Erro ao carregar solicitações de treinamento:", err); }
 }
 
-// 🟢 Atualizar também a função prepararAgendamento para receber a data
-window.prepararAgendamento = function(id, nome, telefone, tema, dataSugerida) {
+// 🟢 2. ATUALIZADA: Lê a string, separa Prédio, Setor e Andar, e preenche o formulário
+window.prepararAgendamento = function(id, nome, telefone, tema, dataSugerida, localizacao) {
     idSolicitacaoEmAndamento = id; 
     document.getElementById('tr_colaborador').value = nome; 
     document.getElementById('tr_telefone').value = telefone; 
     document.getElementById('tr_tema').value = tema; 
     
-    // Se existir data sugerida, preenche o campo de data e hora do agendamento
-    if (dataSugerida && document.getElementById('tr_data_hora')) {
-        // Converte para o formato que o input datetime-local aceita (YYYY-MM-DDTHH:MM)
-        const dataFormatada = dataSugerida.substring(0, 16);
-        document.getElementById('tr_data_hora').value = dataFormatada;
+    // Extrator Automático de Localização
+    if (localizacao && localizacao !== '-') {
+        // Tenta achar o padrão "PRÉDIO - SETOR (ANDAR)"
+        const regex = /^(.*?)\s*-\s*(.*?)\s*\((.*?)\)$/;
+        const match = localizacao.match(regex);
+        
+        if (match) {
+            const predio = match[1]; // Pega o Prédio
+            const setor = match[2];  // Pega o Setor
+            const andar = match[3];  // Pega o Andar
+            
+            // Preenche o Prédio
+            const selectPredio = document.getElementById('tr_predio');
+            if(selectPredio) {
+                selectPredio.value = predio;
+                // Carrega a lista de andares desse prédio e já marca o andar certo!
+                if(typeof atualizarAndares === 'function') {
+                    atualizarAndares('tr_predio', 'tr_andar', andar);
+                }
+            }
+            
+            // Preenche o Setor
+            const inputSetor = document.getElementById('tr_setor');
+            if(inputSetor) inputSetor.value = setor;
+            
+        } else {
+            // Se for um pedido antigo sem essa formatação, joga tudo no campo Setor
+            const inputSetor = document.getElementById('tr_setor');
+            if(inputSetor) inputSetor.value = localizacao;
+        }
+    } else {
+        // Limpa os campos se não tiver nada
+        document.getElementById('tr_predio').value = '';
+        document.getElementById('tr_setor').value = '';
+        document.getElementById('tr_andar').innerHTML = '<option value="">Selecione o Andar</option>';
     }
     
+    // Preenche a data se houver
+    if (dataSugerida && document.getElementById('tr_data_hora')) {
+        const dataFormatada = dataSugerida.substring(0, 16);
+        document.getElementById('tr_data_hora').value = dataFormatada;
+    } else {
+        document.getElementById('tr_data_hora').value = '';
+    }
+    
+    // Muda pra aba e foca no campo
     abrirAba('aba-treinamentos'); 
     document.getElementById('tr_predio').focus();
 };
