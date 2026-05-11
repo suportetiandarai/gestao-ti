@@ -780,7 +780,6 @@ async function abrirModalEditarEquipamento(id) {
 async function salvarEdicaoEquipamento() {
     const id = document.getElementById('edit_inv_id').value;
     
-    // 🟢 Agora todos os dados estão organizados e dentro das chaves { }
     const dadosAtualizados = { 
         tipo: document.getElementById('edit_inv_tipo').value, 
         marca: document.getElementById('edit_inv_marca').value, 
