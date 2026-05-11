@@ -1199,17 +1199,17 @@ async function carregarCadastros() {
 
             let linkDoc = c.foto_documento_url ? `<a href="${c.foto_documento_url}" target="_blank" style="color: #3498db; text-decoration: none; font-weight: bold; display: block; margin-bottom: 3px;">📄 Ver Documento</a>` : '';
             
-            // 🟢 MÁGICA DA FRENTE E VERSO AQUI:
+            // 🟢 MÁGICA DA FRENTE E VERSO AQUI: Lendo múltiplos arquivos
             let linkConselho = ''; 
             if (c.numero_conselho && c.numero_conselho.toUpperCase() !== 'ISENTO' && c.numero_conselho.toUpperCase() !== 'NÃO POSSUI') { 
                 if (c.foto_conselho_url) {
                     // Verifica se a string tem o nosso separador "|||"
                     if (c.foto_conselho_url.includes('|||')) {
                         const urls = c.foto_conselho_url.split('|||');
-                        linkConselho = `
-                            <a href="${urls[0]}" target="_blank" style="color: #8e44ad; text-decoration: none; font-weight: bold; display: block; margin-bottom: 3px;">🖼️ Frente</a>
-                            <a href="${urls[1]}" target="_blank" style="color: #8e44ad; text-decoration: none; font-weight: bold; display: block;">🖼️ Verso</a>
-                        `;
+                        // Cria um botão para cada imagem encontrada no pacote
+                        linkConselho = urls.map((url, idx) => `
+                            <a href="${url}" target="_blank" style="color: #8e44ad; text-decoration: none; font-weight: bold; display: block; margin-bottom: 3px;">🖼️ Arquivo ${idx + 1}</a>
+                        `).join('');
                     } else {
                         // Se for um cadastro antigo (que só tinha 1 foto), mostra normal
                         linkConselho = `<a href="${c.foto_conselho_url}" target="_blank" style="color: #8e44ad; text-decoration: none; font-weight: bold; display: block;">🖼️ Ver Conselho</a>`;
