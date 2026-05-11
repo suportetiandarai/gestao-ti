@@ -813,16 +813,16 @@
                     <div class="table-responsive">
                         <table>
                             <thead>
-                                <tr>
-                                    <th>Tipo</th>
-                                    <th>Marca / Modelo</th>
-                                    <th>Nº Série</th>
-                                    <th>Patrimônio</th><th>Localização</th>
-                                    <th>Localização</th>
-                                    <th>Status</th>
-                                    <th>Ações</th>
-                                </tr>
-                            </thead>
+                            <tr>
+                                <th>Tipo</th>
+                                <th>Marca / Modelo</th>
+                                <th>Nº Série</th>
+                                <th>Patrimônio</th>
+                                <th>Localização</th>
+                                <th>Status</th>
+                                <th>Ações</th>
+                            </tr>
+                        </thead>
                             <tbody id="lista-inventario-aba"></tbody>
                         </table>
                     </div>
@@ -1327,14 +1327,15 @@
             <label>Número de Série (S/N):</label>
             <input type="text" id="inv_serie" required>
 
-     <div class="form-group">
-            <label>Patrimônio</label>
-            <select id="inv_patrimonio" class="form-control">
-        <option value="">Selecione a origem...</option>
-        <option value="RioSaude">RioSaude</option>
-        <option value="Federal">Federal</option>
-    </select>
-</div>
+             <div class="form-group">
+                <label>Patrimônio</label>
+                <select id="edit_inv_patrimonio" class="form-control">
+                    <option value="">Selecione a origem...</option>
+                    <option value="RioSaude">RioSaude</option>
+                    <option value="Federal">Federal</option>
+                </select>
+            </div>
+            
             <label>Status Atual:</label>
             <select id="inv_status" required>
                 <option value="Em uso">🟢 Em uso</option>
