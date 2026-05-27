@@ -1413,6 +1413,46 @@ async function uploadFotoConselhoFaltante(idSolicitacao) {
         alert("❌ Falha ao anexar documento: " + err.message);
     }
 }
+
+// 🟢 3. FUNÇÃO QUE EXCLUI APENAS O ARQUIVO CLICADO NO "X"
+async function removerFotoConselho(idSolicitacao, urlToRemove) {
+    perguntar("Excluir Anexo", "Tem certeza que deseja remover este arquivo?", "perigo", async () => {
+        window.mostrarAviso("⏳ Removendo arquivo...", "aviso");
+        try {
+            // 1. Pega os dados atuais no banco
+            const { data: sol, error: errGet } = await supabase.from('solicitacoes_cadastro').select('foto_conselho_url').eq('id', idSolicitacao).single();
+            if (errGet) throw errGet;
+            if (!sol || !sol.foto_conselho_url) return;
+
+            // 2. Remove a URL da string
+            let urls = sol.foto_conselho_url.split('|||');
+            urls = urls.filter(u => u !== urlToRemove); // Tira apenas a foto clicada
+            let novaStringUrls = urls.length > 0 ? urls.join('|||') : null;
+
+            // 3. Atualiza o banco de dados
+            const { error: errUpdate } = await supabase.from('solicitacoes_cadastro')
+                .update({ foto_conselho_url: novaStringUrls })
+                .eq('id', idSolicitacao);
+            
+            if (errUpdate) throw errUpdate;
+
+            // 4. Exclui a imagem física da lixeira do Supabase (para não pesar)
+            try {
+                const partesUrl = urlToRemove.split('documentos_externos/');
+                if (partesUrl.length > 1) {
+                    const caminhoArquivo = partesUrl[1];
+                    await supabase.storage.from('documentos_externos').remove([caminhoArquivo]);
+                }
+            } catch (e) { console.log("Aviso: A imagem já não estava no Storage", e); }
+
+            window.mostrarAviso("✅ Arquivo removido com sucesso!", "sucesso");
+            carregarCadastros(); 
+        } catch (err) {
+            alert("❌ Erro ao remover arquivo: " + err.message);
+        }
+    });
+}
+
 async function alterarStatusAD(id, novoStatus) {
     let tipoModal = novoStatus === 'Realizado' ? 'sucesso' : 'info';
     perguntar("Status do AD", `Confirma a alteração do login para "${novoStatus}"?`, tipoModal, async () => {
