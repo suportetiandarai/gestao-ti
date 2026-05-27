@@ -1179,7 +1179,6 @@ async function alterarStatusTreinamentoExt(id, novoStatus) {
 function verificarEnterCadastro(event) { if (event.key === 'Enter') carregarCadastros(); }
 window.abrirModalObsCadastro = function(id, obsCodificada) { document.getElementById('obs_cad_id').value = id; document.getElementById('obs_cad_texto').value = obsCodificada && obsCodificada !== 'undefined' ? decodeURIComponent(obsCodificada) : ''; abrirModal('modal-obs-cadastro'); };
 
-// 🟢 ATUALIZADO: Renderiza os dois botões (Frente e Verso) na tabela da T.I.
 async function carregarCadastros() {
     const status = document.getElementById('filtro_cad_status').value; 
     const nome = document.getElementById('filtro_cad_nome').value.trim();
@@ -1199,33 +1198,40 @@ async function carregarCadastros() {
 
             let linkDoc = c.foto_documento_url ? `<a href="${c.foto_documento_url}" target="_blank" style="color: #3498db; text-decoration: none; font-weight: bold; display: block; margin-bottom: 3px;">📄 Ver Documento</a>` : '';
             
-            // 🟢 MÁGICA REVISADA: Sempre mostra o botão de anexar se não houver foto!
             let linkConselho = ''; 
             const numConselho = c.numero_conselho ? c.numero_conselho.toUpperCase() : '';
             const exigeConselho = numConselho && numConselho !== 'ISENTO' && numConselho !== 'NÃO POSSUI';
 
-            // Verifica se a foto existe de verdade
+            // 🟢 DESENHA OS LINKS COM O BOTÃO DE "X" (EXCLUIR)
             if (c.foto_conselho_url && c.foto_conselho_url !== 'null' && c.foto_conselho_url !== 'undefined') {
                 if (c.foto_conselho_url.includes('|||')) {
                     const urls = c.foto_conselho_url.split('|||');
                     linkConselho = urls.map((url, idx) => `
-                        <a href="${url}" target="_blank" style="color: #8e44ad; text-decoration: none; font-weight: bold; display: block; margin-bottom: 3px;">🖼️ Arquivo ${idx + 1}</a>
+                        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px; background: #f8fafc; padding: 2px 6px; border-radius: 4px; border: 1px solid #e2e8f0;">
+                            <a href="${url}" target="_blank" style="color: #8e44ad; text-decoration: none; font-weight: bold; font-size: 11px;">🖼️ Arq ${idx + 1}</a>
+                            <button type="button" style="background: none; border: none; color: #e74c3c; cursor: pointer; font-weight: 900; font-size: 12px;" onclick="removerFotoConselho('${c.id}', '${url}')" title="Excluir arquivo">✕</button>
+                        </div>
                     `).join('');
                 } else {
-                    linkConselho = `<a href="${c.foto_conselho_url}" target="_blank" style="color: #8e44ad; text-decoration: none; font-weight: bold; display: block;">🖼️ Ver Arquivo</a>`;
+                    linkConselho = `
+                        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px; background: #f8fafc; padding: 2px 6px; border-radius: 4px; border: 1px solid #e2e8f0;">
+                            <a href="${c.foto_conselho_url}" target="_blank" style="color: #8e44ad; text-decoration: none; font-weight: bold; font-size: 11px;">🖼️ Ver Arquivo</a>
+                            <button type="button" style="background: none; border: none; color: #e74c3c; cursor: pointer; font-weight: 900; font-size: 12px;" onclick="removerFotoConselho('${c.id}', '${c.foto_conselho_url}')" title="Excluir arquivo">✕</button>
+                        </div>
+                    `;
                 }
             } else {
-                // 🟢 SE NÃO TEM FOTO, MONTA O BOTÃO DE ANEXAR (Para qualquer caso)
                 let textoAviso = exigeConselho 
                     ? '<span style="color: #e74c3c; font-size: 11px; font-weight: bold; display: block; margin-bottom: 6px;">Falta Arquivo</span>' 
                     : '<span style="color: #7f8c8d; font-size: 11px; font-weight: bold; display: block; margin-bottom: 6px;">(Sem Arquivo)</span>';
-
-                linkConselho = `
-                    ${textoAviso}
-                    <input type="file" id="upload_conselho_${c.id}" accept="image/*,application/pdf" multiple style="display: none;" onchange="uploadFotoConselhoFaltante('${c.id}')">
-                    <button class="btn-primary btn-sm" style="background: #34495e; font-size: 10px; padding: 4px 6px; margin: 0; width: 100%; display: block; text-align: center; border-radius: 4px; cursor: pointer;" onclick="document.getElementById('upload_conselho_${c.id}').click()">📎 Anexar Arquivo</button>
-                `;
+                linkConselho = textoAviso;
             }
+
+            // 🟢 BOTÃO DE ANEXAR SEMPRE VISÍVEL
+            linkConselho += `
+                <input type="file" id="upload_conselho_${c.id}" accept="image/*,application/pdf" multiple style="display: none;" onchange="uploadFotoConselhoFaltante('${c.id}')">
+                <button class="btn-primary btn-sm" style="background: #34495e; font-size: 10px; padding: 4px 6px; margin: 4px 0 0 0; width: 100%; display: block; text-align: center; border-radius: 4px; cursor: pointer;" onclick="document.getElementById('upload_conselho_${c.id}').click()">📎 Anexar Arquivo</button>
+            `;
             
             const dataFim = c.data_resolucao || c.updated_at; 
             const dataFinalizacao = dataFim ? new Date(dataFim).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' }) : '';
@@ -1242,7 +1248,7 @@ async function carregarCadastros() {
                 if (isAdmin) { botoesAcao = `<button class="btn-primary btn-sm" style="background: #e67e22; flex: 1; margin: 0; padding: 4px 2px; font-size: 10px;" onclick="alterarStatusCadastro('${c.id}', 'Pendente')">↩️ Desfazer</button><button class="btn-primary btn-sm" style="background: #95a5a6; flex: 1; margin: 0; padding: 4px 2px; font-size: 10px;" onclick="abrirModalObsCadastro('${c.id}', '${obsSegura}')">📝 Obs</button>`; } else { botoesAcao = `<button class="btn-primary btn-sm" style="background: #95a5a6; flex: 1; margin: 0; padding: 4px 2px; font-size: 10px; width: 100%;" onclick="abrirModalObsCadastro('${c.id}', '${obsSegura}')">📝 Ver Obs</button>`; } 
             }
 
-            return `<tr><td style="font-size: 12px; min-width: 80px;">${new Date(c.created_at).toLocaleDateString('pt-BR')} <br><small style="color:#64748b;">${new Date(c.created_at).toLocaleTimeString('pt-BR')}</small></td><td style="font-size: 12px;"><strong style="font-size: 13px;">${c.nome}</strong><br><span style="color:#475569;">CPF:</span> ${c.cpf || '-'}<br><span style="color:#475569;">CNS:</span> ${c.cns || '-'}<br><span style="color:#475569;">Nasc:</span> ${dataNascFormatada || '-'}</td><td style="font-size: 12px;"><strong style="color: #2c3e50;">${c.cargo || '-'}</strong><br><span style="color:#475569;">Setor:</span> ${c.setor_andar || '-'}</td><td style="font-size: 12px;">📧 ${c.email || '-'}<br>📱 ${c.telefone || '-'}</td><td style="font-size: 12px; min-width: 110px;"><strong>${c.numero_conselho || '-'}</strong><div style="margin-top: 5px; background: #f8f9fa; padding: 5px; border-radius: 4px; border: 1px solid #e2e8f0;">${linkDoc} ${linkConselho}</div></td><td style="width: 120px; min-width: 110px;"><div style="margin-bottom: 4px;"><span style="background-color: ${corStatus}; color: white; padding: 4px; border-radius: 4px; font-size: 10px; font-weight: bold; display: block; width: 100%; text-align: center;">${c.status}</span></div><div style="display: flex; gap: 2px; flex-wrap: wrap; justify-content: center;">${botoesAcao}</div>${c.status === 'Cancelado' ? `<div style="margin-top: 4px; font-size: 9px; color: #475569; background: #fee2e2; padding: 2px; border-radius: 4px; text-align: center; line-height: 1.2;"><strong>Motivo:</strong> ${c.observacao || 'Não informado'}</div>` : (c.observacao ? `<div style="margin-top: 4px; font-size: 9px; color: #475569; background: #f1f5f9; padding: 2px; border-radius: 4px; text-align: center; line-height: 1.2;"><strong>Obs:</strong> ${c.observacao}</div>` : '')}</td><td>${realizadoPor}</td></tr>`;
+            return `<tr><td style="font-size: 12px; min-width: 80px;">${new Date(c.created_at).toLocaleDateString('pt-BR')} <br><small style="color:#64748b;">${new Date(c.created_at).toLocaleTimeString('pt-BR')}</small></td><td style="font-size: 12px;"><strong style="font-size: 13px;">${c.nome}</strong><br><span style="color:#475569;">CPF:</span> ${c.cpf || '-'}<br><span style="color:#475569;">CNS:</span> ${c.cns || '-'}<br><span style="color:#475569;">Nasc:</span> ${dataNascFormatada || '-'}</td><td style="font-size: 12px;"><strong style="color: #2c3e50;">${c.cargo || '-'}</strong><br><span style="color:#475569;">Setor:</span> ${c.setor_andar || '-'}</td><td style="font-size: 12px;">📧 ${c.email || '-'}<br>📱 ${c.telefone || '-'}</td><td style="font-size: 12px; min-width: 110px;"><strong>${c.numero_conselho || '-'}</strong><div style="margin-top: 5px; background: #ffffff; padding: 5px; border-radius: 4px; border: 1px solid #e2e8f0;">${linkDoc} ${linkConselho}</div></td><td style="width: 120px; min-width: 110px;"><div style="margin-bottom: 4px;"><span style="background-color: ${corStatus}; color: white; padding: 4px; border-radius: 4px; font-size: 10px; font-weight: bold; display: block; width: 100%; text-align: center;">${c.status}</span></div><div style="display: flex; gap: 2px; flex-wrap: wrap; justify-content: center;">${botoesAcao}</div>${c.status === 'Cancelado' ? `<div style="margin-top: 4px; font-size: 9px; color: #475569; background: #fee2e2; padding: 2px; border-radius: 4px; text-align: center; line-height: 1.2;"><strong>Motivo:</strong> ${c.observacao || 'Não informado'}</div>` : (c.observacao ? `<div style="margin-top: 4px; font-size: 9px; color: #475569; background: #f1f5f9; padding: 2px; border-radius: 4px; text-align: center; line-height: 1.2;"><strong>Obs:</strong> ${c.observacao}</div>` : '')}</td><td>${realizadoPor}</td></tr>`;
         }).join('') : '<tr><td colspan="7" style="text-align: center; color: #7f8c8d; padding: 20px;">Nenhuma solicitação encontrada.</td></tr>';
     } catch (err) { console.error("Erro ao carregar Cadastros:", err); }
 }
@@ -1368,32 +1374,38 @@ async function uploadFotoConselhoFaltante(idSolicitacao) {
     if (!fileInput || fileInput.files.length === 0) return;
 
     window.mostrarAviso("⏳ Fazendo upload do(s) arquivo(s)... Aguarde.", "aviso");
-    let urlsGeradas = [];
 
     try {
-        // Loop para enviar todas as imagens selecionadas (ex: Frente e Verso)
+        // 1. Pega os arquivos que já existem no banco
+        const { data: sol } = await supabase.from('solicitacoes_cadastro').select('foto_conselho_url').eq('id', idSolicitacao).single();
+        let urlsExistentes = [];
+        if (sol && sol.foto_conselho_url && sol.foto_conselho_url !== 'null') {
+            urlsExistentes = sol.foto_conselho_url.split('|||');
+        }
+
+        // 2. Sobe as novas fotos
         for (let i = 0; i < fileInput.files.length; i++) {
             const file = fileInput.files[i];
-            
             const nomeLimpo = file.name.normalize('NFD').replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, '_');
             const nomeArquivo = `conselho_interno_${i}_${Date.now()}_${nomeLimpo}`;
 
-            const { data, error } = await supabase.storage.from('documentos_externos').upload(nomeArquivo, file);
+            const { error } = await supabase.storage.from('documentos_externos').upload(nomeArquivo, file);
             if (error) throw error;
 
             const publicUrl = supabase.storage.from('documentos_externos').getPublicUrl(nomeArquivo).data.publicUrl;
-            urlsGeradas.push(publicUrl);
+            urlsExistentes.push(publicUrl); // Adiciona na lista
         }
 
-        const urlConselhoFinal = urlsGeradas.join('|||');
+        const urlConselhoFinal = urlsExistentes.join('|||');
 
+        // 3. Atualiza o banco com a nova lista completa
         const { error: dbError } = await supabase.from('solicitacoes_cadastro')
             .update({ foto_conselho_url: urlConselhoFinal })
             .eq('id', idSolicitacao);
 
         if (dbError) throw dbError;
 
-        alert("✅ Documento anexado e salvo com sucesso!");
+        window.mostrarAviso("✅ Arquivo(s) anexado(s) com sucesso!", "sucesso");
         carregarCadastros(); 
 
     } catch (err) {
@@ -1401,7 +1413,6 @@ async function uploadFotoConselhoFaltante(idSolicitacao) {
         alert("❌ Falha ao anexar documento: " + err.message);
     }
 }
-
 async function alterarStatusAD(id, novoStatus) {
     let tipoModal = novoStatus === 'Realizado' ? 'sucesso' : 'info';
     perguntar("Status do AD", `Confirma a alteração do login para "${novoStatus}"?`, tipoModal, async () => {
