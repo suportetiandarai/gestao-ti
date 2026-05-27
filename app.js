@@ -1199,7 +1199,7 @@ async function carregarCadastros() {
 
             let linkDoc = c.foto_documento_url ? `<a href="${c.foto_documento_url}" target="_blank" style="color: #3498db; text-decoration: none; font-weight: bold; display: block; margin-bottom: 3px;">📄 Ver Documento</a>` : '';
             
-            // 🟢 MÁGICA DA FRENTE E VERSO AQUI: Lendo múltiplos arquivos
+            // 🟢 MÁGICA DA FRENTE E VERSO E BOTÃO DE ANEXO INTERNO:
             let linkConselho = ''; 
             if (c.numero_conselho && c.numero_conselho.toUpperCase() !== 'ISENTO' && c.numero_conselho.toUpperCase() !== 'NÃO POSSUI') { 
                 if (c.foto_conselho_url) {
@@ -1215,7 +1215,12 @@ async function carregarCadastros() {
                         linkConselho = `<a href="${c.foto_conselho_url}" target="_blank" style="color: #8e44ad; text-decoration: none; font-weight: bold; display: block;">🖼️ Ver Conselho</a>`;
                     }
                 } else {
-                    linkConselho = '<span style="color: #e74c3c; font-size: 11px; display: block;">Falta Foto Conselho</span>'; 
+                    // 🟢 AQUI ESTÁ O BOTÃO PARA O TÉCNICO ANEXAR SE O USUÁRIO ESQUECEU
+                    linkConselho = `
+                        <span style="color: #e74c3c; font-size: 11px; font-weight: bold; display: block; margin-bottom: 6px;">Falta Foto Conselho</span>
+                        <input type="file" id="upload_conselho_${c.id}" accept="image/*,application/pdf" multiple style="display: none;" onchange="uploadFotoConselhoFaltante('${c.id}')">
+                        <button class="btn-primary btn-sm" style="background: #34495e; font-size: 10px; padding: 3px 6px; margin: 0; width: 100%; display: block; text-align: center;" onclick="document.getElementById('upload_conselho_${c.id}').click()">📎 Anexar Foto</button>
+                    `; 
                 }
             } else { 
                 linkConselho = '<span style="color: #7f8c8d; font-size: 11px; font-weight: bold; display: block;">(Isento)</span>'; 
@@ -1352,6 +1357,48 @@ async function carregarSolicitacoesAD() {
             }).join('') : '<tr><td colspan="6" style="text-align: center; color: #7f8c8d; padding: 20px;">Nenhuma solicitação de AD encontrada.</td></tr>';
         }
     } catch (err) { console.error("Erro ao carregar AD:", err); }
+}
+
+// ========================================================
+// 🛡️ ANEXAR FOTO DE CONSELHO MANUAMENTE VIA PAINEL DE GESTÃO
+// ========================================================
+async function uploadFotoConselhoFaltante(idSolicitacao) {
+    const fileInput = document.getElementById(`upload_conselho_${idSolicitacao}`);
+    if (!fileInput || fileInput.files.length === 0) return;
+
+    window.mostrarAviso("⏳ Fazendo upload do(s) arquivo(s)... Aguarde.", "aviso");
+    let urlsGeradas = [];
+
+    try {
+        // Loop para enviar todas as imagens selecionadas (ex: Frente e Verso)
+        for (let i = 0; i < fileInput.files.length; i++) {
+            const file = fileInput.files[i];
+            
+            const nomeLimpo = file.name.normalize('NFD').replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, '_');
+            const nomeArquivo = `conselho_interno_${i}_${Date.now()}_${nomeLimpo}`;
+
+            const { data, error } = await supabase.storage.from('documentos_externos').upload(nomeArquivo, file);
+            if (error) throw error;
+
+            const publicUrl = supabase.storage.from('documentos_externos').getPublicUrl(nomeArquivo).data.publicUrl;
+            urlsGeradas.push(publicUrl);
+        }
+
+        const urlConselhoFinal = urlsGeradas.join('|||');
+
+        const { error: dbError } = await supabase.from('solicitacoes_cadastro')
+            .update({ foto_conselho_url: urlConselhoFinal })
+            .eq('id', idSolicitacao);
+
+        if (dbError) throw dbError;
+
+        alert("✅ Documento anexado e salvo com sucesso!");
+        carregarCadastros(); 
+
+    } catch (err) {
+        console.error("Erro ao anexar arquivo internamente:", err);
+        alert("❌ Falha ao anexar documento: " + err.message);
+    }
 }
 
 async function alterarStatusAD(id, novoStatus) {
