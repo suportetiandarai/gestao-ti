@@ -1199,31 +1199,32 @@ async function carregarCadastros() {
 
             let linkDoc = c.foto_documento_url ? `<a href="${c.foto_documento_url}" target="_blank" style="color: #3498db; text-decoration: none; font-weight: bold; display: block; margin-bottom: 3px;">📄 Ver Documento</a>` : '';
             
-            // 🟢 MÁGICA DA FRENTE E VERSO E BOTÃO DE ANEXO INTERNO:
+            // 🟢 MÁGICA REVISADA: Sempre mostra o botão de anexar se não houver foto!
             let linkConselho = ''; 
-            if (c.numero_conselho && c.numero_conselho.toUpperCase() !== 'ISENTO' && c.numero_conselho.toUpperCase() !== 'NÃO POSSUI') { 
-                if (c.foto_conselho_url) {
-                    // Verifica se a string tem o nosso separador "|||"
-                    if (c.foto_conselho_url.includes('|||')) {
-                        const urls = c.foto_conselho_url.split('|||');
-                        // Cria um botão para cada imagem encontrada no pacote
-                        linkConselho = urls.map((url, idx) => `
-                            <a href="${url}" target="_blank" style="color: #8e44ad; text-decoration: none; font-weight: bold; display: block; margin-bottom: 3px;">🖼️ Arquivo ${idx + 1}</a>
-                        `).join('');
-                    } else {
-                        // Se for um cadastro antigo (que só tinha 1 foto), mostra normal
-                        linkConselho = `<a href="${c.foto_conselho_url}" target="_blank" style="color: #8e44ad; text-decoration: none; font-weight: bold; display: block;">🖼️ Ver Conselho</a>`;
-                    }
+            const numConselho = c.numero_conselho ? c.numero_conselho.toUpperCase() : '';
+            const exigeConselho = numConselho && numConselho !== 'ISENTO' && numConselho !== 'NÃO POSSUI';
+
+            // Verifica se a foto existe de verdade
+            if (c.foto_conselho_url && c.foto_conselho_url !== 'null' && c.foto_conselho_url !== 'undefined') {
+                if (c.foto_conselho_url.includes('|||')) {
+                    const urls = c.foto_conselho_url.split('|||');
+                    linkConselho = urls.map((url, idx) => `
+                        <a href="${url}" target="_blank" style="color: #8e44ad; text-decoration: none; font-weight: bold; display: block; margin-bottom: 3px;">🖼️ Arquivo ${idx + 1}</a>
+                    `).join('');
                 } else {
-                    // 🟢 AQUI ESTÁ O BOTÃO PARA O TÉCNICO ANEXAR SE O USUÁRIO ESQUECEU
-                    linkConselho = `
-                        <span style="color: #e74c3c; font-size: 11px; font-weight: bold; display: block; margin-bottom: 6px;">Falta Foto Conselho</span>
-                        <input type="file" id="upload_conselho_${c.id}" accept="image/*,application/pdf" multiple style="display: none;" onchange="uploadFotoConselhoFaltante('${c.id}')">
-                        <button class="btn-primary btn-sm" style="background: #34495e; font-size: 10px; padding: 3px 6px; margin: 0; width: 100%; display: block; text-align: center;" onclick="document.getElementById('upload_conselho_${c.id}').click()">📎 Anexar Foto</button>
-                    `; 
+                    linkConselho = `<a href="${c.foto_conselho_url}" target="_blank" style="color: #8e44ad; text-decoration: none; font-weight: bold; display: block;">🖼️ Ver Arquivo</a>`;
                 }
-            } else { 
-                linkConselho = '<span style="color: #7f8c8d; font-size: 11px; font-weight: bold; display: block;">(Isento)</span>'; 
+            } else {
+                // 🟢 SE NÃO TEM FOTO, MONTA O BOTÃO DE ANEXAR (Para qualquer caso)
+                let textoAviso = exigeConselho 
+                    ? '<span style="color: #e74c3c; font-size: 11px; font-weight: bold; display: block; margin-bottom: 6px;">Falta Arquivo</span>' 
+                    : '<span style="color: #7f8c8d; font-size: 11px; font-weight: bold; display: block; margin-bottom: 6px;">(Sem Arquivo)</span>';
+
+                linkConselho = `
+                    ${textoAviso}
+                    <input type="file" id="upload_conselho_${c.id}" accept="image/*,application/pdf" multiple style="display: none;" onchange="uploadFotoConselhoFaltante('${c.id}')">
+                    <button class="btn-primary btn-sm" style="background: #34495e; font-size: 10px; padding: 4px 6px; margin: 0; width: 100%; display: block; text-align: center; border-radius: 4px; cursor: pointer;" onclick="document.getElementById('upload_conselho_${c.id}').click()">📎 Anexar Arquivo</button>
+                `;
             }
             
             const dataFim = c.data_resolucao || c.updated_at; 
