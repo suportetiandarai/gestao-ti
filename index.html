@@ -12,6 +12,7 @@
     <link rel="stylesheet" href="styles.css">
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+    <script src="config.js"></script>
 </head>
 <body class="login-bg"> 
     
@@ -22,7 +23,15 @@
         </div>
         <input type="email" id="login-email" placeholder="E-mail Corporativo" required>
         <input type="password" id="login-senha" placeholder="Senha" required onkeypress="verificarEnter(event)">
-        <button onclick="realizarLogin()" class="btn-primary">Entrar</button>
+        <button id="btn-login" onclick="realizarLogin()" class="btn-primary">Entrar</button>
+        <button id="btn-esqueci-senha" type="button" onclick="solicitarRedefinicaoSenha()" class="btn-link">Esqueci minha senha</button>
+
+        <div id="recuperacao-senha" class="hidden">
+            <p class="recovery-title">Defina sua nova senha</p>
+            <input type="password" id="recuperacao-nova-senha" placeholder="Nova senha (mínimo 8 caracteres)">
+            <input type="password" id="recuperacao-confirmar-senha" placeholder="Confirme a nova senha">
+            <button type="button" onclick="salvarSenhaRecuperada()" class="btn-success">Atualizar senha</button>
+        </div>
     </div>
 
     <div id="app-wrapper" class="hidden">
@@ -42,7 +51,7 @@
                 <button class="tab-btn" onclick="window.open('https://tally.so/r/mJeJXR', '_blank')">📤 Envio de RT</button>
                 <button class="tab-btn" onclick="abrirAba('aba-inventario')">📦 Inventário</button>
                 <button id="btn-config" class="tab-btn hidden" onclick="abrirAba('aba-config')">⚙️ Configurações</button>
-                <button id="btn-admin" class="tab-btn hidden" onclick="abrirAba('aba-admin')">⚙️ Admin</button>
+                <button id="btn-admin" data-role="admin" class="tab-btn hidden" onclick="abrirAba('aba-admin')">⚙️ Admin</button>
             </nav>
 
             <div class="version-tag">Versão 1.0.0</div>
@@ -770,13 +779,57 @@
 
             <section id="aba-inventario" class="tab-content hidden">
                 <h3>Gestão de Inventário Geral</h3>
+
+                <div class="inventory-scanner-card">
+                    <div class="scanner-heading">
+                        <div>
+                            <span class="scanner-kicker">CONFERÊNCIA EM CAMPO</span>
+                            <h4>Leitor de código de barras</h4>
+                            <p>Leia o código ou digite manualmente e pressione Enter.</p>
+                        </div>
+                        <span id="scanner-status" class="scanner-status">Pronto para leitura</span>
+                    </div>
+                    <div class="scanner-input-row">
+                        <label class="sr-only" for="inventario-codigo-leitura">Código do equipamento</label>
+                        <input id="inventario-codigo-leitura" class="scanner-input" type="text" inputmode="text"
+                            autocomplete="off" placeholder="Leia o código do equipamento..."
+                            onkeydown="inventarioScannerEnter(event)">
+                        <button id="btn-inventario-buscar" class="btn-primary" onclick="buscarCodigoInventario()">Buscar / validar</button>
+                    </div>
+                    <div class="inventory-counters" aria-label="Resumo da sessão">
+                        <div><strong id="contador-inv-lidos">0</strong><span>Lidos</span></div>
+                        <div><strong id="contador-inv-encontrados">0</strong><span>Encontrados</span></div>
+                        <div><strong id="contador-inv-pendentes">0</strong><span>Pendentes</span></div>
+                        <div><strong id="contador-inv-cadastrados">0</strong><span>Cadastrados</span></div>
+                    </div>
+                    <div id="inventario-resultado" class="inventory-result hidden" aria-live="polite"></div>
+                </div>
+
+                <div class="admin-card mt-20">
+                    <div class="section-heading-inline">
+                        <h4>Histórico desta sessão</h4>
+                        <button class="btn-secondary btn-sm" onclick="limparSessaoInventario()">Limpar painel</button>
+                    </div>
+                    <div id="inventario-historico-sessao" class="session-history">
+                        <p class="empty-state">Nenhuma leitura realizada nesta sessão.</p>
+                    </div>
+                </div>
                 
                 <div class="admin-card">
                     <h4>Ações Rápidas</h4>
                     <div class="button-group">
                         <button class="btn-success" onclick="abrirModalNovoEquipamento()">➕ Cadastrar Equipamento</button>
-                        <button class="btn-primary" style="background: #8e44ad;" onclick="abrirModal('modal-novo-tipo')">➕ Novo Tipo de Equipamento</button>
+                        <button data-role="admin" class="btn-primary" style="background: #8e44ad;" onclick="abrirModal('modal-novo-tipo')">➕ Novo Tipo de Equipamento</button>
+                        <button class="btn-secondary" onclick="exportarInventarioCsv()">⬇ Exportar inventário</button>
+                        <button class="btn-secondary" onclick="validarBancoInventario()">🧪 Validar banco</button>
+                        <button data-role="admin" class="btn-primary" onclick="document.getElementById('arquivo-inventario-csv').click()">⬆ Importar CSV do GLPI</button>
+                        <input data-role="admin" class="hidden" id="arquivo-inventario-csv" type="file" accept=".csv,text/csv" multiple onchange="prepararImportacaoInventario(event)">
                     </div>
+                    <div class="inventory-transfer-help">
+                        <span>Compatível com CSV separado por ponto e vírgula ou vírgula.</span>
+                        <button type="button" class="link-button" onclick="baixarModeloInventarioCsv()">Baixar modelo de importação</button>
+                    </div>
+                    <div id="inventario-import-preview" class="import-preview hidden" aria-live="polite"></div>
                 </div>
 
                 <div class="admin-card mt-20">
@@ -794,12 +847,18 @@
                                 <option value="">Todos</option>
                                 <option value="Em uso">🟢 Em uso</option>
                                 <option value="Em estoque">📦 Em estoque</option>
+                                <option value="Fora de uso">⚫ Fora de uso</option>
+                                <option value="Não informado">⚪ Não informado</option>
                                 <option value="Danificado">🔴 Danificado</option>
                             </select>
                         </div>
                         <div class="form-group" style="flex: 2; min-width: 200px;">
                             <label>Número de Série:</label>
                             <input type="text" id="filtro_inv_serie" placeholder="Digite S/N para buscar..." style="margin-bottom: 0;" onkeyup="verificarEnterFiltro(event)">
+                        </div>
+                        <div class="form-group" style="flex: 2; min-width: 220px;">
+                            <label>Localização:</label>
+                            <input type="text" id="filtro_inv_localizacao" placeholder="Prédio, andar ou setor..." style="margin-bottom: 0;" onkeyup="verificarEnterFiltro(event)">
                         </div>
                         <div style="display: flex; gap: 10px;">
                             <button class="btn-primary" onclick="carregarInventario()">Buscar</button>
@@ -824,6 +883,16 @@
                             </tr>
                         </thead>
                             <tbody id="lista-inventario-aba"></tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div class="admin-card mt-20">
+                    <h4>Histórico persistente de inventário</h4>
+                    <div class="table-responsive">
+                        <table>
+                            <thead><tr><th>Data</th><th>Código</th><th>Equipamento</th><th>Status</th><th>Ação</th><th>Local</th><th>Técnico</th></tr></thead>
+                            <tbody id="lista-inventario-historico"><tr><td colspan="7" class="empty-state">Carregando...</td></tr></tbody>
                         </table>
                     </div>
                 </div>
@@ -867,7 +936,7 @@
                 </div>
             </section>
             
-           <section id="aba-admin" class="tab-content hidden">
+           <section id="aba-admin" data-role="admin" class="tab-content hidden">
     <h3>Painel de Gestão (Admin)</h3>
     
     <div class="admin-card">
@@ -921,7 +990,7 @@
         </main>
     </div>
 
-    <div id="modal-usuario" class="modal">
+    <div id="modal-usuario" data-role="admin" class="modal">
         <div class="modal-content">
             <span class="close-modal" onclick="fecharModal('modal-usuario')">&times;</span>
             <h3>Cadastrar Novo Usuário</h3>
@@ -942,7 +1011,7 @@
         </div>
     </div>
 
-    <div id="modal-editar-usuario" class="modal">
+    <div id="modal-editar-usuario" data-role="admin" class="modal">
         <div class="modal-content">
             <span class="close-modal" onclick="fecharModal('modal-editar-usuario')">&times;</span>
             <h3>Alterar Dados do Usuário</h3>
@@ -962,7 +1031,7 @@
         </div>
     </div>
 
-    <div id="modal-permissoes" class="modal">
+    <div id="modal-permissoes" data-role="admin" class="modal">
         <div class="modal-content large">
             <span class="close-modal" onclick="fecharModal('modal-permissoes')">&times;</span>
             <h3>Gerenciar Permissões</h3>
@@ -982,7 +1051,7 @@
         </div>
     </div>
 
-    <div id="modal-chave" class="modal">
+    <div id="modal-chave" data-role="admin" class="modal">
         <div class="modal-content">
             <span class="close-modal" onclick="fecharModal('modal-chave')">&times;</span>
             <h3>Cadastrar Tipo de Chave</h3>
@@ -995,7 +1064,7 @@
         </div>
     </div>
 
-    <div id="modal-toner" class="modal">
+    <div id="modal-toner" data-role="admin" class="modal">
         <div class="modal-content">
             <span class="close-modal" onclick="fecharModal('modal-toner')">&times;</span>
             <h3>Cadastrar Modelo de Toner</h3>
@@ -1008,7 +1077,7 @@
         </div>
     </div>
 
-    <div id="modal-simpress" class="modal">
+    <div id="modal-simpress" data-role="admin" class="modal">
     <div class="modal-content">
         <span class="close-modal" onclick="fecharModal('modal-simpress')">&times;</span>
         <h3>Registrar Chamado Simpress</h3>
@@ -1202,7 +1271,7 @@
         </div>
     </div>
 
-    <div id="modal-ver-plantao" class="modal">
+    <div id="modal-ver-plantao" data-role="admin" class="modal">
         <div class="modal-content large">
             <span class="close-modal" onclick="fecharModal('modal-ver-plantao')">&times;</span>
             <h3 style="margin-bottom: 10px; border-bottom: 2px solid #e2e8f0; padding-bottom: 10px;">📋 Detalhes da Passagem de Plantão</h3>
@@ -1307,6 +1376,13 @@
         <span class="close-modal" onclick="fecharModal('modal-novo-equipamento')">&times;</span>
         <h3>Cadastrar Equipamento</h3>
         <form id="form-novo-equipamento">
+            <input type="hidden" id="inv_contexto_leitura">
+            <label>Código de barras:</label>
+            <input type="text" id="inv_codigo_barras" autocomplete="off" placeholder="Preenchido automaticamente pelo leitor">
+
+            <label>Nome / descrição:</label>
+            <input type="text" id="inv_nome" placeholder="Ex: Computador da recepção">
+
             <label>Tipo de Equipamento:</label>
             <select id="inv_tipo" required>
                 <option value="">Carregando...</option>
@@ -1326,19 +1402,17 @@
             <label>Número de Série (S/N):</label>
             <input type="text" id="inv_serie" required>
 
-             <div class="form-group">
-                <label>Patrimônio</label>
-                <select id="inv_patrimonio" class="form-control">
-                    <option value="">Selecione a origem...</option>
-                    <option value="RioSaude">RioSaude</option>
-                    <option value="Federal">Federal</option>
-                </select>
+            <div class="form-row">
+                <div class="form-group"><label>Número de patrimônio:</label><input type="text" id="inv_patrimonio"></div>
+                <div class="form-group"><label>Origem do patrimônio:</label><select id="inv_origem_patrimonio"><option value="">Selecione...</option><option value="RioSaude">RioSaude</option><option value="Federal">Federal</option></select></div>
             </div>
             
             <label>Status Atual:</label>
             <select id="inv_status" required>
                 <option value="Em uso">🟢 Em uso</option>
                 <option value="Em estoque">📦 Em estoque</option>
+                <option value="Fora de uso">⚫ Fora de uso</option>
+                <option value="Não informado">⚪ Não informado</option>
                 <option value="Danificado">🔴 Danificado</option>
             </select>
 
@@ -1367,6 +1441,11 @@
                 </div>
             </div>
 
+            <label>Responsável:</label>
+            <input type="text" id="inv_responsavel" placeholder="Nome do responsável, se houver">
+            <label>Observações:</label>
+            <textarea id="inv_observacoes" placeholder="Informações adicionais"></textarea>
+
             <button type="button" class="btn-success mt-20" onclick="salvarEquipamento()">Salvar Equipamento</button>
         </form>
     </div>
@@ -1378,6 +1457,9 @@
         <h3>Editar Equipamento</h3>
         <form id="form-editar-equipamento">
             <input type="hidden" id="edit_inv_id">
+
+            <label>Nome / descrição:</label>
+            <input type="text" id="edit_inv_nome">
             
             <label>Tipo de Equipamento:</label>
             <select id="edit_inv_tipo" required></select>
@@ -1396,14 +1478,19 @@
             <label>Número de Série (S/N):</label>
             <input type="text" id="edit_inv_serie" required>
 
+            <label>Código de barras:</label>
+            <input type="text" id="edit_inv_codigo_barras">
+
             <div class="form-group">
                 <label>Patrimônio</label>
-                <select id="edit_inv_patrimonio" class="form-control">
-                    <option value="">Selecione a origem...</option>
-                    <option value="RioSaude">RioSaude</option>
-                    <option value="Federal">Federal</option>
-                </select>
+                <input type="text" id="edit_inv_patrimonio">
             </div>
+
+            <label>Origem do patrimônio:</label>
+            <select id="edit_inv_origem_patrimonio"><option value="">Selecione...</option><option value="RioSaude">RioSaude</option><option value="Federal">Federal</option></select>
+
+            <label>Status atual:</label>
+            <select id="edit_inv_status"><option value="Em uso">Em uso</option><option value="Em estoque">Em estoque</option><option value="Fora de uso">Fora de uso</option><option value="Não informado">Não informado</option><option value="Danificado">Danificado</option></select>
 
             <div class="form-row" style="display: flex; gap: 15px; margin-bottom: 15px; flex-wrap: wrap;">
                 <div class="form-group" style="flex: 1;">
@@ -1426,6 +1513,11 @@
             
             <label>Setor:</label>
             <input type="text" id="edit_inv_setor">
+
+            <label>Responsável:</label>
+            <input type="text" id="edit_inv_responsavel">
+            <label>Observações:</label>
+            <textarea id="edit_inv_observacoes"></textarea>
 
             <button type="button" class="btn-success mt-20" onclick="salvarEdicaoEquipamento()">Atualizar Equipamento</button>
         </form>
@@ -1491,7 +1583,7 @@
         </div>
     </div>
 
-    <div id="modal-gerenciar-toner" class="modal">
+    <div id="modal-gerenciar-toner" data-role="admin" class="modal">
     <div class="modal-content large">
         <span class="close-modal" onclick="fecharModal('modal-gerenciar-toner')">&times;</span>
         <h3>📦 Gerenciamento de Estoque (Toners)</h3>
@@ -1517,7 +1609,7 @@
     </div>
 </div>
 
-    <div id="modal-exportacao" class="modal hidden">
+    <div id="modal-exportacao" data-role="admin" class="modal">
     <div class="modal-content" style="max-width: 550px;">
         <div class="modal-header">
             <h2>📊Exportação de Relatórios</h2>
@@ -1603,5 +1695,7 @@
     <script src="auth.js"></script>
     <script src="signature.js"></script>
     <script src="app.js"></script>
+    <script src="inventory-scanner.js"></script>
+    <script src="inventory-transfer.js"></script>
 </body>
 </html>

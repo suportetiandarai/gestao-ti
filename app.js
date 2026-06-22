@@ -109,58 +109,22 @@ function resetarTimerInatividade() {
 }
 ['mousedown', 'keydown', 'scroll', 'touchstart'].forEach(evt => document.addEventListener(evt, resetarTimerInatividade, true));
 
-function atualizarInterface(session) {
-    const loginContainer = document.getElementById('login-container');
-    const appWrapper = document.getElementById('app-wrapper');
-
-    if (session) {
-        if (loginContainer) { loginContainer.classList.add('hidden'); loginContainer.style.display = 'none'; }
-        if (appWrapper) { appWrapper.classList.remove('hidden'); appWrapper.style.display = 'flex'; }
-        configurarDadosUsuario(session.user);
-    } else {
-        if (appWrapper) { appWrapper.classList.add('hidden'); appWrapper.style.display = 'none'; }
-        if (loginContainer) { loginContainer.classList.remove('hidden'); loginContainer.style.display = 'block'; }
-    }
-}
-
-async function configurarDadosUsuario(user) {
-    try {
-        const { data: perfil } = await supabase.from('profiles').select('*').eq('id', user.id).single();
-        if (perfil) {
-            window.usuarioAtual = perfil;
-            const userNameHeader = document.getElementById('user-name');
-            if (userNameHeader) userNameHeader.innerText = `Olá, ${perfil.nome.split(' ')[0]}`;
-
-            const btnConfig = document.getElementById('btn-config');
-            const btnAdmin = document.getElementById('btn-admin');
-
-            if (perfil.role === 'operacional') {
-                if (btnConfig) btnConfig.classList.remove('hidden');
-                if (btnAdmin) btnAdmin.classList.add('hidden');
-            } else if (perfil.role === 'admin') {
-                if (btnConfig) btnConfig.classList.add('hidden');
-                if (btnAdmin) btnAdmin.classList.remove('hidden');
-            }
-            if(typeof carregarResumoDashboard === 'function') carregarResumoDashboard();
-        }
-    } catch (err) { console.error("Erro ao carregar perfil:", err); }
-}
-
-document.addEventListener("DOMContentLoaded", async () => {
-    const { data: { session } } = await supabase.auth.getSession();
-    atualizarInterface(session);
-    supabase.auth.onAuthStateChange((event, sessionAtual) => atualizarInterface(sessionAtual));
-});
-
-window.fazerLogout = async function() { await supabase.auth.signOut(); window.location.reload(); };
-
 setInterval(() => {
     const abaInicio = document.getElementById('aba-inicio');
     const estaLogado = document.getElementById('app-wrapper').offsetParent !== null;
     if (estaLogado && abaInicio && !abaInicio.classList.contains('hidden')) carregarResumoDashboard();
 }, 5000);
 
-function abrirAba(idAba) {
+const ABAS_VALIDAS = new Set(Array.from(document.querySelectorAll('.tab-content')).map(aba => aba.id));
+const ABAS_SOMENTE_ADMIN = new Set(['aba-admin']);
+
+function abrirAba(idAba, atualizarHash = true) {
+    if (!ABAS_VALIDAS.has(idAba)) idAba = 'aba-inicio';
+    if (ABAS_SOMENTE_ADMIN.has(idAba) && !window.temPermissao('admin')) {
+        mostrarAviso('Acesso restrito a administradores.', 'erro');
+        idAba = 'aba-inicio';
+    }
+
     document.querySelectorAll('.tab-content').forEach(aba => aba.classList.add('hidden'));
     document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
     
@@ -169,6 +133,7 @@ function abrirAba(idAba) {
     
     const botaoClicado = document.querySelector(`button[onclick*="${idAba}"]`);
     if (botaoClicado) botaoClicado.classList.add('active');
+    if (atualizarHash && window.location.hash !== `#${idAba}`) window.location.hash = idAba;
 
     // Inicializadores de aba
     if (idAba === 'aba-cadastros') carregarCadastros();
@@ -179,13 +144,20 @@ function abrirAba(idAba) {
     if (idAba === 'aba-treinamentos') carregarListaTreinamentos();
     if (idAba === 'aba-solicita-treinamento') carregarSolicitacoesTreinamento();
     if (idAba === 'aba-solicitacoes-ad') carregarSolicitacoesAD();
-    if (idAba === 'aba-inventario') { carregarTiposFiltro(); carregarInventario(); }
+    if (idAba === 'aba-inventario') {
+        carregarTiposFiltro();
+        carregarInventario();
+        if (typeof inicializarInventarioScanner === 'function') inicializarInventarioScanner();
+    }
     if (idAba === 'aba-config') carregarMeusDados();
     if (idAba === 'aba-admin') carregarPlantoesAdmin();
 }
 
 function abrirModal(idModal) {
-    document.getElementById(idModal).classList.add('flex');
+    const modal = document.getElementById(idModal);
+    if (!modal) return mostrarAviso('Janela não encontrada.', 'erro');
+    if (modal.matches('[data-role="admin"]') && !window.exigirAdmin()) return;
+    modal.classList.add('flex');
     if (idModal === 'modal-permissoes') carregarTabelaUsuarios();
 }
 
@@ -266,6 +238,7 @@ async function carregarResumoDashboard() {
 }
 
 async function carregarPlantoesAdmin() {
+    if (!window.exigirAdmin()) return;
     try {
         const { data: plantoes } = await supabase.from('plantoes').select('*').eq('visto_supervisao', false).order('created_at', { ascending: false });
         const adminPlantoes = document.getElementById('admin-plantoes-lista');
@@ -301,6 +274,7 @@ async function visualizarPlantao(idPlantao) {
 }
 
 async function confirmarVistoPlantao() {
+    if (!window.exigirAdmin()) return;
     const idPlantao = document.getElementById('visto_plantao_id').value;
     perguntar("Confirmar Visto", "Deseja aplicar o visto da supervisão? Este plantão sairá do painel pendente.", "sucesso", async () => {
         try {
@@ -530,22 +504,6 @@ window.carregarHistoricoOcorrencias = async function() {
     } catch (err) { console.error("Erro ao carregar histórico:", err); }
 }
 
-function renderizarTabelaHistoricoOc() {
-    const tbody = document.getElementById('lista-historico-ocorrencias-aba');
-    const spanPagina = document.getElementById('span-pagina-historico-oc');
-    if (!tbody) return;
-    const totalPaginas = Math.ceil(dadosHistoricoOc.length / itensPorPaginaOc) || 1;
-    if (spanPagina) spanPagina.innerText = `Página ${paginaAtualOc} de ${totalPaginas}`;
-    const inicio = (paginaAtualOc - 1) * itensPorPaginaOc;
-    const fim = inicio + itensPorPaginaOc;
-    const itensPagina = dadosHistoricoOc.slice(inicio, fim);
-
-    tbody.innerHTML = itensPagina.length > 0 ? itensPagina.map(o => {
-        let corStatus = o.status === 'Solucionada' ? '#2ecc71' : '#e74c3c';
-        return `<tr><td style="font-size: 12px;"><strong>${o.descricao}</strong><br><small style="color: #7f8c8d;">Data: ${new Date(o.created_at).toLocaleDateString('pt-BR')}</small></td><td style="font-size: 12px;">${o.responsavel_abertura}</td><td style="width: 140px; min-width: 140px;"><div style="margin-bottom: 6px;"><span style="background-color: ${corStatus}; color: white; padding: 5px; border-radius: 4px; font-size: 11px; font-weight: bold; display: block; width: 100%; text-align: center;">${o.status}</span></div><div style="display: flex; justify-content: center;"><button class="btn-primary btn-sm" style="background: #3498db; width: 100%; margin: 0; padding: 5px 2px; font-size: 11px;" onclick="abrirModalVerOcorrencia('${o.id}')">👁️ Ver Detalhes</button></div>${o.status === 'Cancelada' && o.motivo_cancelamento ? `<div style="margin-top: 6px; font-size: 10px; color: #475569; background: #f1f5f9; padding: 4px; border-radius: 4px; text-align: center; line-height: 1.3;"><strong>Motivo:</strong> ${o.motivo_cancelamento}</div>` : ''}</td></tr>`;
-    }).join('') : '<tr><td colspan="3" style="text-align: center; color: #7f8c8d; padding: 20px;">Nenhum registro encontrado no histórico.</td></tr>'; 
-}
-
 function mudarPaginaHistoricoOc(direcao) {
     const totalPaginas = Math.ceil(dadosHistoricoOc.length / itensPorPaginaOc) || 1;
     paginaAtualOc += direcao;
@@ -680,13 +638,14 @@ async function abrirModalNovoEquipamento() {
         const { data, error } = await supabase.from('tipos_equipamento').select('nome').order('nome');
         if (!error) {
             const sel = document.getElementById('inv_tipo');
-            sel.innerHTML = '<option value="">Selecione o Tipo...</option>' + data.map(t => `<option value="${t.nome}">${t.nome}</option>`).join('');
+            sel.innerHTML = '<option value="">Selecione o Tipo...</option>' + data.map(t => `<option value="${invEscape(t.nome)}">${invEscape(t.nome)}</option>`).join('');
         }
     } catch (e) { console.error(e); }
     document.getElementById('form-novo-equipamento').reset(); abrirModal('modal-novo-equipamento');
 }
 
 async function salvarNovoTipoEquipamento() {
+    if (!window.exigirAdmin()) return;
     const nome = document.getElementById('cad_tipo_nome').value.toUpperCase().trim();
     if(!nome) return alert("Digite o nome do tipo de equipamento.");
     try {
@@ -697,30 +656,56 @@ async function salvarNovoTipoEquipamento() {
 }
 
 async function salvarEquipamento() {
-    const tipo = document.getElementById('inv_tipo').value; const marca = document.getElementById('inv_marca').value; const modelo = document.getElementById('inv_modelo').value; const serie = document.getElementById('inv_serie').value; const status = document.getElementById('inv_status').value; const predio = document.getElementById('inv_predio').value; const andar = document.getElementById('inv_andar').value; const setor = document.getElementById('inv_setor').value;const patrimonio = document.getElementById('inv_patrimonio').value;
+    const tipo = document.getElementById('inv_tipo').value.trim(); const marca = document.getElementById('inv_marca').value.trim(); const modelo = document.getElementById('inv_modelo').value.trim(); const serie = document.getElementById('inv_serie').value.trim(); const status = document.getElementById('inv_status').value; const predio = document.getElementById('inv_predio').value; const andar = document.getElementById('inv_andar').value; const setor = document.getElementById('inv_setor').value.trim(); const patrimonio = document.getElementById('inv_patrimonio').value.trim();
+    const codigo_barras = document.getElementById('inv_codigo_barras').value.trim();
+    const nome = document.getElementById('inv_nome').value.trim();
+    const origem_patrimonio = document.getElementById('inv_origem_patrimonio').value;
+    const responsavel = document.getElementById('inv_responsavel').value.trim();
+    const observacoes = document.getElementById('inv_observacoes').value.trim();
+    const contextoLeitura = document.getElementById('inv_contexto_leitura').value.trim();
     if(!tipo || !marca || !modelo || !serie || !status || !predio || !andar) return alert("⚠️ Por favor, preencha todos os campos obrigatórios, incluindo Prédio e Andar.");
     try {
-        const { error } = await supabase.from('inventario').insert([{ tipo, marca, modelo, numero_serie: serie, status, predio, andar, setor }]);
+        for (const [rotulo, valor] of [['código de barras', codigo_barras], ['número de série', serie], ['patrimônio', patrimonio]]) {
+            if (!valor) continue;
+            const { data: duplicados, error: erroBusca } = await supabase.rpc('buscar_equipamento_inventario', { p_codigo: valor });
+            if (erroBusca) throw erroBusca;
+            if (duplicados?.length) return mostrarAviso(`Possível duplicidade: já existe equipamento com este ${rotulo}. Revise o cadastro.`, 'aviso');
+        }
+        const novoEquipamento = { nome: nome || null, tipo, marca, modelo, numero_serie: serie, codigo_barras: codigo_barras || null, patrimonio: patrimonio || null, origem_patrimonio: origem_patrimonio || null, status, predio, andar, setor: setor || null, responsavel: responsavel || null, observacoes: observacoes || null };
+        const { data, error } = await supabase.from('inventario').insert([novoEquipamento]).select().single();
         if (error) throw error;
-        alert("✅ Equipamento cadastrado com sucesso!"); fecharModal('modal-novo-equipamento'); document.getElementById('form-novo-equipamento').reset(); carregarInventario();
+        if (contextoLeitura && typeof registrarCadastroNoHistorico === 'function') await registrarCadastroNoHistorico(data, contextoLeitura);
+        mostrarAviso("Equipamento cadastrado com sucesso!", 'sucesso'); fecharModal('modal-novo-equipamento'); document.getElementById('form-novo-equipamento').reset(); carregarInventario();
     } catch(err) { alert("❌ Erro ao salvar: " + err.message); }
 }
 
 async function carregarTiposFiltro() {
     try {
         const { data, error } = await supabase.from('tipos_equipamento').select('nome').order('nome');
-        if (!error) document.getElementById('filtro_inv_tipo').innerHTML = '<option value="">Todos</option>' + data.map(t => `<option value="${t.nome}">${t.nome}</option>`).join('');
+        if (!error) document.getElementById('filtro_inv_tipo').innerHTML = '<option value="">Todos</option>' + data.map(t => `<option value="${invEscape(t.nome)}">${invEscape(t.nome)}</option>`).join('');
     } catch (e) { console.error("Erro ao carregar tipos para o filtro:", e); }
 }
 
-function limparFiltrosInventario() { document.getElementById('filtro_inv_tipo').value = ''; document.getElementById('filtro_inv_status').value = ''; document.getElementById('filtro_inv_serie').value = ''; carregarInventario(); }
+function limparFiltrosInventario() {
+    document.getElementById('filtro_inv_tipo').value = '';
+    document.getElementById('filtro_inv_status').value = '';
+    document.getElementById('filtro_inv_serie').value = '';
+    const filtroLocalizacao = document.getElementById('filtro_inv_localizacao');
+    if (filtroLocalizacao) filtroLocalizacao.value = '';
+    carregarInventario();
+}
 function verificarEnterFiltro(event) { if (event.key === 'Enter') carregarInventario(); }
 
 async function carregarInventario() {
     const filtroTipo = document.getElementById('filtro_inv_tipo').value; const filtroStatus = document.getElementById('filtro_inv_status').value; const filtroSerie = document.getElementById('filtro_inv_serie').value.trim();
+    const filtroLocalizacao = document.getElementById('filtro_inv_localizacao')?.value.trim() || '';
     try {
         let query = supabase.from('inventario').select('*').order('created_at', { ascending: false });
         if (filtroTipo) query = query.eq('tipo', filtroTipo); if (filtroStatus) query = query.eq('status', filtroStatus); if (filtroSerie) query = query.ilike('numero_serie', `%${filtroSerie}%`);
+        if (filtroLocalizacao) {
+            const termoLocalizacao = `%${filtroLocalizacao.replace(/[,%]/g, ' ')}%`;
+            query = query.or(`predio.ilike.${termoLocalizacao},andar.ilike.${termoLocalizacao},setor.ilike.${termoLocalizacao}`);
+        }
         const { data, error } = await query; if (error) throw error;
         const tbody = document.getElementById('lista-inventario-aba');
         if (tbody) {
@@ -731,16 +716,16 @@ async function carregarInventario() {
                 if (isAdmin) botoesAcao += `<button class="btn-primary btn-sm" style="background: #8e44ad;" onclick="abrirModalEditarEquipamento('${e.id}')">✏️ Editar</button><button class="btn-danger btn-sm" onclick="deletarEquipamento('${e.id}')">🗑️ Excluir</button>`;
                 return `
         <tr>
-            <td><strong>${e.tipo}</strong></td>
-            <td>${e.marca}<br><small>${e.modelo}</small></td>
-            <td>${e.numero_serie}</td>
+            <td><strong>${invEscape(e.tipo)}</strong></td>
+            <td>${invEscape(e.marca)}<br><small>${invEscape(e.modelo)}</small></td>
+            <td>${invEscape(e.numero_serie)}</td>
             
             <td style="font-weight: bold; color: #1e293b;">
-                ${e.patrimonio || '-'}
+                ${invEscape(e.patrimonio || '-')}
             </td>
 
-            <td>${e.predio || '-'} / ${e.setor || '-'} <br><small>(${e.andar || '-'})</small></td>
-            <td><span style="background-color: ${corStatus}; color: white; padding: 4px 8px; border-radius: 4px; font-size: 11px; font-weight: bold;">${e.status}</span></td>
+            <td>${invEscape(e.predio || '-')} / ${invEscape(e.setor || '-')} <br><small>(${invEscape(e.andar || '-')})</small></td>
+            <td><span style="background-color: ${corStatus}; color: white; padding: 4px 8px; border-radius: 4px; font-size: 11px; font-weight: bold;">${invEscape(e.status)}</span></td>
             <td>
                 <div style="display: flex; gap: 5px;">
                     ${botoesAcao}
@@ -755,6 +740,7 @@ async function carregarInventario() {
 
 // 🟢 ABRE O MODAL E PREENCHE OS DADOS CORRETAMENTE
 async function abrirModalEditarEquipamento(id) {
+    if (!window.exigirAdmin()) return;
     try {
         const { data: e, error } = await supabase.from('inventario').select('*').eq('id', id).single();
         if (error) throw error;
@@ -764,12 +750,18 @@ async function abrirModalEditarEquipamento(id) {
         document.getElementById('edit_inv_tipo').innerHTML = '<option value="">Selecione...</option>' + tipos.map(t => `<option value="${t.nome}" ${t.nome === e.tipo ? 'selected' : ''}>${t.nome}</option>`).join('');
         
         document.getElementById('edit_inv_id').value = e.id; 
+        document.getElementById('edit_inv_nome').value = e.nome || '';
         document.getElementById('edit_inv_marca').value = e.marca; 
         document.getElementById('edit_inv_modelo').value = e.modelo; 
         document.getElementById('edit_inv_serie').value = e.numero_serie; 
+        document.getElementById('edit_inv_codigo_barras').value = e.codigo_barras || '';
         document.getElementById('edit_inv_setor').value = e.setor || ''; 
         document.getElementById('edit_inv_predio').value = e.predio || '';
         document.getElementById('edit_inv_patrimonio').value = e.patrimonio || ''; // Adicionado corretamente
+        document.getElementById('edit_inv_origem_patrimonio').value = e.origem_patrimonio || '';
+        document.getElementById('edit_inv_status').value = e.status || 'Em uso';
+        document.getElementById('edit_inv_responsavel').value = e.responsavel || '';
+        document.getElementById('edit_inv_observacoes').value = e.observacoes || '';
         
         atualizarAndares('edit_inv_predio', 'edit_inv_andar', e.andar || '');
         
@@ -778,17 +770,24 @@ async function abrirModalEditarEquipamento(id) {
 }
 
 async function salvarEdicaoEquipamento() {
+    if (!window.exigirAdmin()) return;
     const id = document.getElementById('edit_inv_id').value;
     
     const dadosAtualizados = { 
+        nome: document.getElementById('edit_inv_nome').value.trim() || null,
         tipo: document.getElementById('edit_inv_tipo').value, 
         marca: document.getElementById('edit_inv_marca').value, 
         modelo: document.getElementById('edit_inv_modelo').value, 
         numero_serie: document.getElementById('edit_inv_serie').value, 
+        codigo_barras: document.getElementById('edit_inv_codigo_barras').value.trim() || null,
+        status: document.getElementById('edit_inv_status').value,
         predio: document.getElementById('edit_inv_predio').value, 
         andar: document.getElementById('edit_inv_andar').value, 
         setor: document.getElementById('edit_inv_setor').value,
-        patrimonio: document.getElementById('edit_inv_patrimonio').value
+        patrimonio: document.getElementById('edit_inv_patrimonio').value.trim() || null,
+        origem_patrimonio: document.getElementById('edit_inv_origem_patrimonio').value || null,
+        responsavel: document.getElementById('edit_inv_responsavel').value.trim() || null,
+        observacoes: document.getElementById('edit_inv_observacoes').value.trim() || null
     };
 
     try {
@@ -814,6 +813,7 @@ async function salvarNovoStatusInventario() {
 }
 
 async function deletarEquipamento(id) {
+    if (!window.exigirAdmin()) return;
     perguntar("Excluir Equipamento", "Tem certeza que deseja excluir este equipamento definitivamente do estoque?", "perigo", async () => {
         try { const { error } = await supabase.from('inventario').delete().eq('id', id); if (error) throw error; alert("✅ Equipamento removido!"); carregarInventario(); } catch (err) { alert("❌ Erro ao remover: " + err.message); }
     });
@@ -855,6 +855,7 @@ async function salvarTrocaToner() {
 }
 
 async function abrirModalGerenciarToner() {
+    if (!window.exigirAdmin()) return;
     try {
         const { data: toners, error } = await supabase.from('cadastro_toner').select('*').order('modelo_toner', { ascending: true });
         if (error) throw error;
@@ -987,10 +988,6 @@ window.atualizarAndares = function(predioId, andarId, valorPreSelecionado = '') 
     else if (predio === 'TRAUMA') andares = ['1º Andar', '2º Andar', '3º Andar'];
     else if (predio === 'CASA ROSA') andares = ['1º Andar', '2º Andar'];
     andares.forEach(a => { const opt = document.createElement('option'); opt.value = a; opt.textContent = a; if (a === valorPreSelecionado) opt.selected = true; selectAndar.appendChild(opt); });
-};
-
-window.prepararAgendamento = function(id, nome, telefone, tema) {
-    idSolicitacaoEmAndamento = id; document.getElementById('tr_colaborador').value = nome; document.getElementById('tr_telefone').value = telefone; document.getElementById('tr_tema').value = tema; abrirAba('aba-treinamentos'); document.getElementById('tr_predio').focus();
 };
 
 async function salvarTreinamento() {
@@ -1649,33 +1646,42 @@ async function salvarMinhaSenha() {
 }
 
 async function adminCriarUsuario() {
+    if (!window.exigirAdmin()) return;
     const nome = document.getElementById('cad_nome').value; const turno = document.getElementById('cad_turno').value; const celular = document.getElementById('cad_celular').value; const cpf = document.getElementById('cad_cpf').value; const email = document.getElementById('cad_email').value; const senha = document.getElementById('cad_senha').value;
     if (!nome || !email || !senha || !turno) return alert('Por favor, preencha Nome, E-mail, Senha e Turno.');
     try {
-        const { error } = await supabase.rpc('admin_criar_usuario', { p_email: email, p_senha: senha, p_nome: nome, p_turno: turno, p_celular: celular, p_cpf: cpf });
+        const { error } = await supabase.functions.invoke('admin-users', {
+            body: { action: 'create', email, password: senha, nome, turno, celular, cpf, role: 'operacional' }
+        });
         if (error) throw error; alert(`Sucesso! O usuário ${nome} foi criado.`); document.getElementById('form-novo-usuario').reset(); fecharModal('modal-usuario'); 
     } catch (err) { console.error('Erro completo:', err); alert('Erro ao criar usuário: ' + (err.message || 'Verifique se o e-mail já existe.')); }
 }
 
 async function carregarTabelaUsuarios() {
+    if (!window.exigirAdmin()) return;
     try {
         const { data: usuarios, error } = await supabase.from('profiles').select('*').order('nome', { ascending: true });
         if (error) throw error;
         const tabela = document.getElementById('tabela-usuarios-admin'); tabela.innerHTML = ''; 
         usuarios.forEach(user => {
-            const tr = document.createElement('tr'); const cpfUser = user.cpf ? `'${user.cpf}'` : `null`;
-            tr.innerHTML = `<td>${user.nome}</td><td>${user.email}</td><td><select id="role-${user.id}" class="btn-sm" style="margin-bottom: 0;"><option value="operacional" ${user.role === 'operacional' ? 'selected' : ''}>Operacional</option><option value="admin" ${user.role === 'admin' ? 'selected' : ''}>Admin</option></select></td><td><div style="display: flex; gap: 5px; flex-wrap: wrap;"><button class="btn-primary btn-sm" onclick="salvarNivelAcesso('${user.id}')">Salvar Edição</button><button class="btn-primary btn-sm" style="background: #8e44ad;" onclick="prepararEdicaoCompleta('${user.id}')">Alterar Dados</button><button class="btn-primary btn-sm" style="background: #f39c12;" onclick="redefinirSenhaUsuario('${user.id}', ${cpfUser})">Redefinir Senha</button><button class="btn-danger btn-sm" onclick="deletarUsuario('${user.id}')">Excluir</button></div></td>`;
+            const tr = document.createElement('tr');
+            const nomeSeguro = limparTexto(user.nome || '');
+            const emailSeguro = limparTexto(user.email || '');
+            const emailCodificado = encodeURIComponent(user.email || '');
+            tr.innerHTML = `<td>${nomeSeguro}</td><td>${emailSeguro}</td><td><select id="role-${user.id}" class="btn-sm" style="margin-bottom: 0;"><option value="operacional" ${user.role === 'operacional' ? 'selected' : ''}>Operacional</option><option value="admin" ${user.role === 'admin' ? 'selected' : ''}>Admin</option></select></td><td><div style="display: flex; gap: 5px; flex-wrap: wrap;"><button class="btn-primary btn-sm" onclick="salvarNivelAcesso('${user.id}')">Salvar Edição</button><button class="btn-primary btn-sm" style="background: #8e44ad;" onclick="prepararEdicaoCompleta('${user.id}')">Alterar Dados</button><button class="btn-primary btn-sm" style="background: #f39c12;" onclick="redefinirSenhaUsuario('${user.id}', '${emailCodificado}')">Redefinir Senha</button><button class="btn-danger btn-sm" onclick="deletarUsuario('${user.id}')">Excluir</button></div></td>`;
             tabela.appendChild(tr);
         });
     } catch (err) { console.error("Erro ao carregar tabela:", err.message); }
 }
 
 async function salvarNivelAcesso(userId) {
+    if (!window.exigirAdmin()) return;
     const novoRole = document.getElementById(`role-${userId}`).value;
-    try { const { error } = await supabase.from('profiles').update({ role: novoRole }).eq('id', userId); if (error) throw error; alert("Nível de acesso atualizado com sucesso!"); } catch (err) { alert("Erro ao atualizar nível: " + err.message); }
+    try { const { error } = await supabase.functions.invoke('admin-users', { body: { action: 'set-role', userId, role: novoRole } }); if (error) throw error; alert("Nível de acesso atualizado com sucesso!"); } catch (err) { alert("Erro ao atualizar nível: " + err.message); }
 }
 
 async function prepararEdicaoCompleta(userId) {
+    if (!window.exigirAdmin()) return;
     try {
         const { data: user, error } = await supabase.from('profiles').select('*').eq('id', userId).single();
         if (error) throw error; fecharModal('modal-permissoes'); document.getElementById('edit_id').value = user.id; document.getElementById('edit_nome').value = user.nome || ''; document.getElementById('edit_turno').value = user.turno || ''; document.getElementById('edit_celular').value = user.celular || ''; document.getElementById('edit_cpf').value = user.cpf || ''; document.getElementById('edit_email').value = user.email || ''; abrirModal('modal-editar-usuario');
@@ -1683,40 +1689,52 @@ async function prepararEdicaoCompleta(userId) {
 }
 
 async function salvarEdicaoUsuario() {
+    if (!window.exigirAdmin()) return;
     const userId = document.getElementById('edit_id').value; const nome = document.getElementById('edit_nome').value; const turno = document.getElementById('edit_turno').value; const celular = document.getElementById('edit_celular').value; const cpf = document.getElementById('edit_cpf').value; const email = document.getElementById('edit_email').value;
     try {
-        const { error } = await supabase.from('profiles').update({ nome, turno, celular, cpf, email }).eq('id', userId);
+        const { error } = await supabase.functions.invoke('admin-users', { body: { action: 'update-profile', userId, nome, turno, celular, cpf, email } });
         if (error) throw error; alert("Dados alterados com sucesso no Perfil!"); fecharModal('modal-editar-usuario'); abrirModal('modal-permissoes'); 
     } catch (err) { alert("Erro ao salvar: " + err.message); }
 }
 
-async function redefinirSenhaUsuario(userId, cpfUsuario) {
-    if (!cpfUsuario || cpfUsuario.length < 4) return alert("❌ Erro: O usuário não possui um CPF válido para gerar a senha.");
-    const cpfNumeros = cpfUsuario.replace(/\D/g, ""); const novaSenha = cpfNumeros.substring(0, 4);
-    perguntar("Redefinir Senha", `A nova senha será os 4 primeiros dígitos do CPF (${novaSenha}). Confirmar operação?`, "aviso", async () => {
-        try { const { error } = await supabase.rpc('admin_redefinir_senha', { p_user_id: userId, p_nova_senha: novaSenha }); if (error) throw error; alert(`✅ Sucesso! A senha foi redefinida para: ${novaSenha}`); } catch (err) { alert("❌ Erro ao redefinir senha: " + err.message); }
+function gerarSenhaTemporaria() {
+    const bytes = crypto.getRandomValues(new Uint8Array(12));
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@#$%';
+    return Array.from(bytes, byte => chars[byte % chars.length]).join('');
+}
+
+async function redefinirSenhaUsuario(userId, emailCodificado) {
+    if (!window.exigirAdmin()) return;
+    const email = decodeURIComponent(emailCodificado || '');
+    const novaSenha = gerarSenhaTemporaria();
+    perguntar("Redefinir Senha", `Gerar uma senha temporária forte para ${email}?`, "aviso", async () => {
+        try { const { error } = await supabase.functions.invoke('admin-users', { body: { action: 'reset-password', userId, password: novaSenha } }); if (error) throw error; alert(`✅ Sucesso! A senha foi redefinida para: ${novaSenha}`); } catch (err) { alert("❌ Erro ao redefinir senha: " + err.message); }
     });
 }
 
 async function deletarUsuario(userId) {
+    if (!window.exigirAdmin()) return;
     perguntar("Excluir Usuário", "Tem certeza que deseja excluir este usuário permanentemente do sistema?", "perigo", async () => {
-        try { const { error } = await supabase.from('profiles').delete().eq('id', userId); if (error) throw error; alert("✅ Usuário removido do sistema!"); carregarTabelaUsuarios(); } catch (err) { alert("❌ Erro ao excluir: " + err.message); }
+        try { const { error } = await supabase.functions.invoke('admin-users', { body: { action: 'delete', userId } }); if (error) throw error; alert("✅ Usuário removido do sistema!"); carregarTabelaUsuarios(); } catch (err) { alert("❌ Erro ao excluir: " + err.message); }
     });
 }
 
 async function adminCadastrarChave() {
+    if (!window.exigirAdmin()) return;
     const nome = document.getElementById('cad_chave_nome').value; const cor = document.getElementById('cad_chave_cor').value; const local = document.getElementById('cad_chave_local').value;
     if(!nome || !cor || !local) return alert('Preencha todos os campos!');
     try { const { error } = await supabase.from('chaves').insert([{ nome, cor, localizacao: local, status: 'disponivel' }]); if (error) throw error; alert('Chave cadastrada com sucesso!'); fecharModal('modal-chave'); carregarSelectChaves(); } catch (err) { alert('Erro: ' + err.message); }
 }
 
 async function adminCadastrarToner() {
+    if (!window.exigirAdmin()) return;
     const modelo = document.getElementById('cad_toner_modelo').value; const impressoras = document.getElementById('cad_toner_imp').value; const quantidade = document.getElementById('cad_toner_qtd').value;
     if(!modelo || !impressoras || !quantidade) return alert('Preencha todos os campos!');
     try { const { error } = await supabase.from('cadastro_toner').insert([{ modelo_toner: modelo, impressora_compativel: impressoras, quantidade_atual: parseInt(quantidade) }]); if (error) throw error; alert('Toner cadastrado com sucesso no estoque!'); fecharModal('modal-toner'); } catch (err) { alert('Erro: ' + err.message); }
 }
 
 async function adminCadastrarSimpress() {
+    if (!window.exigirAdmin()) return;
     const numero = document.getElementById('cad_sim_numero').value; const modelo = document.getElementById('cad_sim_modelo').value; const serie = document.getElementById('cad_sim_serie').value; const predio = document.getElementById('cad_sim_predio').value; const andar = document.getElementById('cad_sim_andar').value; const setor = document.getElementById('cad_sim_setor').value;
     if (!numero || !modelo || !serie || !predio || !andar || !setor) return alert("⚠️ Por favor, preencha todos os campos obrigatórios.");
     const localizacaoCompleta = `${predio} / ${setor} (${andar})`;
@@ -1727,10 +1745,11 @@ async function adminCadastrarSimpress() {
 // EXPORTAÇÃO PDF ORGANIZADO E CSV LIMPO
 // ==========================================
 
-async function exportarPDF() { abrirModal('modal-exportacao'); }
+async function exportarPDF() { if (!window.exigirAdmin()) return; abrirModal('modal-exportacao'); }
 
 // PDF: Corrigido para garantir que a aba esteja visível e o arquivo baixe
 function prepararExportacao(idAba, nomeArquivo) {
+    if (!window.exigirAdmin()) return;
     fecharModal('modal-exportacao');
     window.mostrarAviso("⏳ Gerando relatório visual... Aguarde.", "aviso");
     
@@ -1765,6 +1784,7 @@ function prepararExportacao(idAba, nomeArquivo) {
 
 // 🟢 CSV: Corrigido para "Modo Humano" (Limpa códigos e organiza pro Excel)
 async function exportarParaCSV(tabelaSupabase, nomeArquivo) {
+    if (!window.exigirAdmin()) return;
     fecharModal('modal-exportacao');
     window.mostrarAviso("⏳ Limpando dados e organizando planilha...", "aviso");
 
@@ -1822,34 +1842,6 @@ async function exportarParaCSV(tabelaSupabase, nomeArquivo) {
 
 function mascaraCPF(cpf) { let v = cpf.value.replace(/\D/g, ""); if (v.length > 11) v = v.slice(0, 11); v = v.replace(/(\d{3})(\d)/, "$1.$2"); v = v.replace(/(\d{3})(\d)/, "$1.$2"); v = v.replace(/(\d{3})(\d{1,2})$/, "$1-$2"); cpf.value = v; }
 function mascaraTelefone(tel) { let v = tel.value.replace(/\D/g, ""); if (v.length > 11) v = v.slice(0, 11); v = v.replace(/^(\d{2})(\d)/g, "($1) $2"); v = v.replace(/(\d)(\d{4})$/, "$1-$2"); tel.value = v; }
-
-// ==========================================
-// 🛡️ BLINDAGEM DE FRONT-END (ANTI-CURIOSOS)
-// ==========================================
-
-// 1. Bloqueia botão direito, F12, Inspecionar e Ver Código Fonte
-document.addEventListener('contextmenu', e => e.preventDefault());
-document.addEventListener('keydown', e => {
-    if (e.key === 'F12' || 
-       (e.ctrlKey && e.shiftKey && (e.key === 'I' || e.key === 'J' || e.key === 'C')) || 
-       (e.ctrlKey && e.key === 'U')) {
-        e.preventDefault();
-        return false;
-    }
-});
-
-// 2. Armadilha de Debugger (Inferniza a vida de quem abrir o console)
-setInterval(function() {
-    const inicio = new Date().getTime();
-    debugger; // Se o console estiver aberto, o navegador trava aqui
-    const fim = new Date().getTime();
-    
-    // Se ele demorou mais de 100ms para passar da linha de cima, o painel está aberto!
-    if (fim - inicio > 100) {
-        document.body.innerHTML = "<h1 style='color:red; text-align:center; margin-top:20%;'>Acesso Negado. Atividade Suspeita Detectada.</h1>";
-        window.location.replace("about:blank"); // Expulsa o usuário
-    }
-}, 2000);
 
 // Função que neutraliza códigos maliciosos digitados pelos usuários
 window.limparTexto = function(texto) {
