@@ -64,9 +64,49 @@ body.login-bg {
    3. BACKGROUND DO APP E INPUTS (Refinados e Delicados)
    ========================================================= */
 body.app-bg { 
-    background-color: #f8fafc; 
+    background: #f8fafc;
+    background-image: none !important;
+    min-height: 100vh;
+    display: block;
+    padding: 0;
     margin: 0; 
     color: #334155;
+}
+
+#login-container .btn-link {
+    background: transparent;
+    color: #1d6f94;
+    box-shadow: none;
+    font-size: 13px !important;
+    padding: 10px !important;
+    margin-top: 6px;
+}
+
+#login-container .btn-link:hover {
+    color: #0f4c6a;
+    text-decoration: underline;
+    transform: none;
+}
+
+#recuperacao-senha {
+    margin-top: 16px;
+    padding-top: 16px;
+    border-top: 1px solid rgba(51, 65, 85, 0.2);
+}
+
+.recovery-title {
+    margin: 0 0 12px !important;
+    color: #334155 !important;
+    font-weight: 700;
+}
+
+body.app-bg #app-wrapper:not(.hidden) { display: flex; }
+body.login-bg #app-wrapper { display: none !important; }
+body.app-bg #login-container { display: none !important; }
+
+button:disabled {
+    cursor: wait;
+    opacity: 0.7;
 }
 
 input[type="email"], input[type="password"], input[type="text"], select, textarea {
@@ -912,3 +952,50 @@ input[type="file"]::file-selector-button:hover {
     color: #475569;
     text-transform: uppercase;
 }
+
+/* =========================================================
+   15. INVENTARIO COM LEITOR
+   ========================================================= */
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
+.inventory-scanner-card { background: linear-gradient(135deg, #0f2744, #0d5770); color: #fff; border-radius: 16px; padding: 24px; box-shadow: 0 14px 35px rgba(15, 39, 68, .18); }
+.scanner-heading, .section-heading-inline { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; }
+.scanner-heading h4 { color: #fff; font-size: 21px; margin: 3px 0; }
+.scanner-heading p { margin: 0; color: #c9e8f1; font-size: 13px; }
+.scanner-kicker { color: #75dcf3; font-size: 10px; letter-spacing: 1.4px; font-weight: 800; }
+.scanner-status { background: rgba(255,255,255,.12); border: 1px solid rgba(255,255,255,.2); padding: 7px 11px; border-radius: 999px; font-size: 11px; font-weight: 700; white-space: nowrap; }
+.scanner-status.success { background: #087f5b; }.scanner-status.warning { background: #a65b00; }.scanner-status.error { background: #b42318; }.scanner-status.loading { animation: scannerPulse 1s infinite alternate; }
+@keyframes scannerPulse { to { opacity: .55; } }
+.scanner-input-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px; margin-top: 20px; }
+.scanner-input { height: 58px; margin: 0 !important; border: 2px solid transparent !important; border-radius: 10px !important; font-size: 20px !important; font-weight: 700; letter-spacing: .5px; padding: 0 18px !important; }
+.scanner-input:focus { border-color: #75dcf3 !important; box-shadow: 0 0 0 4px rgba(117,220,243,.2) !important; }
+.scanner-input-row button { min-width: 155px; }
+.inventory-counters { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-top: 18px; }
+.inventory-counters div { background: rgba(255,255,255,.09); border: 1px solid rgba(255,255,255,.11); padding: 10px 12px; border-radius: 9px; display: flex; align-items: baseline; gap: 8px; }
+.inventory-counters strong { font-size: 22px; }.inventory-counters span { color: #c9e8f1; font-size: 11px; }
+.inventory-result { margin-top: 18px; padding: 18px; border-radius: 12px; color: #263547; background: #fff; }
+.inventory-result.found { border-left: 5px solid #10b981; }.inventory-result.not-found { border-left: 5px solid #f59e0b; }
+.result-title { display: flex; gap: 12px; align-items: center; }.result-title > span { width: 34px; height: 34px; display: grid; place-items: center; border-radius: 50%; color: #fff; background: #10b981; font-weight: 900; }.not-found .result-title > span { background: #f59e0b; }
+.result-title strong, .result-title small { display: block; }.result-title small { margin-top: 3px; color: #64748b; }
+.equipment-details { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 10px; margin-top: 16px; }
+.equipment-details div { background: #f8fafc; border: 1px solid #e6edf4; padding: 10px; border-radius: 8px; min-width: 0; }.equipment-details span, .equipment-details strong { display: block; overflow-wrap: anywhere; }.equipment-details span { color: #64748b; font-size: 10px; text-transform: uppercase; font-weight: 700; }.equipment-details strong { margin-top: 4px; font-size: 12px; }
+.equipment-notes { background: #fff8e8; border-radius: 7px; padding: 10px; font-size: 12px; }
+.validation-fields { display: grid; grid-template-columns: 1fr 1fr auto auto; align-items: center; gap: 8px; margin-top: 15px; }.validation-fields input { margin: 0; }
+.quick-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; }.quick-actions button { flex: 1 1 170px; }
+.manual-validation { display: grid; grid-template-columns: 1fr auto; gap: 8px; margin-top: 12px; }.manual-validation input { margin: 0; }
+.btn-secondary { background: #64748b; color: #fff; border: 0; border-radius: 6px; cursor: pointer; }.btn-warning { background: #d97706; color: #fff; border: 0; border-radius: 6px; cursor: pointer; }
+.section-heading-inline h4 { margin: 0; }.session-history { display: grid; gap: 7px; margin-top: 12px; }.session-history-item { display: grid; grid-template-columns: 1fr auto auto; align-items: center; gap: 12px; padding: 9px 11px; border: 1px solid #e2e8f0; border-left: 4px solid #94a3b8; border-radius: 7px; }.session-history-item.status-encontrado, .session-history-item.status-cadastrado { border-left-color: #10b981; }.session-history-item.status-pendente, .session-history-item.status-nao_encontrado { border-left-color: #f59e0b; }.session-history-item div span { display: block; color: #64748b; font-size: 11px; margin-top: 2px; }.session-history-item time { color: #64748b; font-size: 11px; }
+.history-badge { display: inline-block; background: #e2e8f0; color: #475569; border-radius: 999px; padding: 4px 8px; font-size: 9px; font-weight: 800; text-transform: uppercase; white-space: nowrap; }.history-badge.status-encontrado, .history-badge.status-cadastrado { background: #d1fae5; color: #047857; }.history-badge.status-pendente, .history-badge.status-nao_encontrado { background: #fef3c7; color: #92400e; }
+.empty-state { text-align: center; color: #64748b; padding: 14px; }
+
+@media (max-width: 900px) { .validation-fields { grid-template-columns: 1fr 1fr; }.equipment-details { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 600px) {
+    .inventory-scanner-card { padding: 17px; border-radius: 12px; }.scanner-heading { flex-direction: column; }.scanner-input-row { grid-template-columns: 1fr; }.scanner-input-row button { min-height: 45px; }.inventory-counters { grid-template-columns: repeat(2, 1fr); }.equipment-details, .validation-fields, .manual-validation { grid-template-columns: 1fr; }.session-history-item { grid-template-columns: 1fr auto; }.session-history-item time { grid-column: 1 / -1; }.quick-actions button { flex-basis: 100%; }
+}
+
+.inventory-transfer-help { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin-top: 10px; color: #64748b; font-size: 11px; }
+.link-button { padding: 0; border: 0; background: transparent; color: #087ea4; text-decoration: underline; cursor: pointer; font: inherit; font-weight: 700; }
+.import-preview { margin-top: 15px; padding: 15px; border: 1px solid #cbd5e1; border-radius: 10px; background: #f8fafc; }
+.import-summary { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 12px; }
+.import-summary div { padding: 10px; background: #fff; border: 1px solid #e2e8f0; border-radius: 7px; }.import-summary strong, .import-summary span { display: block; }.import-summary strong { color: #0f5770; font-size: 20px; }.import-summary span { color: #64748b; font-size: 10px; }
+.import-actions { display: flex; gap: 8px; margin-top: 12px; }.import-error { color: #b42318; }.import-success { color: #047857; }
+@media (max-width: 600px) { .import-summary { grid-template-columns: repeat(2, 1fr); }.import-actions { flex-direction: column; } }
