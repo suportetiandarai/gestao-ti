@@ -28,6 +28,11 @@ begin
   new.codigo_barras := nullif(btrim(regexp_replace(coalesce(new.codigo_barras, ''), '^FDRAND-', '', 'i')), '');
   new.patrimonio := nullif(btrim(coalesce(new.patrimonio, '')), '');
   new.origem_patrimonio := nullif(btrim(coalesce(new.origem_patrimonio, '')), '');
+  if lower(coalesce(new.origem_patrimonio, '')) like '%federal%' then
+    new.origem_patrimonio := 'Federal';
+  elsif replace(lower(coalesce(new.origem_patrimonio, '')), ' ', '') in ('riosaude', 'riosaúde') then
+    new.origem_patrimonio := 'RioSaude';
+  end if;
 
   if new.status is null or btrim(new.status) = '' then
     new.status := 'Não informado';
@@ -50,6 +55,11 @@ update public.inventario
 set
   numero_serie = nullif(btrim(regexp_replace(coalesce(numero_serie, ''), '^FDRAND-', '', 'i')), ''),
   codigo_barras = nullif(btrim(regexp_replace(coalesce(codigo_barras, ''), '^FDRAND-', '', 'i')), ''),
+  origem_patrimonio = case
+    when lower(coalesce(origem_patrimonio, '')) like '%federal%' then 'Federal'
+    when replace(lower(coalesce(origem_patrimonio, '')), ' ', '') in ('riosaude', 'riosaúde') then 'RioSaude'
+    else nullif(btrim(coalesce(origem_patrimonio, '')), '')
+  end,
   status = case
     when status is null or btrim(status) = '' then 'Não informado'
     when lower(status) like '%fora%uso%' or lower(btrim(status)) in ('em estoque', 'estoque') then 'Estoque'

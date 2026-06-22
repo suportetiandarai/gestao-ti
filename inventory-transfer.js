@@ -50,6 +50,14 @@ function normalizarNumeroSerieImportado(valor) {
     return normalizarTextoInventario(valor, 120).replace(/^FDRAND-/i, '');
 }
 
+function normalizarOrigemPatrimonioImportada(valor) {
+    const origem = normalizarTextoInventario(valor, 120).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+    if (!origem) return '';
+    if (origem.includes('federal')) return 'Federal';
+    if ((origem.includes('rio') && origem.includes('saude')) || origem === 'riosaude') return 'RioSaude';
+    return normalizarTextoInventario(valor, 120);
+}
+
 function detectarDelimitadorCsv(texto) {
     const primeiraLinha = String(texto).replace(/^\uFEFF/, '').split(/\r?\n/, 1)[0] || '';
     const contar = delimitador => {
@@ -104,7 +112,7 @@ function mapearLinhaInventario(cabecalhos, valores) {
         status: normalizarStatusInventarioImportado(obter('status')), predio: obter('predio') || null,
         andar: obter('andar') || null, setor: localizacao || null,
         responsavel: obter('responsavel') || null,
-        origem_patrimonio: obter('origem_patrimonio') || null,
+        origem_patrimonio: normalizarOrigemPatrimonioImportada(obter('origem_patrimonio')) || null,
         observacoes: obter('observacoes') || null
     };
     return registro;
@@ -151,7 +159,7 @@ function renderizarResumoImportacao(resumo, amostra) {
         <div><strong>${resumo.total}</strong><span>Linhas lidas</span></div><div><strong>${resumo.novos}</strong><span>Novos válidos</span></div>
         <div><strong>${resumo.duplicados}</strong><span>Duplicados ignorados</span></div><div><strong>${resumo.invalidos}</strong><span>Sem identificador</span></div>
     </div>
-    ${amostra.length ? `<div class="table-responsive"><table><thead><tr><th>Série</th><th>Patrimônio</th><th>Tipo</th><th>Modelo</th><th>Local</th></tr></thead><tbody>${amostra.map(item => `<tr><td>${invEscape(item.numero_serie || '-')}</td><td>${invEscape(item.patrimonio || '-')}</td><td>${invEscape(item.tipo)}</td><td>${invEscape(item.modelo)}</td><td>${invEscape(item.setor || '-')}</td></tr>`).join('')}</tbody></table></div>` : ''}
+    ${amostra.length ? `<div class="table-responsive"><table><thead><tr><th>Série</th><th>Patrimônio</th><th>Origem</th><th>Tipo</th><th>Modelo</th><th>Local</th></tr></thead><tbody>${amostra.map(item => `<tr><td>${invEscape(item.numero_serie || '-')}</td><td>${invEscape(item.patrimonio || '-')}</td><td>${invEscape(item.origem_patrimonio || '-')}</td><td>${invEscape(item.tipo)}</td><td>${invEscape(item.modelo)}</td><td>${invEscape(item.setor || '-')}</td></tr>`).join('')}</tbody></table></div>` : ''}
     <div class="import-actions"><button class="btn-success" ${resumo.novos ? '' : 'disabled'} onclick="confirmarImportacaoInventario()">Importar ${resumo.novos} equipamento(s)</button><button class="btn-secondary" onclick="cancelarImportacaoInventario()">Cancelar</button></div>`;
 }
 

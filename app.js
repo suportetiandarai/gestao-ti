@@ -670,11 +670,20 @@ function normalizarNumeroSerieInventario(valor) {
     return String(valor || '').trim().replace(/^FDRAND-/i, '');
 }
 
+function normalizarOrigemPatrimonioInventario(valor) {
+    const origem = String(valor || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toLowerCase();
+    if (!origem) return '';
+    if (origem.includes('federal')) return 'Federal';
+    if (origem.includes('rio') && origem.includes('saude')) return 'RioSaude';
+    if (origem === 'riosaude') return 'RioSaude';
+    return String(valor).trim();
+}
+
 async function salvarEquipamento() {
     const tipo = document.getElementById('inv_tipo').value.trim(); const marca = document.getElementById('inv_marca').value.trim(); const modelo = document.getElementById('inv_modelo').value.trim(); const serie = normalizarNumeroSerieInventario(document.getElementById('inv_serie').value); const status = normalizarStatusInventario(document.getElementById('inv_status').value); const predio = document.getElementById('inv_predio').value; const andar = document.getElementById('inv_andar').value; const setor = document.getElementById('inv_setor').value.trim(); const patrimonio = document.getElementById('inv_patrimonio').value.trim();
     const codigo_barras = normalizarNumeroSerieInventario(document.getElementById('inv_codigo_barras').value);
     const nome = document.getElementById('inv_nome').value.trim();
-    const origem_patrimonio = document.getElementById('inv_origem_patrimonio').value;
+    const origem_patrimonio = normalizarOrigemPatrimonioInventario(document.getElementById('inv_origem_patrimonio').value);
     const responsavel = document.getElementById('inv_responsavel').value.trim();
     const observacoes = document.getElementById('inv_observacoes').value.trim();
     const contextoLeitura = document.getElementById('inv_contexto_leitura').value.trim();
@@ -738,6 +747,7 @@ async function carregarInventario() {
             
             <td style="font-weight: bold; color: #1e293b;">
                 ${invEscape(e.patrimonio || '-')}
+                ${e.origem_patrimonio ? `<br><small class="badge-patrimonio">Origem: ${invEscape(normalizarOrigemPatrimonioInventario(e.origem_patrimonio))}</small>` : ''}
             </td>
 
             <td>${invEscape(e.predio || '-')} / ${invEscape(e.setor || '-')} <br><small>(${invEscape(e.andar || '-')})</small></td>
@@ -774,7 +784,7 @@ async function abrirModalEditarEquipamento(id) {
         document.getElementById('edit_inv_setor').value = e.setor || ''; 
         document.getElementById('edit_inv_predio').value = e.predio || '';
         document.getElementById('edit_inv_patrimonio').value = e.patrimonio || ''; // Adicionado corretamente
-        document.getElementById('edit_inv_origem_patrimonio').value = e.origem_patrimonio || '';
+        document.getElementById('edit_inv_origem_patrimonio').value = normalizarOrigemPatrimonioInventario(e.origem_patrimonio);
         document.getElementById('edit_inv_status').value = normalizarStatusInventario(e.status || 'Em uso');
         document.getElementById('edit_inv_responsavel').value = e.responsavel || '';
         document.getElementById('edit_inv_observacoes').value = e.observacoes || '';
@@ -801,7 +811,7 @@ async function salvarEdicaoEquipamento() {
         andar: document.getElementById('edit_inv_andar').value, 
         setor: document.getElementById('edit_inv_setor').value,
         patrimonio: document.getElementById('edit_inv_patrimonio').value.trim() || null,
-        origem_patrimonio: document.getElementById('edit_inv_origem_patrimonio').value || null,
+        origem_patrimonio: normalizarOrigemPatrimonioInventario(document.getElementById('edit_inv_origem_patrimonio').value) || null,
         responsavel: document.getElementById('edit_inv_responsavel').value.trim() || null,
         observacoes: document.getElementById('edit_inv_observacoes').value.trim() || null
     };
