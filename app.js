@@ -655,9 +655,24 @@ async function salvarNovoTipoEquipamento() {
     } catch (err) { alert("Erro: Este tipo talvez já exista. " + err.message); }
 }
 
+function normalizarStatusInventario(valor) {
+    const status = String(valor || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toLowerCase();
+    if (!status) return 'Não informado';
+    if (status.includes('fora') && status.includes('uso')) return 'Estoque';
+    if (status === 'em estoque' || status === 'estoque') return 'Estoque';
+    if (status === 'em uso' || status === 'uso') return 'Em uso';
+    if (status.includes('danific')) return 'Danificado';
+    if (status.includes('nao informado') || status.includes('não informado')) return 'Não informado';
+    return String(valor).trim();
+}
+
+function normalizarNumeroSerieInventario(valor) {
+    return String(valor || '').trim().replace(/^FDRAND-/i, '');
+}
+
 async function salvarEquipamento() {
-    const tipo = document.getElementById('inv_tipo').value.trim(); const marca = document.getElementById('inv_marca').value.trim(); const modelo = document.getElementById('inv_modelo').value.trim(); const serie = document.getElementById('inv_serie').value.trim(); const status = document.getElementById('inv_status').value; const predio = document.getElementById('inv_predio').value; const andar = document.getElementById('inv_andar').value; const setor = document.getElementById('inv_setor').value.trim(); const patrimonio = document.getElementById('inv_patrimonio').value.trim();
-    const codigo_barras = document.getElementById('inv_codigo_barras').value.trim();
+    const tipo = document.getElementById('inv_tipo').value.trim(); const marca = document.getElementById('inv_marca').value.trim(); const modelo = document.getElementById('inv_modelo').value.trim(); const serie = normalizarNumeroSerieInventario(document.getElementById('inv_serie').value); const status = normalizarStatusInventario(document.getElementById('inv_status').value); const predio = document.getElementById('inv_predio').value; const andar = document.getElementById('inv_andar').value; const setor = document.getElementById('inv_setor').value.trim(); const patrimonio = document.getElementById('inv_patrimonio').value.trim();
+    const codigo_barras = normalizarNumeroSerieInventario(document.getElementById('inv_codigo_barras').value);
     const nome = document.getElementById('inv_nome').value.trim();
     const origem_patrimonio = document.getElementById('inv_origem_patrimonio').value;
     const responsavel = document.getElementById('inv_responsavel').value.trim();
@@ -703,7 +718,7 @@ async function carregarInventario() {
         let query = supabase.from('inventario').select('*').order('created_at', { ascending: false });
         if (filtroTipo) query = query.eq('tipo', filtroTipo); if (filtroStatus) query = query.eq('status', filtroStatus); if (filtroSerie) query = query.ilike('numero_serie', `%${filtroSerie}%`);
         if (filtroLocalizacao) {
-            const termoLocalizacao = `%${filtroLocalizacao.replace(/[,%]/g, ' ')}%`;
+            const termoLocalizacao = `%${filtroLocalizacao.replace(/[,%()]/g, ' ')}%`;
             query = query.or(`predio.ilike.${termoLocalizacao},andar.ilike.${termoLocalizacao},setor.ilike.${termoLocalizacao}`);
         }
         const { data, error } = await query; if (error) throw error;
@@ -711,7 +726,8 @@ async function carregarInventario() {
         if (tbody) {
             const isAdmin = typeof window.usuarioAtual !== 'undefined' && window.usuarioAtual && window.usuarioAtual.role === 'admin';
             tbody.innerHTML = data.length > 0 ? data.map(e => {
-                let corStatus = '#3498db'; if (e.status === 'Em uso') corStatus = '#2ecc71'; if (e.status === 'Danificado') corStatus = '#e74c3c'; 
+                const statusNormalizado = normalizarStatusInventario(e.status);
+                let corStatus = '#3498db'; if (statusNormalizado === 'Em uso') corStatus = '#2ecc71'; if (statusNormalizado === 'Danificado') corStatus = '#e74c3c'; if (statusNormalizado === 'Estoque') corStatus = '#64748b';
                 let botoesAcao = `<button class="btn-primary btn-sm" style="background: #f39c12;" onclick="alterarStatusInventario('${e.id}')">🔄 Status</button>`;
                 if (isAdmin) botoesAcao += `<button class="btn-primary btn-sm" style="background: #8e44ad;" onclick="abrirModalEditarEquipamento('${e.id}')">✏️ Editar</button><button class="btn-danger btn-sm" onclick="deletarEquipamento('${e.id}')">🗑️ Excluir</button>`;
                 return `
@@ -725,7 +741,7 @@ async function carregarInventario() {
             </td>
 
             <td>${invEscape(e.predio || '-')} / ${invEscape(e.setor || '-')} <br><small>(${invEscape(e.andar || '-')})</small></td>
-            <td><span style="background-color: ${corStatus}; color: white; padding: 4px 8px; border-radius: 4px; font-size: 11px; font-weight: bold;">${invEscape(e.status)}</span></td>
+            <td><span style="background-color: ${corStatus}; color: white; padding: 4px 8px; border-radius: 4px; font-size: 11px; font-weight: bold;">${invEscape(statusNormalizado)}</span></td>
             <td>
                 <div style="display: flex; gap: 5px;">
                     ${botoesAcao}
@@ -759,7 +775,7 @@ async function abrirModalEditarEquipamento(id) {
         document.getElementById('edit_inv_predio').value = e.predio || '';
         document.getElementById('edit_inv_patrimonio').value = e.patrimonio || ''; // Adicionado corretamente
         document.getElementById('edit_inv_origem_patrimonio').value = e.origem_patrimonio || '';
-        document.getElementById('edit_inv_status').value = e.status || 'Em uso';
+        document.getElementById('edit_inv_status').value = normalizarStatusInventario(e.status || 'Em uso');
         document.getElementById('edit_inv_responsavel').value = e.responsavel || '';
         document.getElementById('edit_inv_observacoes').value = e.observacoes || '';
         
@@ -778,9 +794,9 @@ async function salvarEdicaoEquipamento() {
         tipo: document.getElementById('edit_inv_tipo').value, 
         marca: document.getElementById('edit_inv_marca').value, 
         modelo: document.getElementById('edit_inv_modelo').value, 
-        numero_serie: document.getElementById('edit_inv_serie').value, 
-        codigo_barras: document.getElementById('edit_inv_codigo_barras').value.trim() || null,
-        status: document.getElementById('edit_inv_status').value,
+        numero_serie: normalizarNumeroSerieInventario(document.getElementById('edit_inv_serie').value),
+        codigo_barras: normalizarNumeroSerieInventario(document.getElementById('edit_inv_codigo_barras').value) || null,
+        status: normalizarStatusInventario(document.getElementById('edit_inv_status').value),
         predio: document.getElementById('edit_inv_predio').value, 
         andar: document.getElementById('edit_inv_andar').value, 
         setor: document.getElementById('edit_inv_setor').value,
@@ -804,7 +820,7 @@ async function salvarEdicaoEquipamento() {
 
 function alterarStatusInventario(id) { document.getElementById('status_inv_id').value = id; document.getElementById('status_inv_novo').value = ''; abrirModal('modal-status-inventario'); }
 async function salvarNovoStatusInventario() {
-    const id = document.getElementById('status_inv_id').value; const novoStatus = document.getElementById('status_inv_novo').value;
+    const id = document.getElementById('status_inv_id').value; const novoStatus = normalizarStatusInventario(document.getElementById('status_inv_novo').value);
     if (!novoStatus) return alert("⚠️ Selecione um status.");
     try {
         const { error } = await supabase.from('inventario').update({ status: novoStatus }).eq('id', id);
@@ -1708,7 +1724,13 @@ async function redefinirSenhaUsuario(userId, emailCodificado) {
     const email = decodeURIComponent(emailCodificado || '');
     const novaSenha = gerarSenhaTemporaria();
     perguntar("Redefinir Senha", `Gerar uma senha temporária forte para ${email}?`, "aviso", async () => {
-        try { const { error } = await supabase.functions.invoke('admin-users', { body: { action: 'reset-password', userId, password: novaSenha } }); if (error) throw error; alert(`✅ Sucesso! A senha foi redefinida para: ${novaSenha}`); } catch (err) { alert("❌ Erro ao redefinir senha: " + err.message); }
+        try {
+            if (!navigator.clipboard?.writeText) throw new Error('Navegador sem suporte seguro para copiar senha temporária.');
+            await navigator.clipboard.writeText(novaSenha);
+            const { error } = await supabase.functions.invoke('admin-users', { body: { action: 'reset-password', userId, password: novaSenha } });
+            if (error) throw error;
+            alert('✅ Senha temporária redefinida e copiada para a área de transferência do administrador. Cole em um canal seguro e oriente a troca no primeiro acesso.');
+        } catch (err) { alert("❌ Erro ao redefinir senha: " + err.message); }
     });
 }
 
