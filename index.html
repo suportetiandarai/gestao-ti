@@ -780,48 +780,23 @@
             <section id="aba-inventario" class="tab-content hidden">
                 <h3>Gestão de Inventário Geral</h3>
 
-                <div class="inventory-scanner-card">
-                    <div class="scanner-heading">
-                        <div>
-                            <span class="scanner-kicker">CONFERÊNCIA EM CAMPO</span>
-                            <h4>Leitor de código de barras</h4>
-                            <p>Leia o código ou digite manualmente e pressione Enter.</p>
-                        </div>
-                        <span id="scanner-status" class="scanner-status">Pronto para leitura</span>
+                <div class="admin-card inventory-start-card">
+                    <div>
+                        <h4>Inventário em campo</h4>
+                        <p>Abra uma sessão focada para leitura via leitor físico, digitação manual ou câmera.</p>
                     </div>
-                    <div class="scanner-input-row">
-                        <label class="sr-only" for="inventario-codigo-leitura">Código do equipamento</label>
-                        <input id="inventario-codigo-leitura" class="scanner-input" type="text" inputmode="text"
-                            autocomplete="off" placeholder="Leia o código do equipamento..."
-                            onkeydown="inventarioScannerEnter(event)">
-                        <button id="btn-inventario-buscar" class="btn-primary" onclick="buscarCodigoInventario()">Buscar / validar</button>
-                    </div>
-                    <div class="inventory-counters" aria-label="Resumo da sessão">
-                        <div><strong id="contador-inv-lidos">0</strong><span>Lidos</span></div>
-                        <div><strong id="contador-inv-encontrados">0</strong><span>Encontrados</span></div>
-                        <div><strong id="contador-inv-pendentes">0</strong><span>Pendentes</span></div>
-                        <div><strong id="contador-inv-cadastrados">0</strong><span>Cadastrados</span></div>
-                    </div>
-                    <div id="inventario-resultado" class="inventory-result hidden" aria-live="polite"></div>
+                    <button class="btn-success inventory-start-button" onclick="abrirModalInventarioScanner()">📷 Fazer Inventário</button>
                 </div>
 
-                <div class="admin-card mt-20">
-                    <div class="section-heading-inline">
-                        <h4>Histórico desta sessão</h4>
-                        <button class="btn-secondary btn-sm" onclick="limparSessaoInventario()">Limpar painel</button>
-                    </div>
-                    <div id="inventario-historico-sessao" class="session-history">
-                        <p class="empty-state">Nenhuma leitura realizada nesta sessão.</p>
-                    </div>
-                </div>
+                <div id="inventario-area-principal">
                 
                 <div class="admin-card">
                     <h4>Ações Rápidas</h4>
                     <div class="button-group">
                         <button class="btn-success" onclick="abrirModalNovoEquipamento()">➕ Cadastrar Equipamento</button>
                         <button data-role="admin" class="btn-primary" style="background: #8e44ad;" onclick="abrirModal('modal-novo-tipo')">➕ Novo Tipo de Equipamento</button>
-                        <button class="btn-secondary" onclick="exportarInventarioCsv()">⬇ Exportar inventário</button>
-                        <button class="btn-secondary" onclick="validarBancoInventario()">🧪 Validar banco</button>
+                        <button data-role="admin" class="btn-secondary" onclick="exportarInventarioCsv()">⬇ Exportar inventário</button>
+                        <button data-role="admin" class="btn-secondary" onclick="validarBancoInventario()">🧪 Validar banco</button>
                         <button data-role="admin" class="btn-primary" onclick="document.getElementById('arquivo-inventario-csv').click()">⬆ Importar CSV do GLPI</button>
                         <input data-role="admin" class="hidden" id="arquivo-inventario-csv" type="file" accept=".csv,text/csv" multiple onchange="prepararImportacaoInventario(event)">
                     </div>
@@ -846,8 +821,7 @@
                             <select id="filtro_inv_status" style="margin-bottom: 0;">
                                 <option value="">Todos</option>
                                 <option value="Em uso">🟢 Em uso</option>
-                                <option value="Em estoque">📦 Em estoque</option>
-                                <option value="Fora de uso">⚫ Fora de uso</option>
+                                <option value="Estoque">📦 Estoque</option>
                                 <option value="Não informado">⚪ Não informado</option>
                                 <option value="Danificado">🔴 Danificado</option>
                             </select>
@@ -891,10 +865,11 @@
                     <h4>Histórico persistente de inventário</h4>
                     <div class="table-responsive">
                         <table>
-                            <thead><tr><th>Data</th><th>Código</th><th>Equipamento</th><th>Status</th><th>Ação</th><th>Local</th><th>Técnico</th></tr></thead>
-                            <tbody id="lista-inventario-historico"><tr><td colspan="7" class="empty-state">Carregando...</td></tr></tbody>
+                            <thead><tr><th>Data</th><th>Código</th><th>Equipamento</th><th>Status</th><th>Ação</th><th>Local</th><th>Técnico</th><th>Login</th></tr></thead>
+                            <tbody id="lista-inventario-historico"><tr><td colspan="8" class="empty-state">Carregando...</td></tr></tbody>
                         </table>
                     </div>
+                </div>
                 </div>
             </section>
 
@@ -988,6 +963,54 @@
 </section>
 
         </main>
+    </div>
+
+    <div id="modal-inventario-scanner" class="modal inventory-scan-modal" aria-modal="true" role="dialog" aria-labelledby="titulo-modal-inventario">
+        <div class="modal-content large inventory-scan-content">
+            <span class="close-modal" onclick="fecharModalInventarioScanner()">&times;</span>
+            <div class="inventory-scanner-card">
+                <div class="scanner-heading">
+                    <div>
+                        <span class="scanner-kicker">CONFERÊNCIA EM CAMPO</span>
+                        <h4 id="titulo-modal-inventario">Fazer Inventário</h4>
+                        <p>Leia o código, digite manualmente ou use a câmera do dispositivo.</p>
+                    </div>
+                    <span id="scanner-status" class="scanner-status">Pronto para leitura</span>
+                </div>
+                <div class="scanner-input-row">
+                    <label class="sr-only" for="inventario-codigo-leitura">Código do equipamento</label>
+                    <input id="inventario-codigo-leitura" class="scanner-input" type="text" inputmode="text"
+                        autocomplete="off" placeholder="Leia o código do equipamento..."
+                        onkeydown="inventarioScannerEnter(event)">
+                    <button id="btn-inventario-buscar" class="btn-primary" onclick="buscarCodigoInventario()">Buscar / validar</button>
+                    <button id="btn-inventario-camera" class="btn-secondary" onclick="alternarCameraInventario()">Usar câmera</button>
+                </div>
+                <div id="inventario-camera-area" class="inventory-camera-area hidden">
+                    <video id="inventario-camera-video" muted playsinline></video>
+                    <div class="camera-overlay">
+                        <span>Posicione o código dentro da área</span>
+                    </div>
+                    <button type="button" class="btn-danger btn-sm" onclick="pararCameraInventario()">Fechar câmera</button>
+                </div>
+                <div id="inventario-camera-feedback" class="camera-feedback hidden" aria-live="polite"></div>
+                <div class="inventory-counters" aria-label="Resumo da sessão">
+                    <div><strong id="contador-inv-lidos">0</strong><span>Lidos</span></div>
+                    <div><strong id="contador-inv-encontrados">0</strong><span>Encontrados</span></div>
+                    <div><strong id="contador-inv-pendentes">0</strong><span>Pendentes</span></div>
+                    <div><strong id="contador-inv-cadastrados">0</strong><span>Cadastrados</span></div>
+                </div>
+                <div id="inventario-resultado" class="inventory-result hidden" aria-live="polite"></div>
+            </div>
+            <div class="admin-card mt-20 inventory-session-card">
+                <div class="section-heading-inline">
+                    <h4>Histórico desta sessão</h4>
+                    <button data-role="admin" class="btn-secondary btn-sm" onclick="limparSessaoInventario()">Limpar painel</button>
+                </div>
+                <div id="inventario-historico-sessao" class="session-history">
+                    <p class="empty-state">Nenhuma leitura realizada nesta sessão.</p>
+                </div>
+            </div>
+        </div>
     </div>
 
     <div id="modal-usuario" data-role="admin" class="modal">
@@ -1410,8 +1433,7 @@
             <label>Status Atual:</label>
             <select id="inv_status" required>
                 <option value="Em uso">🟢 Em uso</option>
-                <option value="Em estoque">📦 Em estoque</option>
-                <option value="Fora de uso">⚫ Fora de uso</option>
+                <option value="Estoque">📦 Estoque</option>
                 <option value="Não informado">⚪ Não informado</option>
                 <option value="Danificado">🔴 Danificado</option>
             </select>
@@ -1490,7 +1512,7 @@
             <select id="edit_inv_origem_patrimonio"><option value="">Selecione...</option><option value="RioSaude">RioSaude</option><option value="Federal">Federal</option></select>
 
             <label>Status atual:</label>
-            <select id="edit_inv_status"><option value="Em uso">Em uso</option><option value="Em estoque">Em estoque</option><option value="Fora de uso">Fora de uso</option><option value="Não informado">Não informado</option><option value="Danificado">Danificado</option></select>
+            <select id="edit_inv_status"><option value="Em uso">Em uso</option><option value="Estoque">Estoque</option><option value="Não informado">Não informado</option><option value="Danificado">Danificado</option></select>
 
             <div class="form-row" style="display: flex; gap: 15px; margin-bottom: 15px; flex-wrap: wrap;">
                 <div class="form-group" style="flex: 1;">
@@ -1575,7 +1597,7 @@
             <select id="status_inv_novo" style="width: 100%; margin-bottom: 25px; padding: 10px; font-size: 13px;">
                 <option value="">Selecione...</option>
                 <option value="Em uso">🟢 Em uso</option>
-                <option value="Em estoque">📦 Em estoque</option>
+                <option value="Estoque">📦 Estoque</option>
                 <option value="Danificado">🔴 Danificado</option>
             </select>
             

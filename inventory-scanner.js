@@ -5,7 +5,11 @@ const inventarioSessao = {
     equipamentoAtual: null,
     codigoAtual: '',
     tipoLeituraAtual: 'codigo_barras',
-    ocupado: false
+    ocupado: false,
+    cameraStream: null,
+    cameraDetector: null,
+    cameraAtiva: false,
+    cameraFrameId: null
 };
 
 function invEscape(valor) {
@@ -21,9 +25,38 @@ function localizacaoEquipamento(equipamento) {
 function focarLeitorInventario() {
     setTimeout(() => {
         const campo = document.getElementById('inventario-codigo-leitura');
-        const modalAberto = document.querySelector('.modal.flex');
-        if (campo && !modalAberto && !document.getElementById('aba-inventario')?.classList.contains('hidden')) campo.focus();
+        const modalScannerAberto = document.getElementById('modal-inventario-scanner')?.classList.contains('flex');
+        if (campo && modalScannerAberto) campo.focus();
     }, 80);
+}
+
+function normalizarCodigoLeituraInventario(valor) {
+    if (typeof normalizarNumeroSerieInventario === 'function') return normalizarNumeroSerieInventario(valor);
+    return String(valor || '').trim().replace(/^FDRAND-/i, '');
+}
+
+function definirFocoInventarioAtivo(ativo) {
+    const areaPrincipal = document.getElementById('inventario-area-principal');
+    if (areaPrincipal) {
+        areaPrincipal.setAttribute('aria-hidden', ativo ? 'true' : 'false');
+        areaPrincipal.classList.toggle('inventory-main-disabled', ativo);
+    }
+    document.body.classList.toggle('inventory-scan-open', ativo);
+}
+
+function abrirModalInventarioScanner() {
+    abrirModal('modal-inventario-scanner');
+    definirFocoInventarioAtivo(true);
+    atualizarResumoInventario();
+    atualizarStatusScanner('Pronto para leitura');
+    focarLeitorInventario();
+}
+
+function fecharModalInventarioScanner() {
+    pararCameraInventario();
+    cancelarResultadoInventario();
+    definirFocoInventarioAtivo(false);
+    fecharModal('modal-inventario-scanner');
 }
 
 function inventarioScannerEnter(event) {
@@ -55,7 +88,7 @@ function marcarBancoInventarioPendente(error) {
     atualizarStatusScanner('Banco pendente de migration', 'warning');
     const tbody = document.getElementById('lista-inventario-historico');
     if (tbody) {
-        tbody.innerHTML = `<tr><td colspan="7" class="empty-state">${invEscape(mensagemBancoInventarioPendente())}</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="8" class="empty-state">${invEscape(mensagemBancoInventarioPendente())}</td></tr>`;
     }
 }
 
@@ -81,8 +114,13 @@ function adicionarEventoSessao(status, codigo, acao, descricao = '', contabiliza
     atualizarResumoInventario();
 }
 
+function obterLoginTecnicoInventario() {
+    return window.perfilAtual?.email || window.usuarioAtual?.email || '';
+}
+
 async function registrarHistoricoInventario({ equipamentoId = null, codigo, tipoLeitura = 'codigo_barras', status, acao, localizacao = '', observacao = '' }) {
     const tecnicoId = window.perfilAtual?.id;
+    const tecnicoLogin = obterLoginTecnicoInventario();
     if (!tecnicoId) throw new Error('Sessão do técnico não identificada.');
     const { error } = await supabase.from('inventario_historico').insert([{
         equipamento_id: equipamentoId,
@@ -91,6 +129,7 @@ async function registrarHistoricoInventario({ equipamentoId = null, codigo, tipo
         status,
         acao,
         tecnico_id: tecnicoId,
+        tecnico_login: tecnicoLogin || null,
         localizacao: localizacao || null,
         observacao: observacao || null,
         sessao_id: inventarioSessao.id
@@ -116,7 +155,8 @@ async function buscarEquipamentoPorCodigo(codigo) {
 async function buscarCodigoInventario(codigoForcado = '', tipoLeitura = 'codigo_barras') {
     if (inventarioSessao.ocupado) return;
     const campo = document.getElementById('inventario-codigo-leitura');
-    const codigo = String(codigoForcado || campo?.value || '').trim();
+    const codigoOriginal = String(codigoForcado || campo?.value || '').trim();
+    const codigo = normalizarCodigoLeituraInventario(codigoOriginal);
     if (!codigo) {
         mostrarAviso('Leia ou informe um código para pesquisar.', 'aviso');
         return focarLeitorInventario();
@@ -282,13 +322,13 @@ async function carregarHistoricoInventario() {
     const tbody = document.getElementById('lista-inventario-historico');
     if (!tbody) return;
     const { data, error } = await supabase.from('inventario_historico')
-        .select('id,codigo_lido,status,acao,localizacao,created_at,tecnico_id,inventario(tipo,marca,modelo,numero_serie),profiles(nome)')
+        .select('id,codigo_lido,status,acao,localizacao,created_at,tecnico_id,tecnico_login,inventario(tipo,marca,modelo,numero_serie),profiles(nome,email)')
         .order('created_at', { ascending: false }).limit(100);
     if (error) {
         if (erroRecursoInventarioAusente(error)) {
             marcarBancoInventarioPendente(error);
         } else {
-            tbody.innerHTML = `<tr><td colspan="7" class="empty-state">Histórico indisponível: ${invEscape(error.message)}</td></tr>`;
+            tbody.innerHTML = `<tr><td colspan="8" class="empty-state">Histórico indisponível: ${invEscape(error.message)}</td></tr>`;
         }
         return;
     }
@@ -299,7 +339,8 @@ async function carregarHistoricoInventario() {
         <td><span class="history-badge status-${invEscape(item.status)}">${invEscape(item.status.replaceAll('_', ' '))}</span></td>
         <td>${invEscape(item.acao)}</td><td>${invEscape(item.localizacao || '-')}</td>
         <td>${invEscape(item.profiles?.nome || (item.tecnico_id === window.perfilAtual?.id ? window.perfilAtual.nome : '-'))}</td>
-    </tr>`).join('') : '<tr><td colspan="7" class="empty-state">Nenhuma conferência registrada.</td></tr>';
+        <td>${invEscape(item.tecnico_login || item.profiles?.email || (item.tecnico_id === window.perfilAtual?.id ? window.perfilAtual.email : '-') || '-')}</td>
+    </tr>`).join('') : '<tr><td colspan="8" class="empty-state">Nenhuma conferência registrada.</td></tr>';
 }
 
 function cancelarResultadoInventario() {
@@ -313,6 +354,7 @@ function cancelarResultadoInventario() {
 }
 
 function limparSessaoInventario() {
+    if (!window.exigirAdmin || !window.exigirAdmin()) return;
     inventarioSessao.id = crypto.randomUUID();
     inventarioSessao.leituras = [];
     cancelarResultadoInventario();
@@ -320,15 +362,103 @@ function limparSessaoInventario() {
     mostrarAviso('Painel da sessão limpo. O histórico persistente foi preservado.', 'sucesso');
 }
 
+function exibirFeedbackCamera(mensagem, tipo = '') {
+    const feedback = document.getElementById('inventario-camera-feedback');
+    if (!feedback) return;
+    feedback.textContent = mensagem;
+    feedback.className = `camera-feedback ${tipo}`.trim();
+    feedback.classList.remove('hidden');
+}
+
+async function iniciarCameraInventario() {
+    if (!navigator.mediaDevices?.getUserMedia) {
+        exibirFeedbackCamera('Não foi possível acessar a câmera. Verifique as permissões do navegador ou utilize a digitação manual.', 'error');
+        return;
+    }
+    if (!('BarcodeDetector' in window)) {
+        exibirFeedbackCamera('Este navegador não possui leitor nativo de código de barras. Utilize leitor físico ou digitação manual.', 'warning');
+        return;
+    }
+    try {
+        const formatos = await BarcodeDetector.getSupportedFormats?.();
+        inventarioSessao.cameraDetector = new BarcodeDetector({
+            formats: formatos?.length ? formatos : ['qr_code', 'code_128', 'code_39', 'ean_13', 'ean_8', 'upc_a', 'upc_e']
+        });
+        inventarioSessao.cameraStream = await navigator.mediaDevices.getUserMedia({
+            video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } },
+            audio: false
+        });
+        const video = document.getElementById('inventario-camera-video');
+        video.srcObject = inventarioSessao.cameraStream;
+        await video.play();
+        document.getElementById('inventario-camera-area')?.classList.remove('hidden');
+        document.getElementById('btn-inventario-camera').textContent = 'Câmera ativa';
+        inventarioSessao.cameraAtiva = true;
+        exibirFeedbackCamera('Câmera ativa. Aponte para o código de barras ou QR Code.', 'success');
+        detectarCodigoCameraInventario();
+    } catch (error) {
+        console.error('Falha ao abrir câmera:', error);
+        exibirFeedbackCamera('Não foi possível acessar a câmera. Verifique as permissões do navegador ou utilize a digitação manual.', 'error');
+        pararCameraInventario();
+    }
+}
+
+async function detectarCodigoCameraInventario() {
+    if (!inventarioSessao.cameraAtiva) return;
+    const video = document.getElementById('inventario-camera-video');
+    try {
+        if (video?.readyState >= 2 && inventarioSessao.cameraDetector) {
+            const codigos = await inventarioSessao.cameraDetector.detect(video);
+            const codigo = normalizarCodigoLeituraInventario(codigos?.[0]?.rawValue || '');
+            if (codigo) {
+                const campo = document.getElementById('inventario-codigo-leitura');
+                if (campo) campo.value = codigo;
+                exibirFeedbackCamera(`Código detectado: ${codigo}`, 'success');
+                pararCameraInventario(false);
+                await buscarCodigoInventario(codigo, 'codigo_barras');
+                return;
+            }
+        }
+    } catch (error) {
+        console.warn('Falha na leitura por câmera:', error);
+    }
+    inventarioSessao.cameraFrameId = requestAnimationFrame(detectarCodigoCameraInventario);
+}
+
+function pararCameraInventario(exibirMensagem = true) {
+    if (inventarioSessao.cameraFrameId) cancelAnimationFrame(inventarioSessao.cameraFrameId);
+    inventarioSessao.cameraFrameId = null;
+    inventarioSessao.cameraAtiva = false;
+    inventarioSessao.cameraStream?.getTracks().forEach(track => track.stop());
+    inventarioSessao.cameraStream = null;
+    const video = document.getElementById('inventario-camera-video');
+    if (video) video.srcObject = null;
+    document.getElementById('inventario-camera-area')?.classList.add('hidden');
+    const botao = document.getElementById('btn-inventario-camera');
+    if (botao) botao.textContent = 'Usar câmera';
+    if (exibirMensagem) exibirFeedbackCamera('Câmera fechada. Você pode continuar com leitor físico ou digitação manual.', '');
+    focarLeitorInventario();
+}
+
+function alternarCameraInventario() {
+    if (inventarioSessao.cameraAtiva) return pararCameraInventario();
+    return iniciarCameraInventario();
+}
+
 window.inicializarInventarioScanner = function() {
     atualizarResumoInventario();
     carregarHistoricoInventario();
-    focarLeitorInventario();
 };
 
+window.abrirModalInventarioScanner = abrirModalInventarioScanner;
+window.fecharModalInventarioScanner = fecharModalInventarioScanner;
+window.alternarCameraInventario = alternarCameraInventario;
+window.pararCameraInventario = pararCameraInventario;
+
 window.validarBancoInventario = async function() {
+    if (!window.exigirAdmin || !window.exigirAdmin()) return false;
     const tbody = document.getElementById('lista-inventario-historico');
-    if (tbody) tbody.innerHTML = '<tr><td colspan="7" class="empty-state">Validando estrutura do banco...</td></tr>';
+    if (tbody) tbody.innerHTML = '<tr><td colspan="8" class="empty-state">Validando estrutura do banco...</td></tr>';
     try {
         const [historico, busca] = await Promise.all([
             supabase.from('inventario_historico').select('id').limit(1),

@@ -23,12 +23,31 @@ const ALIASES_INVENTARIO = {
     predio: ['predio', 'prédio', 'unidade'], andar: ['andar', 'pavimento'],
     setor: ['setor/localizacao', 'setor/localização', 'setor', 'localizacao', 'localização', 'local'],
     responsavel: ['responsavel', 'responsável', 'usuario', 'usuário', 'user'],
-    origem_patrimonio: ['origem do patrimonio', 'origem do patrimônio', 'origem'],
+    origem_patrimonio: ['origem do patrimonio', 'origem do patrimônio', 'origem', 'entidade'],
     observacoes: ['observacoes', 'observações', 'comentarios', 'comentários', 'comment']
 };
 
 function normalizarCabecalhoInventario(valor) {
     return String(valor || '').replace(/^\uFEFF/, '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toLowerCase();
+}
+
+function normalizarTextoInventario(valor, limite = 500) {
+    return String(valor ?? '').replace(/[\u0000-\u001F\u007F]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, limite);
+}
+
+function normalizarStatusInventarioImportado(valor) {
+    const status = normalizarTextoInventario(valor).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+    if (!status) return 'Não informado';
+    if (status.includes('fora') && status.includes('uso')) return 'Estoque';
+    if (status === 'em estoque' || status === 'estoque') return 'Estoque';
+    if (status === 'em uso' || status === 'uso') return 'Em uso';
+    if (status.includes('danific')) return 'Danificado';
+    if (status.includes('nao informado')) return 'Não informado';
+    return normalizarTextoInventario(valor, 80);
+}
+
+function normalizarNumeroSerieImportado(valor) {
+    return normalizarTextoInventario(valor, 120).replace(/^FDRAND-/i, '');
 }
 
 function detectarDelimitadorCsv(texto) {
@@ -70,17 +89,19 @@ function mapearLinhaInventario(cabecalhos, valores) {
     const indicePorNome = new Map(cabecalhos.map((cabecalho, indice) => [normalizarCabecalhoInventario(cabecalho), indice]));
     const obter = campo => {
         const alias = ALIASES_INVENTARIO[campo].map(normalizarCabecalhoInventario).find(nome => indicePorNome.has(nome));
-        return alias ? String(valores[indicePorNome.get(alias)] || '').trim() : '';
+        return alias ? normalizarTextoInventario(valores[indicePorNome.get(alias)] || '') : '';
     };
     const localizacao = obter('setor');
+    const serie = normalizarNumeroSerieImportado(obter('numero_serie') || obter('nome'));
+    const codigoBarras = normalizarNumeroSerieImportado(obter('codigo_barras') || serie);
     const registro = {
-        codigo_barras: obter('codigo_barras') || null,
-        numero_serie: obter('numero_serie') || null,
-        patrimonio: obter('patrimonio') || null,
+        codigo_barras: codigoBarras || null,
+        numero_serie: serie || null,
+        patrimonio: normalizarTextoInventario(obter('patrimonio'), 120) || null,
         nome: obter('nome') || null,
-        tipo: obter('tipo') || 'EQUIPAMENTO', marca: obter('marca') || 'Não informado',
-        modelo: obter('modelo') || obter('nome') || 'Não informado',
-        status: obter('status') || 'Em uso', predio: obter('predio') || null,
+        tipo: normalizarTextoInventario(obter('tipo') || 'EQUIPAMENTO', 80), marca: normalizarTextoInventario(obter('marca') || 'Não informado', 120),
+        modelo: normalizarTextoInventario(obter('modelo') || obter('nome') || 'Não informado', 180),
+        status: normalizarStatusInventarioImportado(obter('status')), predio: obter('predio') || null,
         andar: obter('andar') || null, setor: localizacao || null,
         responsavel: obter('responsavel') || null,
         origem_patrimonio: obter('origem_patrimonio') || null,
@@ -168,6 +189,7 @@ async function confirmarImportacaoInventario() {
 }
 
 function cancelarImportacaoInventario() {
+    if (!window.exigirAdmin || !window.exigirAdmin()) return;
     importacaoInventarioPendente = []; resumoImportacaoInventario = null;
     document.getElementById('inventario-import-preview').className = 'import-preview hidden';
 }
@@ -187,6 +209,7 @@ function baixarCsvInventario(nome, linhas) {
 }
 
 async function exportarInventarioCsv() {
+    if (!window.exigirAdmin || !window.exigirAdmin()) return;
     const { data, error } = await supabase.from('inventario').select('*').order('tipo').order('marca').order('modelo');
     if (error) return mostrarAviso(`Erro ao exportar inventário: ${error.message}`, 'erro');
     if (!data?.length) return mostrarAviso('Não existem equipamentos cadastrados para exportar.', 'aviso');
@@ -198,6 +221,6 @@ async function exportarInventarioCsv() {
 function baixarModeloInventarioCsv() {
     baixarCsvInventario('modelo_importacao_inventario.csv', [
         COLUNAS_EXPORTACAO_INVENTARIO.slice(0, 14).map(([titulo]) => titulo),
-        ['789000000001', 'SN-EXEMPLO-001', 'PAT-001', 'COMPUTADOR', 'Dell', 'OptiPlex', 'Em uso', 'UPI', '1º Andar', 'Recepção', 'Responsável', 'RioSaude', 'Linha de exemplo - remova antes de importar', '']
+        ['789000000001', 'SN-EXEMPLO-001', 'PAT-001', 'COMPUTADOR', 'Dell', 'OptiPlex', 'Estoque', 'UPI', '1º Andar', 'Recepção', 'Responsável', 'RioSaude', 'Linha de exemplo - remova antes de importar', '']
     ]);
 }

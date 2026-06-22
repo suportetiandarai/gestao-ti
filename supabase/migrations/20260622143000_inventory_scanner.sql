@@ -1,4 +1,6 @@
 -- Inventario por leitor de codigo de barras e trilha de auditoria.
+create schema if not exists private;
+
 alter table public.inventario
   add column if not exists nome text,
   add column if not exists codigo_barras text,
@@ -14,6 +16,45 @@ alter table public.inventario
 alter table public.inventario
   add constraint inventario_status_inventario_check
   check (status_inventario is null or status_inventario in ('validado', 'pendente'));
+
+create or replace function private.normalize_inventory_values()
+returns trigger
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+begin
+  new.numero_serie := nullif(btrim(regexp_replace(coalesce(new.numero_serie, ''), '^FDRAND-', '', 'i')), '');
+  new.codigo_barras := nullif(btrim(regexp_replace(coalesce(new.codigo_barras, ''), '^FDRAND-', '', 'i')), '');
+  new.patrimonio := nullif(btrim(coalesce(new.patrimonio, '')), '');
+  new.origem_patrimonio := nullif(btrim(coalesce(new.origem_patrimonio, '')), '');
+
+  if new.status is null or btrim(new.status) = '' then
+    new.status := 'Não informado';
+  elsif lower(new.status) like '%fora%uso%' or lower(btrim(new.status)) = 'em estoque' then
+    new.status := 'Estoque';
+  elsif lower(btrim(new.status)) = 'estoque' then
+    new.status := 'Estoque';
+  end if;
+
+  return new;
+end;
+$$;
+
+drop trigger if exists normalize_inventory_values_trigger on public.inventario;
+create trigger normalize_inventory_values_trigger
+before insert or update on public.inventario
+for each row execute function private.normalize_inventory_values();
+
+update public.inventario
+set
+  numero_serie = nullif(btrim(regexp_replace(coalesce(numero_serie, ''), '^FDRAND-', '', 'i')), ''),
+  codigo_barras = nullif(btrim(regexp_replace(coalesce(codigo_barras, ''), '^FDRAND-', '', 'i')), ''),
+  status = case
+    when status is null or btrim(status) = '' then 'Não informado'
+    when lower(status) like '%fora%uso%' or lower(btrim(status)) in ('em estoque', 'estoque') then 'Estoque'
+    else status
+  end;
 
 create unique index if not exists inventario_codigo_barras_unique
   on public.inventario (lower(btrim(codigo_barras)))
@@ -35,11 +76,21 @@ create table if not exists public.inventario_historico (
     check (status in ('encontrado', 'nao_encontrado', 'cadastrado', 'pendente', 'ignorado')),
   acao text not null,
   tecnico_id uuid not null default auth.uid() references public.profiles(id) on delete restrict,
+  tecnico_login text,
   localizacao text,
   observacao text,
   sessao_id uuid not null,
   created_at timestamptz not null default now()
 );
+
+alter table public.inventario_historico
+  add column if not exists tecnico_login text;
+
+update public.inventario_historico h
+set tecnico_login = p.email
+from public.profiles p
+where h.tecnico_id = p.id
+  and nullif(btrim(coalesce(h.tecnico_login, '')), '') is null;
 
 create index if not exists inventario_historico_equipamento_idx
   on public.inventario_historico (equipamento_id, created_at desc);
