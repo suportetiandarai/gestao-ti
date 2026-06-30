@@ -49,6 +49,10 @@ Deno.serve(async (request) => {
       auth: { autoRefreshToken: false, persistSession: false },
     });
     const token = authorization.replace(/^Bearer\s+/i, '');
+    const userScopedClient = createClient(supabaseUrl, serviceKey, {
+      global: { headers: { Authorization: `Bearer ${token}` } },
+      auth: { autoRefreshToken: false, persistSession: false },
+    });
     const { data: { user }, error: userError } = await adminClient.auth.getUser(token);
     if (userError || !user) return json({ error: 'Sessão inválida.' }, 401);
 
@@ -96,7 +100,7 @@ Deno.serve(async (request) => {
     if (action === 'set-role') {
       const role = normalizeRole(body.role);
       if (!['admin', 'operacional'].includes(role)) return json({ error: 'Perfil inválido.' }, 400);
-      const { data: updatedProfile, error } = await adminClient
+      const { data: updatedProfile, error } = await userScopedClient
         .from('profiles')
         .update({ role })
         .eq('id', userId)
