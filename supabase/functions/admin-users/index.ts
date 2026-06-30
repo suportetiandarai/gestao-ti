@@ -18,6 +18,23 @@ function normalizeRole(role: unknown) {
   return String(role || '').trim().toLowerCase();
 }
 
+function formatError(error: unknown) {
+  if (error instanceof Error) return error.message;
+  if (error && typeof error === 'object') {
+    const payload = error as Record<string, unknown>;
+    const parts = [payload.message, payload.details, payload.hint, payload.code]
+      .filter((value) => typeof value === 'string' && value.trim())
+      .map((value) => String(value).trim());
+    if (parts.length) return parts.join(' | ');
+    try {
+      return JSON.stringify(payload);
+    } catch (_) {
+      return 'Erro interno.';
+    }
+  }
+  return String(error || 'Erro interno.');
+}
+
 Deno.serve(async (request) => {
   if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: corsHeaders });
   if (request.method !== 'POST') return json({ error: 'Método não permitido.' }, 405);
@@ -79,9 +96,15 @@ Deno.serve(async (request) => {
     if (action === 'set-role') {
       const role = normalizeRole(body.role);
       if (!['admin', 'operacional'].includes(role)) return json({ error: 'Perfil inválido.' }, 400);
-      const { error } = await adminClient.from('profiles').update({ role }).eq('id', userId);
-      if (error) throw error;
-      return json({ ok: true });
+      const { data: updatedProfile, error } = await adminClient
+        .from('profiles')
+        .update({ role })
+        .eq('id', userId)
+        .select('id, role')
+        .maybeSingle();
+      if (error) return json({ error: formatError(error) }, 500);
+      if (!updatedProfile) return json({ error: 'Perfil do usuário não encontrado para atualizar.' }, 404);
+      return json({ ok: true, role: updatedProfile.role });
     }
 
     if (action === 'update-profile') {
@@ -108,7 +131,8 @@ Deno.serve(async (request) => {
 
     return json({ error: 'Ação inválida.' }, 400);
   } catch (error) {
-    console.error(error);
-    return json({ error: error instanceof Error ? error.message : 'Erro interno.' }, 500);
+    const message = formatError(error);
+    console.error('admin-users failed:', message, error);
+    return json({ error: message }, 500);
   }
 });
