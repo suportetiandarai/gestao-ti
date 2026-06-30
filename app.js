@@ -1683,6 +1683,29 @@ async function adminCriarUsuario() {
     } catch (err) { console.error('Erro completo:', err); alert('Erro ao criar usuário: ' + (err.message || 'Verifique se o e-mail já existe.')); }
 }
 
+async function extrairErroFuncaoAdmin(error) {
+    if (!error) return 'Erro desconhecido na função administrativa.';
+    try {
+        if (error.context && typeof error.context.json === 'function') {
+            const body = await error.context.clone().json();
+            if (body?.error) return body.error;
+        }
+        if (error.context && typeof error.context.text === 'function') {
+            const texto = await error.context.clone().text();
+            if (texto) return texto;
+        }
+    } catch (parseError) {
+        console.warn('Não foi possível ler o erro da Edge Function:', parseError);
+    }
+    return error.message || 'Edge Function retornou erro.';
+}
+
+async function chamarAdminUsers(body) {
+    const { data, error } = await supabase.functions.invoke('admin-users', { body });
+    if (error) throw new Error(await extrairErroFuncaoAdmin(error));
+    return data;
+}
+
 async function carregarTabelaUsuarios() {
     if (!window.exigirAdmin()) return;
     try {
@@ -1703,7 +1726,7 @@ async function carregarTabelaUsuarios() {
 async function salvarNivelAcesso(userId) {
     if (!window.exigirAdmin()) return;
     const novoRole = document.getElementById(`role-${userId}`).value;
-    try { const { error } = await supabase.functions.invoke('admin-users', { body: { action: 'set-role', userId, role: novoRole } }); if (error) throw error; alert("Nível de acesso atualizado com sucesso!"); } catch (err) { alert("Erro ao atualizar nível: " + err.message); }
+    try { await chamarAdminUsers({ action: 'set-role', userId, role: novoRole }); alert("Nível de acesso atualizado com sucesso!"); } catch (err) { alert("Erro ao atualizar nível: " + err.message); }
 }
 
 async function prepararEdicaoCompleta(userId) {

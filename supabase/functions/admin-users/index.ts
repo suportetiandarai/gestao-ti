@@ -14,6 +14,10 @@ function json(body: unknown, status = 200) {
   });
 }
 
+function normalizeRole(role: unknown) {
+  return String(role || '').trim().toLowerCase();
+}
+
 Deno.serve(async (request) => {
   if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: corsHeaders });
   if (request.method !== 'POST') return json({ error: 'Método não permitido.' }, 405);
@@ -36,14 +40,14 @@ Deno.serve(async (request) => {
       .select('role')
       .eq('id', user.id)
       .single();
-    if (requester?.role !== 'admin') return json({ error: 'Acesso restrito a administradores.' }, 403);
+    if (normalizeRole(requester?.role) !== 'admin') return json({ error: 'Acesso restrito a administradores.' }, 403);
 
     const body = await request.json();
     const { action, userId } = body;
 
     if (action === 'create') {
       if (!body.email || !body.password || !body.nome || !body.turno) return json({ error: 'Dados obrigatórios ausentes.' }, 400);
-      const role = body.role === 'admin' ? 'admin' : 'operacional';
+      const role = normalizeRole(body.role) === 'admin' ? 'admin' : 'operacional';
       const { data, error } = await adminClient.auth.admin.createUser({
         email: body.email,
         password: body.password,
@@ -68,13 +72,14 @@ Deno.serve(async (request) => {
     }
 
     if (!userId) return json({ error: 'Usuário não informado.' }, 400);
-    if (userId === user.id && (action === 'delete' || (action === 'set-role' && body.role !== 'admin'))) {
+    if (userId === user.id && (action === 'delete' || (action === 'set-role' && normalizeRole(body.role) !== 'admin'))) {
       return json({ error: 'Um administrador não pode remover o próprio acesso.' }, 400);
     }
 
     if (action === 'set-role') {
-      if (!['admin', 'operacional'].includes(body.role)) return json({ error: 'Perfil inválido.' }, 400);
-      const { error } = await adminClient.from('profiles').update({ role: body.role }).eq('id', userId);
+      const role = normalizeRole(body.role);
+      if (!['admin', 'operacional'].includes(role)) return json({ error: 'Perfil inválido.' }, 400);
+      const { error } = await adminClient.from('profiles').update({ role }).eq('id', userId);
       if (error) throw error;
       return json({ ok: true });
     }
