@@ -1,6 +1,6 @@
 const SUPABASE_URL = 'https://ditygnxttjvlfrdpvaxe.supabase.co';
 const SUPABASE_PUBLIC_KEY = window.GESTAO_TI_CONFIG?.SUPABASE_PUBLIC_KEY || '';
-const PERFIS_VALIDOS = Object.freeze(['admin', 'operacional']);
+const PERFIS_VALIDOS = Object.freeze(['admin', 'gestor', 'supervisor', 'tecnico', 'operacional']);
 
 function chavePublicaValida(chave) {
     if (!chave) return false;
@@ -21,6 +21,7 @@ window.supabaseClient = SUPABASE_CONFIGURADO
 var supabase = window.supabaseClient;
 window.usuarioAtual = null;
 window.perfilAtual = null;
+let recuperandoSenha = false;
 
 function aplicarLayout(estado) {
     const autenticado = estado === 'autenticado';
@@ -33,6 +34,53 @@ function aplicarLayout(estado) {
 
     loginContainer?.classList.toggle('hidden', autenticado);
     appWrapper?.classList.toggle('hidden', !autenticado);
+}
+
+function obterTokenPainelPublico() {
+    const params = new URLSearchParams(window.location.search);
+    if (params.has('painel_publico')) return params.get('painel_publico');
+
+    const pathMatch = window.location.pathname.match(/\/dashboard\/publico\/([^/]+)/);
+    if (pathMatch) return decodeURIComponent(pathMatch[1]);
+
+    const hashMatch = window.location.hash.match(/dashboard\/publico\/([^/?#]+)/);
+    if (hashMatch) return decodeURIComponent(hashMatch[1]);
+
+    return null;
+}
+
+function rotaPainelPublico() {
+    return Boolean(obterTokenPainelPublico());
+}
+
+function painelPublicoAutorizado() {
+    const token = obterTokenPainelPublico();
+    const config = JSON.parse(localStorage.getItem('glpiPublicDashboardConfig') || '{}');
+    return Boolean(config.enabled && config.token && token && config.token === token);
+}
+
+function entrarModoPainelPublico() {
+    window.GESTAO_TI_PUBLIC_DASHBOARD = true;
+    window.usuarioAtual = null;
+    window.perfilAtual = { role: 'publico', nome: 'Painel público' };
+    aplicarLayout('autenticado');
+    document.body.classList.add('public-dashboard', 'glpi-panel-mode');
+
+    const userName = document.getElementById('user-name');
+    const userRole = document.getElementById('user-role');
+    const logout = document.querySelector('header .btn-danger');
+    if (userName) userName.textContent = 'Dashboard Diário GLPI';
+    if (userRole) userRole.textContent = 'PAINEL PÚBLICO';
+    if (logout) logout.classList.add('hidden');
+
+    if (!painelPublicoAutorizado()) {
+        mostrarAviso('Painel público indisponível, revogado ou token inválido.', 'erro');
+        document.querySelectorAll('.tab-content').forEach(aba => aba.classList.add('hidden'));
+        return;
+    }
+
+    if (typeof abrirAba === 'function') abrirAba('aba-glpi', false);
+    if (typeof glpiAbrirSubaba === 'function') glpiAbrirSubaba('diario');
 }
 
 function normalizarRole(role) {
@@ -99,6 +147,7 @@ async function carregarPerfil(user) {
 }
 
 async function sincronizarSessao(session) {
+    if (recuperandoSenha) return;
     if (!session?.user) {
         window.usuarioAtual = null;
         window.perfilAtual = null;
@@ -156,6 +205,9 @@ async function solicitarRedefinicaoSenha() {
 }
 
 function mostrarRecuperacaoSenha() {
+    recuperandoSenha = true;
+    window.usuarioAtual = null;
+    window.perfilAtual = null;
     aplicarLayout('anonimo');
     document.getElementById('login-email')?.classList.add('hidden');
     document.getElementById('login-senha')?.classList.add('hidden');
@@ -164,16 +216,76 @@ function mostrarRecuperacaoSenha() {
     document.getElementById('recuperacao-senha')?.classList.remove('hidden');
 }
 
+function parametrosAuthUrl() {
+    const params = new URLSearchParams(window.location.search);
+    const hash = new URLSearchParams(window.location.hash.replace(/^#/, ''));
+    hash.forEach((value, key) => params.set(key, value));
+    return params;
+}
+
+function urlIndicaRecuperacaoSenha() {
+    const params = parametrosAuthUrl();
+    return params.get('type') === 'recovery'
+        || params.get('recovery') === 'true'
+        || params.has('token_hash')
+        || (params.has('access_token') && params.has('refresh_token'))
+        || params.has('code');
+}
+
+async function prepararSessaoRecuperacaoSenha() {
+    if (!SUPABASE_CONFIGURADO || !urlIndicaRecuperacaoSenha()) return false;
+
+    recuperandoSenha = true;
+    const params = parametrosAuthUrl();
+
+    try {
+        if (params.has('code')) {
+            const { error } = await supabase.auth.exchangeCodeForSession(params.get('code'));
+            if (error) throw error;
+        } else if (params.has('access_token') && params.has('refresh_token')) {
+            const { error } = await supabase.auth.setSession({
+                access_token: params.get('access_token'),
+                refresh_token: params.get('refresh_token')
+            });
+            if (error) throw error;
+        } else if (params.has('token_hash')) {
+            const { error } = await supabase.auth.verifyOtp({
+                token_hash: params.get('token_hash'),
+                type: 'recovery'
+            });
+            if (error) throw error;
+        }
+
+        mostrarRecuperacaoSenha();
+        window.history.replaceState({}, document.title, `${window.location.origin}${window.location.pathname}`);
+        return true;
+    } catch (error) {
+        console.error('Falha ao preparar recuperação de senha:', error);
+        await supabase.auth.signOut();
+        recuperandoSenha = false;
+        aplicarLayout('anonimo');
+        mostrarAviso('Link de recuperação inválido ou expirado. Solicite um novo link.', 'erro');
+        window.history.replaceState({}, document.title, `${window.location.origin}${window.location.pathname}`);
+        return true;
+    }
+}
+
 async function salvarSenhaRecuperada() {
     const senha = document.getElementById('recuperacao-nova-senha').value;
     const confirmacao = document.getElementById('recuperacao-confirmar-senha').value;
     if (senha.length < 8) return mostrarAviso('A senha deve ter no mínimo 8 caracteres.', 'aviso');
     if (senha !== confirmacao) return mostrarAviso('As senhas não coincidem.', 'aviso');
 
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) {
+        return mostrarAviso('Sua sessão de recuperação expirou. Solicite um novo link de redefinição.', 'erro');
+    }
+
     const { error } = await supabase.auth.updateUser({ password: senha });
     if (error) return mostrarAviso(`Não foi possível atualizar a senha: ${error.message}`, 'erro');
 
     await supabase.auth.signOut();
+    recuperandoSenha = false;
     window.location.replace(`${window.location.origin}${window.location.pathname}`);
 }
 
@@ -189,6 +301,11 @@ async function fazerLogout() {
 }
 
 document.addEventListener('DOMContentLoaded', async () => {
+    if (rotaPainelPublico()) {
+        entrarModoPainelPublico();
+        return;
+    }
+
     if (!SUPABASE_CONFIGURADO) {
         aplicarLayout('anonimo');
         const botao = document.getElementById('btn-login');
@@ -196,15 +313,21 @@ document.addEventListener('DOMContentLoaded', async () => {
         mostrarAviso('Servidor iniciado. Configure a chave pública do Supabase em config.js para testar o login.', 'aviso');
         return;
     }
-    const { data: { session }, error } = await supabase.auth.getSession();
-    if (error) console.error('Falha ao restaurar sessão:', error);
-    await sincronizarSessao(session);
 
     supabase.auth.onAuthStateChange((evento, sessao) => {
         if (evento === 'PASSWORD_RECOVERY') return mostrarRecuperacaoSenha();
+        if (recuperandoSenha) return;
         if (evento === 'SIGNED_OUT') sincronizarSessao(null);
         if (evento === 'TOKEN_REFRESHED' && sessao) sincronizarSessao(sessao);
+        if (evento === 'SIGNED_IN' && sessao) sincronizarSessao(sessao);
     });
+
+    const fluxoRecuperacao = await prepararSessaoRecuperacaoSenha();
+    if (fluxoRecuperacao) return;
+
+    const { data: { session }, error } = await supabase.auth.getSession();
+    if (error) console.error('Falha ao restaurar sessão:', error);
+    await sincronizarSessao(session);
 });
 
 window.addEventListener('hashchange', () => {

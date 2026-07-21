@@ -1,3 +1,9 @@
 config.js
+.env
+.env.*
+!.env.example
+.codex-server-*.log
+__pycache__/
 .tmp-sheet/
 data/
+.codex-solicitacoes/
