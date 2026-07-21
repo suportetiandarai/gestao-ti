@@ -118,6 +118,27 @@ setInterval(() => {
 const ABAS_VALIDAS = new Set(Array.from(document.querySelectorAll('.tab-content')).map(aba => aba.id));
 const ABAS_SOMENTE_ADMIN = new Set(['aba-admin']);
 
+function aplicarPreferenciaMenu() {
+    const recolhido = localStorage.getItem('gestaoTiMenuRecolhido') === 'true';
+    document.body.classList.toggle('menu-collapsed', recolhido);
+}
+
+window.alternarMenuLateral = function() {
+    const recolhido = !document.body.classList.contains('menu-collapsed');
+    document.body.classList.toggle('menu-collapsed', recolhido);
+    localStorage.setItem('gestaoTiMenuRecolhido', String(recolhido));
+};
+
+window.alternarMenuMobile = function() {
+    document.body.classList.toggle('mobile-menu-open');
+};
+
+window.fecharMenuMobile = function() {
+    document.body.classList.remove('mobile-menu-open');
+};
+
+aplicarPreferenciaMenu();
+
 function abrirAba(idAba, atualizarHash = true) {
     if (!ABAS_VALIDAS.has(idAba)) idAba = 'aba-inicio';
     if (ABAS_SOMENTE_ADMIN.has(idAba) && !window.temPermissao('admin')) {
@@ -134,6 +155,7 @@ function abrirAba(idAba, atualizarHash = true) {
     const botaoClicado = document.querySelector(`button[onclick*="${idAba}"]`);
     if (botaoClicado) botaoClicado.classList.add('active');
     if (atualizarHash && window.location.hash !== `#${idAba}`) window.location.hash = idAba;
+    if (window.matchMedia('(max-width: 768px)').matches) fecharMenuMobile();
 
     // Inicializadores de aba
     if (idAba === 'aba-cadastros') carregarCadastros();

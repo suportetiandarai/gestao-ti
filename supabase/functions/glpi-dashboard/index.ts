@@ -90,9 +90,13 @@ class GlpiClient {
   private sessionToken = '';
 
   constructor() {
+    const apiUrl = env('GLPI_API_URL');
     const base = env('GLPI_BASE_URL');
-    if (!base) throw new Error('GLPI_BASE_URL não configurado.');
-    this.baseUrl = `${base.replace(/\/+$/, '')}/apirest.php`;
+    if (apiUrl) this.baseUrl = apiUrl.replace(/\/+$/, '');
+    else {
+      if (!base) throw new Error('GLPI_BASE_URL não configurado.');
+      this.baseUrl = `${base.replace(/\/+$/, '')}/apirest.php`;
+    }
     this.appToken = env('GLPI_APP_TOKEN');
   }
 
@@ -109,7 +113,7 @@ class GlpiClient {
 
   private async request(path: string, init: RequestInit = {}) {
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), Number(env('GLPI_TIMEOUT_MS') || 15000));
+    const timeout = setTimeout(() => controller.abort(), Number(env('GLPI_REQUEST_TIMEOUT') || env('GLPI_TIMEOUT_MS') || 15000));
     try {
       const response = await fetch(`${this.baseUrl}/${path.replace(/^\/+/, '')}`, {
         ...init,
@@ -182,6 +186,15 @@ class GlpiClient {
     }
 
     return tickets;
+  }
+
+  async countItems(itemType: string) {
+    const params = new URLSearchParams({
+      range: '0-0',
+      expand_dropdowns: 'false',
+    });
+    const result = await this.request(`${itemType}?${params.toString()}`, { method: 'GET' }) as unknown;
+    return Array.isArray(result) ? result.length : 0;
   }
 }
 
@@ -257,9 +270,11 @@ Deno.serve(async (request) => {
     const glpi = new GlpiClient();
     await glpi.initSession();
     if (body.action === 'test-connection') {
+      const ticketsCount = await glpi.countItems('Ticket');
+      const usersCount = await glpi.countItems('User');
       await glpi.killSession();
-      await logSync(admin, 'info', 'Conexão com GLPI validada.', 0);
-      return json({ ok: true });
+      await logSync(admin, 'info', 'Conexão com GLPI validada.', ticketsCount);
+      return json({ ok: true, tickets: ticketsCount, technicians: usersCount });
     }
 
     const tickets = await glpi.getTickets();

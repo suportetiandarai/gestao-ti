@@ -273,6 +273,22 @@ button {
     transition: all 0.2s ease;
     position: relative;
     overflow: hidden;
+    display: flex;
+    align-items: center;
+    gap: 9px;
+}
+
+.tab-icon {
+    display: inline-flex;
+    width: 22px;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.tab-label {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 .tab-btn:hover { 
@@ -307,6 +323,31 @@ button {
 
 .main-content {
     flex: 1; padding: 35px; overflow-y: auto;
+}
+
+body.menu-collapsed .sidebar {
+    width: 82px;
+    padding-left: 12px;
+    padding-right: 12px;
+}
+
+body.menu-collapsed .sidebar h2,
+body.menu-collapsed .version-tag,
+body.menu-collapsed .tab-label {
+    display: none;
+}
+
+body.menu-collapsed .tabs {
+    padding: 0;
+}
+
+body.menu-collapsed .tab-btn {
+    justify-content: center;
+    padding: 12px 8px;
+}
+
+body.menu-collapsed .tab-btn:hover {
+    transform: none;
 }
 
 header { 
@@ -1281,6 +1322,32 @@ input[type="file"]::file-selector-button:hover {
     flex-wrap: wrap;
 }
 
+.glpi-filter-button {
+    border: 1px solid #0d5770;
+    background: #0d5770;
+    color: #fff;
+    border-radius: 8px;
+    padding: 8px 12px;
+    min-height: 36px;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    font-weight: 800;
+    cursor: pointer;
+}
+
+.glpi-filter-button span {
+    background: #fff;
+    color: #0d5770;
+    border-radius: 999px;
+    min-width: 22px;
+    min-height: 22px;
+    display: inline-flex;
+    justify-content: center;
+    align-items: center;
+}
+
 .glpi-last-update,
 .glpi-muted {
     color: var(--glpi-muted);
@@ -1354,12 +1421,68 @@ input[type="file"]::file-selector-button:hover {
 
 .glpi-filters {
     background: #fff;
-    border: 1px solid #e2e8f0;
-    border-radius: 8px;
-    padding: 16px;
     display: grid;
-    grid-template-columns: repeat(6, minmax(140px, 1fr));
+    grid-template-columns: 1fr;
     gap: 12px;
+}
+
+.glpi-filter-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(15, 23, 42, .35);
+    z-index: 80;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity .2s ease;
+}
+
+.glpi-filter-backdrop.open {
+    opacity: 1;
+    visibility: visible;
+}
+
+.glpi-filter-drawer {
+    position: fixed;
+    top: 0;
+    right: 0;
+    height: 100vh;
+    width: min(520px, 94vw);
+    background: #fff;
+    z-index: 90;
+    transform: translateX(100%);
+    transition: transform .22s ease;
+    box-shadow: -18px 0 38px rgba(15, 23, 42, .18);
+    padding: 18px;
+    overflow-y: auto;
+}
+
+.glpi-filter-drawer.open {
+    transform: translateX(0);
+}
+
+.glpi-filter-drawer-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 14px;
+    border-bottom: 1px solid #e2e8f0;
+    padding-bottom: 12px;
+}
+
+.glpi-filter-drawer-head strong {
+    display: block;
+    color: #0d5770;
+    font-size: 18px;
+}
+
+.glpi-filter-drawer-head span {
+    color: #64748b;
+    font-size: 12px;
+}
+
+.glpi-filter-drawer .glpi-filters {
+    grid-template-columns: 1fr !important;
 }
 
 .glpi-filters label,
@@ -1474,6 +1597,34 @@ input[type="file"]::file-selector-button:hover {
     background: #e2e8f0;
     border-radius: 999px;
     overflow: hidden;
+}
+
+.sidebar-head {
+    position: relative;
+    z-index: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 0 12px;
+}
+
+.sidebar-toggle,
+.mobile-menu-button {
+    border: 1px solid rgba(255,255,255,.35);
+    background: rgba(255,255,255,.16);
+    color: #fff;
+    border-radius: 8px;
+    min-width: 36px;
+    min-height: 36px;
+    cursor: pointer;
+}
+
+.mobile-menu-button {
+    display: none;
+    background: #0d5770;
+    border-color: #0d5770;
+    margin-right: 8px;
 }
 
 .glpi-bar-fill {
@@ -1610,6 +1761,60 @@ input[type="file"]::file-selector-button:hover {
     padding: 18px;
 }
 
+body.glpi-panel-mode #app-wrapper {
+    height: 100vh;
+}
+
+body.glpi-panel-mode .sidebar,
+body.glpi-panel-mode .main-content > header,
+body.public-dashboard .sidebar,
+body.public-dashboard .main-content > header,
+body.public-dashboard .glpi-subtabs button:not(:first-child),
+body.public-dashboard #glpi-view-configuracoes,
+body.public-dashboard #glpi-view-monitoramento,
+body.public-dashboard #glpi-view-relatorios,
+body.public-dashboard #glpi-view-chamados,
+body.public-dashboard #glpi-view-tecnicos,
+body.public-dashboard .glpi-filter-button {
+    display: none !important;
+}
+
+body.glpi-panel-mode .main-content,
+body.public-dashboard .main-content {
+    padding: 18px;
+    width: 100vw;
+}
+
+body.glpi-panel-mode .glpi-header {
+    align-items: center;
+    padding: 18px 22px;
+}
+
+body.glpi-panel-mode .glpi-header h3 {
+    font-size: clamp(24px, 2.2vw, 42px);
+}
+
+body.glpi-panel-mode .glpi-kpi-grid {
+    grid-template-columns: repeat(5, minmax(180px, 1fr));
+}
+
+body.glpi-panel-mode .glpi-kpi strong {
+    font-size: clamp(28px, 2.6vw, 48px);
+}
+
+body.glpi-panel-mode .glpi-grid.two {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+body.public-dashboard #aba-glpi {
+    display: block;
+}
+
+body.public-dashboard .glpi-diagnostic,
+body.public-dashboard .glpi-subtabs {
+    display: none;
+}
+
 @media (max-width: 1200px) {
     .glpi-filters {
         grid-template-columns: repeat(3, minmax(150px, 1fr));
@@ -1664,5 +1869,62 @@ input[type="file"]::file-selector-button:hover {
 
     .quick-actions button {
         min-height: 42px;
+    }
+}
+
+@media (max-width: 768px) {
+    .mobile-menu-button {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 42px !important;
+        flex: 0 0 auto;
+    }
+
+    #app-wrapper {
+        display: block;
+        height: auto;
+    }
+
+    .sidebar {
+        position: fixed;
+        inset: 0 auto 0 0;
+        width: min(320px, 88vw) !important;
+        height: 100vh !important;
+        transform: translateX(-105%);
+        transition: transform .22s ease;
+        z-index: 95;
+        overflow-y: auto;
+        padding-top: 18px;
+    }
+
+    body.mobile-menu-open .sidebar {
+        transform: translateX(0);
+    }
+
+    .tabs {
+        flex-direction: column !important;
+        overflow-x: visible !important;
+        padding: 0 12px 18px !important;
+    }
+
+    .tab-btn {
+        width: 100% !important;
+        white-space: normal !important;
+    }
+
+    body.menu-collapsed .tab-label,
+    body.menu-collapsed .sidebar h2 {
+        display: inline;
+    }
+
+    .glpi-filter-drawer {
+        width: min(96vw, 520px);
+        padding: 14px;
+    }
+
+    body.glpi-panel-mode .glpi-kpi-grid,
+    body.glpi-panel-mode .glpi-grid.two {
+        grid-template-columns: 1fr;
     }
 }

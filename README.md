@@ -94,6 +94,27 @@ Estratégia robusta para produção: adicionar fila/Redis, job agendado no servi
 
 Consulte [docs/GLPI_DASHBOARD_CRITERIOS.md](docs/GLPI_DASHBOARD_CRITERIOS.md).
 
+## Como integrar com o GLPI
+
+1. Verifique a versão instalada do GLPI e confirme compatibilidade com a API REST em `/apirest.php`.
+2. No GLPI, habilite a API em `Configurar > Geral > API` ou caminho equivalente da versão.
+3. Crie um cliente de API e gere/localize o `App-Token`.
+4. Crie um usuário exclusivo, como `integracao.dashboard`.
+5. Gere/localize o `User-Token` desse usuário.
+6. Libere somente permissões de leitura para chamados, técnicos, grupos, entidades, categorias, acompanhamentos, soluções e SLA.
+7. Configure as variáveis em `.env` ou nos secrets do Supabase, usando `.env.example` como referência.
+8. Faça deploy da função `glpi-dashboard`.
+9. Na aba GLPI, acesse `Configurações` e clique em `Testar conexão com o GLPI`.
+10. Clique em `Sincronizar agora` e acompanhe os logs em `Monitoramento`.
+
+Exemplo de teste manual sem tokens reais:
+
+```bash
+curl -i "$GLPI_API_URL/initSession"
+```
+
+Guia completo: [docs/INTEGRACAO_GLPI.md](docs/INTEGRACAO_GLPI.md).
+
 ## Testes e validação
 
 Validações recomendadas:

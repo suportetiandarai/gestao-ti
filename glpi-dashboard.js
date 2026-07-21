@@ -24,8 +24,26 @@
         sortKey: 'openedAt',
         sortDir: 'desc',
         refreshTimer: null,
-        subtab: 'geral'
+        countdownTimer: null,
+        secondsToRefresh: 30,
+        refreshing: false,
+        subtab: 'diario',
+        panelMode: false,
+        publicMode: false,
+        publicConfig: {},
+        localConfig: {}
     };
+
+    const DEFAULT_PUBLIC_CONFIG = Object.freeze({
+        enabled: false,
+        token: '',
+        techMode: 'first',
+        showTitle: false,
+        showCategory: true,
+        showUnit: true,
+        showRanking: true,
+        showRecent: true
+    });
 
     function esc(value) {
         return (value === null || value === undefined || value === '')
@@ -100,6 +118,67 @@
 
     function getField(id) {
         return document.getElementById(id);
+    }
+
+    function readJsonStorage(key, fallback = {}) {
+        try {
+            return { ...fallback, ...JSON.parse(localStorage.getItem(key) || '{}') };
+        } catch (_) {
+            return { ...fallback };
+        }
+    }
+
+    function saveJsonStorage(key, value) {
+        localStorage.setItem(key, JSON.stringify(value));
+    }
+
+    function generatePublicToken() {
+        const bytes = new Uint8Array(24);
+        crypto.getRandomValues(bytes);
+        return Array.from(bytes, byte => byte.toString(16).padStart(2, '0')).join('');
+    }
+
+    function todayRangeSaoPaulo() {
+        const today = dateOnlyInSaoPaulo();
+        return {
+            label: today.split('-').reverse().join('/'),
+            start: new Date(`${today}T00:00:00-03:00`),
+            end: new Date(`${today}T23:59:59-03:00`)
+        };
+    }
+
+    function isBetween(value, start, end) {
+        const date = parseDate(value);
+        return Boolean(date && date >= start && date <= end);
+    }
+
+    function technicianDisplayName(name) {
+        if (!state.publicMode) return name || 'Não disponível';
+        const clean = name || 'Não disponível';
+        if (state.publicConfig.techMode === 'hidden') return 'Técnico';
+        const parts = clean.split(/\s+/).filter(Boolean);
+        if (state.publicConfig.techMode === 'short') return parts.length > 1 ? `${parts[0]} ${parts.at(-1).slice(0, 1)}.` : parts[0] || 'Técnico';
+        if (state.publicConfig.techMode === 'full') return clean;
+        return parts[0] || 'Técnico';
+    }
+
+    function publicTicketTitle(ticket) {
+        if (!state.publicMode || state.publicConfig.showTitle) return ticket.title;
+        return `Chamado ${ticket.id}`;
+    }
+
+    function dailyTickets() {
+        const { start, end } = todayRangeSaoPaulo();
+        return state.tickets.filter(ticket =>
+            isBetween(ticket.openedAt, start, end)
+            || isBetween(ticket.assignedAt, start, end)
+            || isBetween(ticket.solvedAt, start, end)
+            || isBetween(ticket.closedAt, start, end)
+        );
+    }
+
+    function currentOpenTickets() {
+        return state.tickets.filter(ticket => STATUS_OPEN.has(ticket.status));
     }
 
     function normalizeTicket(row) {
@@ -199,6 +278,12 @@
     }
 
     async function loadTickets() {
+        state.publicMode = Boolean(window.GESTAO_TI_PUBLIC_DASHBOARD);
+        state.publicConfig = readJsonStorage('glpiPublicDashboardConfig', DEFAULT_PUBLIC_CONFIG);
+        state.localConfig = readJsonStorage('glpiDashboardLocalConfig', {
+            integrationEnabled: true,
+            demoEnabled: false
+        });
         state.metadata = {
             glpi_version: GLPI_VERSION,
             api_enabled: 'A confirmar no endpoint /apirest.php/initSession',
@@ -209,7 +294,7 @@
             base_url: ''
         };
 
-        if (!window.supabase) {
+        if (!window.supabase || state.localConfig.demoEnabled) {
             state.demo = true;
             state.tickets = demoTickets();
             state.syncLogs = [{ level: 'aviso', message: 'Supabase não configurado. Modo demonstração local ativado.', created_at: new Date().toISOString() }];
@@ -244,9 +329,12 @@
             }
         } catch (error) {
             console.warn('Dashboard GLPI em modo demonstração:', error);
-            state.demo = true;
-            state.tickets = demoTickets();
-            state.syncLogs = [{ level: 'erro', message: 'Não foi possível ler as tabelas GLPI. Modo demonstração ativado.', created_at: new Date().toISOString() }];
+            state.syncLogs = [{ level: 'erro', message: 'Não foi possível ler as tabelas GLPI. Últimos dados válidos preservados quando disponíveis.', created_at: new Date().toISOString() }];
+            if (!state.tickets.length) {
+                state.demo = true;
+                state.tickets = demoTickets();
+                state.syncLogs[0].message = 'Não foi possível ler as tabelas GLPI. Modo demonstração ativado.';
+            }
         }
     }
 
@@ -293,6 +381,20 @@
         };
     }
 
+    function countActiveFilters(filters = currentFilters()) {
+        return Object.entries(filters)
+            .filter(([key, value]) => key !== 'start' && key !== 'end' && value)
+            .length + (filters.start || filters.end ? 1 : 0);
+    }
+
+    function renderActiveFilterCount() {
+        const count = countActiveFilters();
+        const badge = getField('glpi-active-filter-count');
+        const drawer = getField('glpi-filter-drawer-count');
+        if (badge) badge.textContent = count;
+        if (drawer) drawer.textContent = `Filtros ativos: ${count}`;
+    }
+
     function applyFilters() {
         const filters = currentFilters();
         const start = filters.start ? new Date(`${filters.start}T00:00:00`) : null;
@@ -317,6 +419,7 @@
             return true;
         });
         state.page = 1;
+        renderActiveFilterCount();
         renderAll();
     }
 
@@ -383,6 +486,87 @@
                 <small>${esc(hint)}</small>
             </article>
         `).join('');
+    }
+
+    function renderDailyDashboard() {
+        const { start, end, label } = todayRangeSaoPaulo();
+        const daily = dailyTickets();
+        const openNow = currentOpenTickets();
+        const createdToday = state.tickets.filter(ticket => isBetween(ticket.openedAt, start, end));
+        const assignedToday = state.tickets.filter(ticket => isBetween(ticket.assignedAt, start, end));
+        const solvedToday = state.tickets.filter(ticket => isBetween(ticket.solvedAt, start, end));
+        const closedToday = state.tickets.filter(ticket => isBetween(ticket.closedAt, start, end));
+        const pendingNow = state.tickets.filter(ticket => ticket.status === 'Pendente');
+        const slaOk = openNow.filter(ticket => ticket.slaStatus === 'ok' || ticket.slaStatus === 'warning');
+        const slaBreached = openNow.filter(ticket => ticket.slaStatus === 'breached');
+        const avgAttendance = average(solvedToday.map(ticket => diffMinutes(ticket.assignedAt || ticket.openedAt, ticket.solvedAt)));
+        const avgSolution = average(solvedToday.map(ticket => diffMinutes(ticket.openedAt, ticket.solvedAt)));
+
+        const cards = [
+            ['Abertos agora', openNow.length, 'Chamados não solucionados nem fechados'],
+            ['Criados hoje', createdToday.length, `Período automático ${label}`],
+            ['Atendidos hoje', assignedToday.length, 'Chamados atribuídos no dia'],
+            ['Solucionados hoje', solvedToday.length, 'Solução registrada no dia'],
+            ['Fechados hoje', closedToday.length, 'Fechamento registrado no dia'],
+            ['Pendentes', pendingNow.length, 'Status pendente no momento'],
+            ['Dentro do SLA', slaOk.length, 'Abertos no prazo ou próximos do prazo'],
+            ['Fora do SLA', slaBreached.length, 'Abertos com prazo vencido'],
+            ['Atendimento médio', formatDuration(avgAttendance), 'Atribuição até solução'],
+            ['Solução média', formatDuration(avgSolution), 'Abertura até solução']
+        ];
+
+        getField('glpi-daily-kpis').innerHTML = cards.map(([labelText, value, hint]) => `
+            <article class="glpi-kpi">
+                <span>${esc(labelText)}</span>
+                <strong>${esc(value)}</strong>
+                <small>${esc(hint)}</small>
+            </article>
+        `).join('');
+
+        const techRows = technicianStats(daily).map(tech => {
+            const openByTech = openNow.filter(ticket => ticket.technician === tech.name).length;
+            const finalToday = solvedToday.concat(closedToday).filter(ticket => ticket.technician === tech.name).length;
+            return { ...tech, openByTech, finalToday };
+        }).sort((a, b) => (b.finalToday + b.attendedToday) - (a.finalToday + a.attendedToday));
+
+        getField('glpi-daily-ranking').innerHTML = state.publicMode && !state.publicConfig.showRanking
+            ? '<p class="glpi-empty">Ranking oculto no painel público.</p>'
+            : techRows.slice(0, 8).map((tech, index) => `
+                <div class="glpi-rank-row">
+                    <strong>${index + 1}. ${esc(technicianDisplayName(tech.name))}</strong>
+                    <span>${tech.attendedToday} atendidos • ${tech.finalToday} finalizados • ${tech.openByTech} abertos</span>
+                    <small>Solução média ${formatDuration(tech.avgSolution)}</small>
+                </div>
+            `).join('') || '<p class="glpi-empty">Nenhum atendimento registrado hoje.</p>';
+
+        renderBarChart('glpi-daily-technicians', techRows.map(tech => ({
+            label: technicianDisplayName(tech.name),
+            value: tech.attendedToday + tech.finalToday + tech.openByTech
+        })), 10);
+
+        const recent = createdToday
+            .sort((a, b) => parseDate(b.openedAt) - parseDate(a.openedAt))
+            .slice(0, 8);
+        getField('glpi-daily-recent').innerHTML = state.publicMode && !state.publicConfig.showRecent
+            ? '<p class="glpi-empty">Chamados recentes ocultos no painel público.</p>'
+            : recent.map(ticket => `
+                <div class="glpi-log">
+                    <strong>#${esc(ticket.id)} • ${esc(ticket.status)}</strong>
+                    <span>${esc(publicTicketTitle(ticket))}</span>
+                    <small>${formatDateTime(ticket.openedAt)}${state.publicConfig.showCategory || !state.publicMode ? ` • ${esc(ticket.category)}` : ''}${state.publicConfig.showUnit || !state.publicMode ? ` • ${esc(ticket.unit)}` : ''}</small>
+                </div>
+            `).join('') || '<p class="glpi-empty">Nenhum chamado criado hoje.</p>';
+
+        const oldest = openNow
+            .sort((a, b) => parseDate(a.openedAt) - parseDate(b.openedAt))
+            .slice(0, 8);
+        getField('glpi-daily-oldest').innerHTML = oldest.map(ticket => `
+            <div class="glpi-log ${ticket.slaStatus === 'breached' ? 'erro' : ticket.slaStatus === 'warning' ? 'aviso' : ''}">
+                <strong>#${esc(ticket.id)} • ${esc(ticket.status)}</strong>
+                <span>${esc(publicTicketTitle(ticket))}</span>
+                <small>Aberto em ${formatDateTime(ticket.openedAt)} • ${esc(technicianDisplayName(ticket.technician))}</small>
+            </div>
+        `).join('') || '<p class="glpi-empty">Nenhum chamado aberto no momento.</p>';
     }
 
     function renderBarChart(id, data, maxItems = 8) {
@@ -541,11 +725,52 @@
             <dt>Versão identificada</dt><dd>GLPI ${GLPI_VERSION}</dd>
             <dt>API REST</dt><dd>${esc(state.metadata.api_enabled)}</dd>
             <dt>URL da API</dt><dd><code>{GLPI_BASE_URL}/apirest.php</code></dd>
+            <dt>URL base do GLPI</dt><dd>${esc(state.metadata.base_url || 'Configurada por GLPI_BASE_URL no back-end')}</dd>
+            <dt>App-Token</dt><dd>••••••••••••••••••••</dd>
+            <dt>User-Token</dt><dd>••••••••••••••••••••</dd>
+            <dt>Entidade</dt><dd>${esc(state.metadata.entity_id || 'Não disponível')}</dd>
+            <dt>Perfil</dt><dd>${esc(state.metadata.profile_id || 'Não disponível')}</dd>
             <dt>Credenciais necessárias</dt><dd>GLPI_BASE_URL, GLPI_APP_TOKEN e GLPI_USER_TOKEN; alternativa controlada: GLPI_LOGIN e GLPI_PASSWORD.</dd>
             <dt>OAuth</dt><dd>Não adotado para GLPI 10.0.18 neste MVP.</dd>
             <dt>Banco próprio</dt><dd>PostgreSQL/Supabase, com tabelas de tickets, configurações, favoritos e logs.</dd>
             <dt>Tempo real</dt><dd>Sincronização incremental por data de modificação, cache no banco e atualização automática configurável.</dd>
         `;
+        renderConfigFields();
+    }
+
+    function publicDashboardUrl(pathMode = false) {
+        const token = state.publicConfig.token || '';
+        if (!token) return '';
+        if (pathMode) return `${window.location.origin}/dashboard/publico/${encodeURIComponent(token)}`;
+        return `${window.location.origin}${window.location.pathname}?painel_publico=${encodeURIComponent(token)}`;
+    }
+
+    function renderConfigFields() {
+        const publicEnabled = getField('glpi-public-enabled');
+        const techMode = getField('glpi-public-tech-mode');
+        const integrationEnabled = getField('glpi-integration-enabled');
+        const demoEnabled = getField('glpi-demo-enabled');
+        if (publicEnabled) publicEnabled.value = String(Boolean(state.publicConfig.enabled));
+        if (techMode) techMode.value = state.publicConfig.techMode || 'first';
+        if (integrationEnabled) integrationEnabled.value = String(state.localConfig.integrationEnabled !== false);
+        if (demoEnabled) demoEnabled.value = String(Boolean(state.localConfig.demoEnabled));
+
+        [
+            ['glpi-public-show-title', 'showTitle'],
+            ['glpi-public-show-category', 'showCategory'],
+            ['glpi-public-show-unit', 'showUnit'],
+            ['glpi-public-show-ranking', 'showRanking'],
+            ['glpi-public-show-recent', 'showRecent']
+        ].forEach(([id, key]) => {
+            const field = getField(id);
+            if (field) field.checked = Boolean(state.publicConfig[key]);
+        });
+
+        const preview = getField('glpi-public-link-preview');
+        if (preview) {
+            const url = publicDashboardUrl(true);
+            preview.textContent = url ? `Link público: ${url}` : 'Link público: Não disponível';
+        }
     }
 
     function renderMonitoring() {
@@ -571,11 +796,16 @@
         status.className = `glpi-status-badge ${state.demo ? 'warning' : 'ok'}`;
         const last = state.syncLogs[0]?.created_at || new Date();
         getField('glpi-last-update').textContent = `Última atualização: ${formatDateTime(last)}`;
+        const currentTime = getField('glpi-current-time');
+        const nextRefresh = getField('glpi-next-refresh');
+        if (currentTime) currentTime.textContent = `Hora atual: ${new Intl.DateTimeFormat('pt-BR', { timeStyle: 'medium', timeZone: TZ }).format(new Date())}`;
+        if (nextRefresh) nextRefresh.textContent = `Próxima atualização em ${state.secondsToRefresh} segundos`;
     }
 
     function renderAll() {
         renderDiagnostics();
         renderStatus();
+        renderDailyDashboard();
         renderKpis();
         renderRankings();
         renderTechnicians();
@@ -586,13 +816,28 @@
     }
 
     async function refreshData(triggerSync = false) {
-        if (triggerSync && window.supabase?.functions && !state.demo) {
-            const { error } = await supabase.functions.invoke('glpi-dashboard', { body: { action: 'sync-incremental' } });
-            if (error) mostrarAviso('Falha na solicitação de sincronização. Verifique o monitoramento.', 'erro');
+        if (state.refreshing) return;
+        state.refreshing = true;
+        const scrollTop = document.querySelector('.main-content')?.scrollTop || 0;
+        try {
+            if (triggerSync && window.supabase?.functions && !state.demo && state.localConfig.integrationEnabled !== false) {
+                const { error } = await supabase.functions.invoke('glpi-dashboard', { body: { action: 'sync-incremental' } });
+                if (error) throw error;
+            }
+            await loadTickets();
+            populateFilters();
+            applyFilters();
+        } catch (error) {
+            console.error('Falha ao atualizar GLPI:', error);
+            state.syncLogs.unshift({ level: 'erro', message: 'Falha na atualização. Os últimos dados válidos foram mantidos.', created_at: new Date().toISOString() });
+            mostrarAviso('Não foi possível atualizar agora. Mantive os últimos dados válidos.', 'aviso');
+            renderAll();
+        } finally {
+            state.refreshing = false;
+            state.secondsToRefresh = Number(getField('glpi-sync-interval')?.value || 30000) / 1000;
+            const main = document.querySelector('.main-content');
+            if (main) main.scrollTop = scrollTop;
         }
-        await loadTickets();
-        populateFilters();
-        applyFilters();
     }
 
     function setDefaultPeriod() {
@@ -610,10 +855,12 @@
         await refreshData(false);
         setDefaultPeriod();
         applyFilters();
+        window.glpiAbrirSubaba(window.GESTAO_TI_PUBLIC_DASHBOARD ? 'diario' : state.subtab || 'diario');
         window.glpiAtualizarIntervaloSincronizacao();
     };
 
     window.glpiAbrirSubaba = function (name) {
+        if (window.GESTAO_TI_PUBLIC_DASHBOARD && name !== 'diario') name = 'diario';
         state.subtab = name;
         document.querySelectorAll('.glpi-subtab').forEach(btn => btn.classList.toggle('active', btn.getAttribute('onclick')?.includes(`'${name}'`)));
         document.querySelectorAll('.glpi-view').forEach(view => view.classList.add('hidden'));
@@ -637,15 +884,30 @@
         applyFilters();
     };
 
-    window.glpiAplicarFiltros = applyFilters;
+    window.glpiAplicarFiltros = function () {
+        applyFilters();
+        window.glpiFecharFiltros();
+    };
+
+    window.glpiAbrirFiltros = function () {
+        getField('glpi-filter-drawer')?.classList.add('open');
+        getField('glpi-filter-backdrop')?.classList.add('open');
+        getField('glpi-filter-drawer')?.setAttribute('aria-hidden', 'false');
+    };
+
+    window.glpiFecharFiltros = function () {
+        getField('glpi-filter-drawer')?.classList.remove('open');
+        getField('glpi-filter-backdrop')?.classList.remove('open');
+        getField('glpi-filter-drawer')?.setAttribute('aria-hidden', 'true');
+    };
 
     window.glpiLimparFiltros = function () {
-        document.querySelectorAll('#aba-glpi input, #aba-glpi select').forEach(field => {
-            if (field.id === 'glpi-sync-interval' || field.id === 'glpi-attended-rule') return;
+        document.querySelectorAll('#glpi-filter-drawer input, #glpi-filter-drawer select').forEach(field => {
             field.value = '';
         });
         state.page = 1;
         applyFilters();
+        renderActiveFilterCount();
     };
 
     window.glpiSalvarFiltroFavorito = async function () {
@@ -663,17 +925,124 @@
 
     window.glpiAtualizarAgora = async function () {
         mostrarAviso('Atualizando dados do GLPI...', 'aviso');
-        await refreshData(true);
+        await refreshData(!window.GESTAO_TI_PUBLIC_DASHBOARD);
         mostrarAviso('Dashboard GLPI atualizado.', 'sucesso');
+    };
+
+    window.glpiSincronizarAgora = window.glpiAtualizarAgora;
+
+    window.glpiTestarConexao = async function () {
+        try {
+            if (!window.supabase?.functions) throw new Error('Edge Function indisponível no ambiente local.');
+            const { data, error } = await supabase.functions.invoke('glpi-dashboard', { body: { action: 'test-connection' } });
+            if (error) throw error;
+            mostrarAviso(`Conexão realizada com sucesso. API disponível. Chamados consultáveis: ${data?.tickets ?? 'Não disponível'}. Técnicos consultáveis: ${data?.technicians ?? 'Não disponível'}.`, 'sucesso');
+        } catch (error) {
+            console.error('Teste GLPI falhou:', error);
+            mostrarAviso('Não foi possível validar a conexão. Verifique URL, tokens, API habilitada, permissões, rede e logs.', 'erro');
+        }
+    };
+
+    window.glpiLimparCache = function () {
+        if (!window.exigirAdmin?.()) return;
+        state.tickets = [];
+        state.filtered = [];
+        state.demo = true;
+        state.tickets = demoTickets();
+        applyFilters();
+        mostrarAviso('Cache visual local limpo. O cache real do banco deve ser limpo pela rotina administrativa do back-end.', 'aviso');
+    };
+
+    window.glpiAlternarPainel = function () {
+        state.panelMode = !document.body.classList.contains('glpi-panel-mode');
+        document.body.classList.toggle('glpi-panel-mode', state.panelMode);
+        localStorage.setItem('glpiPanelMode', String(state.panelMode));
+        if (state.panelMode) document.body.classList.add('menu-collapsed');
+        mostrarAviso(state.panelMode ? 'Modo painel ativado.' : 'Modo painel desativado.', 'sucesso');
+    };
+
+    window.glpiTelaCheia = async function () {
+        try {
+            if (!document.fullscreenElement) await document.documentElement.requestFullscreen();
+            else await document.exitFullscreen();
+        } catch (error) {
+            mostrarAviso('Tela cheia indisponível neste navegador.', 'aviso');
+        }
+    };
+
+    window.glpiSalvarConfiguracaoLocal = function () {
+        state.localConfig = {
+            integrationEnabled: getField('glpi-integration-enabled')?.value !== 'false',
+            demoEnabled: getField('glpi-demo-enabled')?.value === 'true'
+        };
+        saveJsonStorage('glpiDashboardLocalConfig', state.localConfig);
+        mostrarAviso('Configuração local salva.', 'sucesso');
+        refreshData(false);
+    };
+
+    window.glpiSalvarConfiguracaoPublica = function () {
+        state.publicConfig = {
+            ...DEFAULT_PUBLIC_CONFIG,
+            ...state.publicConfig,
+            enabled: getField('glpi-public-enabled')?.value === 'true',
+            techMode: getField('glpi-public-tech-mode')?.value || 'first',
+            showTitle: Boolean(getField('glpi-public-show-title')?.checked),
+            showCategory: Boolean(getField('glpi-public-show-category')?.checked),
+            showUnit: Boolean(getField('glpi-public-show-unit')?.checked),
+            showRanking: Boolean(getField('glpi-public-show-ranking')?.checked),
+            showRecent: Boolean(getField('glpi-public-show-recent')?.checked)
+        };
+        if (state.publicConfig.enabled && !state.publicConfig.token) state.publicConfig.token = generatePublicToken();
+        saveJsonStorage('glpiPublicDashboardConfig', state.publicConfig);
+        renderConfigFields();
+        renderDailyDashboard();
+        mostrarAviso('Configuração do painel público salva.', 'sucesso');
+    };
+
+    window.glpiRegenerarTokenPublico = function () {
+        state.publicConfig = { ...DEFAULT_PUBLIC_CONFIG, ...state.publicConfig, enabled: true, token: generatePublicToken() };
+        saveJsonStorage('glpiPublicDashboardConfig', state.publicConfig);
+        renderConfigFields();
+        mostrarAviso('Link público regenerado. Links antigos deixam de funcionar neste ambiente.', 'sucesso');
+    };
+
+    window.glpiRevogarPainelPublico = function () {
+        state.publicConfig = { ...DEFAULT_PUBLIC_CONFIG, ...state.publicConfig, enabled: false, token: '' };
+        saveJsonStorage('glpiPublicDashboardConfig', state.publicConfig);
+        renderConfigFields();
+        mostrarAviso('Acesso público revogado.', 'sucesso');
+    };
+
+    window.glpiCopiarLinkPublico = async function () {
+        if (!state.publicConfig.enabled || !state.publicConfig.token) window.glpiRegenerarTokenPublico();
+        const url = publicDashboardUrl(true);
+        try {
+            await navigator.clipboard.writeText(url);
+            mostrarAviso('Link público copiado.', 'sucesso');
+        } catch (_) {
+            mostrarAviso(`Copie o link exibido: ${url}`, 'aviso');
+        }
+    };
+
+    window.glpiAbrirPainelPublico = function () {
+        if (!state.publicConfig.enabled || !state.publicConfig.token) window.glpiRegenerarTokenPublico();
+        window.open(publicDashboardUrl(false), '_blank', 'noopener');
     };
 
     window.glpiAtualizarIntervaloSincronizacao = function () {
         clearInterval(state.refreshTimer);
-        const interval = Number(getField('glpi-sync-interval')?.value || 60000);
+        clearInterval(state.countdownTimer);
+        const interval = Number(getField('glpi-sync-interval')?.value || 30000);
+        state.secondsToRefresh = Math.round(interval / 1000);
         state.refreshTimer = setInterval(() => {
             const aba = getField('aba-glpi');
-            if (aba && !aba.classList.contains('hidden')) refreshData(!state.demo);
+            if (aba && !aba.classList.contains('hidden')) refreshData(!state.demo && !window.GESTAO_TI_PUBLIC_DASHBOARD);
         }, interval);
+        state.countdownTimer = setInterval(() => {
+            state.secondsToRefresh = state.secondsToRefresh <= 1 ? Math.round(interval / 1000) : state.secondsToRefresh - 1;
+            renderStatus();
+        }, 1000);
+        renderStatus();
     };
 
     window.glpiOrdenarTabela = function (key) {

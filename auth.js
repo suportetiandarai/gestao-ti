@@ -36,6 +36,53 @@ function aplicarLayout(estado) {
     appWrapper?.classList.toggle('hidden', !autenticado);
 }
 
+function obterTokenPainelPublico() {
+    const params = new URLSearchParams(window.location.search);
+    if (params.has('painel_publico')) return params.get('painel_publico');
+
+    const pathMatch = window.location.pathname.match(/\/dashboard\/publico\/([^/]+)/);
+    if (pathMatch) return decodeURIComponent(pathMatch[1]);
+
+    const hashMatch = window.location.hash.match(/dashboard\/publico\/([^/?#]+)/);
+    if (hashMatch) return decodeURIComponent(hashMatch[1]);
+
+    return null;
+}
+
+function rotaPainelPublico() {
+    return Boolean(obterTokenPainelPublico());
+}
+
+function painelPublicoAutorizado() {
+    const token = obterTokenPainelPublico();
+    const config = JSON.parse(localStorage.getItem('glpiPublicDashboardConfig') || '{}');
+    return Boolean(config.enabled && config.token && token && config.token === token);
+}
+
+function entrarModoPainelPublico() {
+    window.GESTAO_TI_PUBLIC_DASHBOARD = true;
+    window.usuarioAtual = null;
+    window.perfilAtual = { role: 'publico', nome: 'Painel público' };
+    aplicarLayout('autenticado');
+    document.body.classList.add('public-dashboard', 'glpi-panel-mode');
+
+    const userName = document.getElementById('user-name');
+    const userRole = document.getElementById('user-role');
+    const logout = document.querySelector('header .btn-danger');
+    if (userName) userName.textContent = 'Dashboard Diário GLPI';
+    if (userRole) userRole.textContent = 'PAINEL PÚBLICO';
+    if (logout) logout.classList.add('hidden');
+
+    if (!painelPublicoAutorizado()) {
+        mostrarAviso('Painel público indisponível, revogado ou token inválido.', 'erro');
+        document.querySelectorAll('.tab-content').forEach(aba => aba.classList.add('hidden'));
+        return;
+    }
+
+    if (typeof abrirAba === 'function') abrirAba('aba-glpi', false);
+    if (typeof glpiAbrirSubaba === 'function') glpiAbrirSubaba('diario');
+}
+
 function normalizarRole(role) {
     return String(role || '').trim().toLowerCase();
 }
@@ -254,6 +301,11 @@ async function fazerLogout() {
 }
 
 document.addEventListener('DOMContentLoaded', async () => {
+    if (rotaPainelPublico()) {
+        entrarModoPainelPublico();
+        return;
+    }
+
     if (!SUPABASE_CONFIGURADO) {
         aplicarLayout('anonimo');
         const botao = document.getElementById('btn-login');

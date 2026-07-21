@@ -36,7 +36,8 @@
 - Chamados abertos: chamados cujo status esteja em `Novo`, `Atribuído`, `Planejado` ou `Pendente`.
 - Chamados pendentes: chamados atualmente no status `Pendente`.
 - Chamados finalizados: chamados com `solved_at` ou `closed_at` dentro do período filtrado.
-- Chamados atendidos por técnico: regra configurável. O padrão é chamado solucionado pelo técnico no dia atual.
+- Chamados atendidos por técnico no Dashboard Geral: regra configurável. O padrão inicial é chamado solucionado pelo técnico no dia atual.
+- Chamados atendidos hoje no Dashboard Diário: chamados atribuídos a um técnico entre `00:00:00` e `23:59:59` em `America/Sao_Paulo`.
 - Tempo médio de primeira resposta: soma de `first_response_at - opened_at` dividida pela quantidade de chamados com as duas datas válidas.
 - Tempo médio de solução: soma de `solved_at - opened_at` dividida pela quantidade de chamados solucionados com datas válidas.
 - Tempo médio de fechamento: soma de `closed_at - opened_at` dividida pela quantidade de chamados fechados com datas válidas.

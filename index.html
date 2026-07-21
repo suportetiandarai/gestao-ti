@@ -3,6 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="robots" content="noindex,nofollow">
     <title>Gestão em T.I - T.I Andaraí</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -37,22 +38,25 @@
     <div id="app-wrapper" class="hidden">
         
         <aside class="sidebar">
-            <h2>MENU</h2>
+            <div class="sidebar-head">
+                <h2>MENU</h2>
+                <button type="button" class="sidebar-toggle" title="Recolher menu" onclick="alternarMenuLateral()">☰</button>
+            </div>
             <nav class="tabs">
-                <button class="tab-btn active" onclick="abrirAba('aba-inicio')">🏠 Início</button>
-                <button class="tab-btn" onclick="abrirAba('aba-plantao')">📋 Passagem de Plantão</button>
-                <button class="tab-btn" onclick="abrirAba('aba-chaves')">🔑 Chaves</button>
-                <button class="tab-btn" onclick="abrirAba('aba-ocorrencias')">⚠️ Ocorrências Pendentes</button>
-                <button class="tab-btn" onclick="abrirAba('aba-toner')">🖨️ Toner/Simpress</button>
-                <button class="tab-btn" onclick="abrirAba('aba-treinamentos')">📚 Agenda de Treinamentos</button>
-                <button class="tab-btn" onclick="abrirAba('aba-solicita-treinamento')">🎓 Solicitações Treinamento</button>
-                <button class="tab-btn" onclick="abrirAba('aba-solicitacoes-ad')">💻 Solicitações AD</button>
-                <button class="tab-btn" onclick="abrirAba('aba-cadastros')">📝 Solicitações TIMED</button>
-                <button class="tab-btn" onclick="window.open('https://tally.so/r/mJeJXR', '_blank')">📤 Envio de RT</button>
-                <button class="tab-btn" onclick="abrirAba('aba-inventario')">📦 Inventário</button>
-                <button class="tab-btn" onclick="abrirAba('aba-glpi')">📊 GLPI</button>
-                <button id="btn-config" class="tab-btn hidden" onclick="abrirAba('aba-config')">⚙️ Configurações</button>
-                <button id="btn-admin" data-role="admin" class="tab-btn hidden" onclick="abrirAba('aba-admin')">⚙️ Admin</button>
+                <button class="tab-btn active" title="Início" onclick="abrirAba('aba-inicio')"><span class="tab-icon">🏠</span><span class="tab-label">Início</span></button>
+                <button class="tab-btn" title="Passagem de Plantão" onclick="abrirAba('aba-plantao')"><span class="tab-icon">📋</span><span class="tab-label">Passagem de Plantão</span></button>
+                <button class="tab-btn" title="Chaves" onclick="abrirAba('aba-chaves')"><span class="tab-icon">🔑</span><span class="tab-label">Chaves</span></button>
+                <button class="tab-btn" title="Ocorrências Pendentes" onclick="abrirAba('aba-ocorrencias')"><span class="tab-icon">⚠️</span><span class="tab-label">Ocorrências Pendentes</span></button>
+                <button class="tab-btn" title="Toner/Simpress" onclick="abrirAba('aba-toner')"><span class="tab-icon">🖨️</span><span class="tab-label">Toner/Simpress</span></button>
+                <button class="tab-btn" title="Agenda de Treinamentos" onclick="abrirAba('aba-treinamentos')"><span class="tab-icon">📚</span><span class="tab-label">Agenda de Treinamentos</span></button>
+                <button class="tab-btn" title="Solicitações Treinamento" onclick="abrirAba('aba-solicita-treinamento')"><span class="tab-icon">🎓</span><span class="tab-label">Solicitações Treinamento</span></button>
+                <button class="tab-btn" title="Solicitações AD" onclick="abrirAba('aba-solicitacoes-ad')"><span class="tab-icon">💻</span><span class="tab-label">Solicitações AD</span></button>
+                <button class="tab-btn" title="Solicitações TIMED" onclick="abrirAba('aba-cadastros')"><span class="tab-icon">📝</span><span class="tab-label">Solicitações TIMED</span></button>
+                <button class="tab-btn" title="Envio de RT" onclick="window.open('https://tally.so/r/mJeJXR', '_blank')"><span class="tab-icon">📤</span><span class="tab-label">Envio de RT</span></button>
+                <button class="tab-btn" title="Inventário" onclick="abrirAba('aba-inventario')"><span class="tab-icon">📦</span><span class="tab-label">Inventário</span></button>
+                <button class="tab-btn" title="GLPI" onclick="abrirAba('aba-glpi')"><span class="tab-icon">📊</span><span class="tab-label">GLPI</span></button>
+                <button id="btn-config" class="tab-btn hidden" title="Configurações" onclick="abrirAba('aba-config')"><span class="tab-icon">⚙️</span><span class="tab-label">Configurações</span></button>
+                <button id="btn-admin" data-role="admin" class="tab-btn hidden" title="Admin" onclick="abrirAba('aba-admin')"><span class="tab-icon">⚙️</span><span class="tab-label">Admin</span></button>
             </nav>
 
             <div class="version-tag">Versão 1.0.0</div>
@@ -61,6 +65,7 @@
         <main class="main-content">
             <header>
                 <div>
+                    <button type="button" class="mobile-menu-button" title="Abrir menu" onclick="alternarMenuMobile()">☰</button>
                     <h1 id="user-name">Carregando...</h1>
                     <span id="user-role" class="badge">Operacional</span>
                 </div>
@@ -150,14 +155,20 @@
                         <div class="glpi-actions">
                             <span id="glpi-connection-status" class="glpi-status-badge">Verificando conexão</span>
                             <span id="glpi-last-update" class="glpi-last-update">Última atualização: Não disponível</span>
+                            <span id="glpi-current-time" class="glpi-last-update">Hora atual: Não disponível</span>
+                            <span id="glpi-next-refresh" class="glpi-last-update">Próxima atualização: Não disponível</span>
                             <button type="button" class="btn-primary btn-sm" onclick="glpiAtualizarAgora()">Atualizar agora</button>
+                            <button type="button" class="btn-secondary btn-sm" onclick="glpiAlternarPainel()">Modo Painel</button>
+                            <button type="button" class="btn-secondary btn-sm" onclick="glpiTelaCheia()">Tela cheia</button>
+                            <button type="button" class="glpi-filter-button" onclick="glpiAbrirFiltros()">☷ Filtros <span id="glpi-active-filter-count">0</span></button>
                         </div>
                     </div>
 
                     <div id="glpi-diagnostic" class="glpi-diagnostic"></div>
 
                     <div class="glpi-subtabs" role="tablist" aria-label="Áreas do dashboard GLPI">
-                        <button type="button" class="glpi-subtab active" onclick="glpiAbrirSubaba('geral')">Dashboard geral</button>
+                        <button type="button" class="glpi-subtab active" onclick="glpiAbrirSubaba('diario')">Dashboard Diário</button>
+                        <button type="button" class="glpi-subtab" onclick="glpiAbrirSubaba('geral')">Dashboard geral</button>
                         <button type="button" class="glpi-subtab" onclick="glpiAbrirSubaba('tecnicos')">Técnicos</button>
                         <button type="button" class="glpi-subtab" onclick="glpiAbrirSubaba('chamados')">Chamados</button>
                         <button type="button" class="glpi-subtab" onclick="glpiAbrirSubaba('relatorios')">Relatórios</button>
@@ -165,7 +176,16 @@
                         <button type="button" class="glpi-subtab" onclick="glpiAbrirSubaba('monitoramento')">Monitoramento</button>
                     </div>
 
-                    <div class="glpi-filters">
+                    <div id="glpi-filter-backdrop" class="glpi-filter-backdrop" onclick="glpiFecharFiltros()"></div>
+                    <aside id="glpi-filter-drawer" class="glpi-filter-drawer" aria-hidden="true">
+                        <div class="glpi-filter-drawer-head">
+                            <div>
+                                <strong>Filtros</strong>
+                                <span id="glpi-filter-drawer-count">Filtros ativos: 0</span>
+                            </div>
+                            <button type="button" class="btn-secondary btn-sm" onclick="glpiFecharFiltros()">Fechar</button>
+                        </div>
+                        <div class="glpi-filters">
                         <label>Data inicial<input type="date" id="glpi-filter-start"></label>
                         <label>Data final<input type="date" id="glpi-filter-end"></label>
                         <label>Atalho
@@ -208,9 +228,20 @@
                             <button type="button" class="btn-secondary btn-sm" onclick="glpiSalvarFiltroFavorito()">Salvar favorito</button>
                             <button type="button" class="btn-success btn-sm" onclick="glpiExportar('csv')">Exportar resultado</button>
                         </div>
+                        </div>
+                    </aside>
+
+                    <div id="glpi-view-diario" class="glpi-view">
+                        <div id="glpi-daily-kpis" class="glpi-kpi-grid"></div>
+                        <div class="glpi-grid two">
+                            <div class="glpi-panel"><h4>Ranking diário dos técnicos</h4><div id="glpi-daily-ranking"></div></div>
+                            <div class="glpi-panel"><h4>Chamados por técnico hoje</h4><div id="glpi-daily-technicians" class="glpi-chart"></div></div>
+                            <div class="glpi-panel"><h4>Últimos chamados registrados</h4><div id="glpi-daily-recent" class="glpi-log-list"></div></div>
+                            <div class="glpi-panel"><h4>Chamados antigos ainda abertos</h4><div id="glpi-daily-oldest" class="glpi-log-list"></div></div>
+                        </div>
                     </div>
 
-                    <div id="glpi-view-geral" class="glpi-view">
+                    <div id="glpi-view-geral" class="glpi-view hidden">
                         <div id="glpi-kpis" class="glpi-kpi-grid"></div>
                         <div class="glpi-grid two">
                             <div class="glpi-panel"><h4>Chamados abertos por status</h4><div id="glpi-chart-status" class="glpi-chart"></div></div>
@@ -307,6 +338,11 @@
                             <div class="glpi-panel">
                                 <h4>Integração</h4>
                                 <dl id="glpi-config-summary" class="glpi-definition-list"></dl>
+                                <div class="glpi-button-row mt-10">
+                                    <button type="button" class="btn-primary btn-sm" onclick="glpiTestarConexao()">Testar conexão com o GLPI</button>
+                                    <button type="button" class="btn-secondary btn-sm" onclick="glpiSincronizarAgora()">Sincronizar agora</button>
+                                    <button type="button" class="btn-secondary btn-sm" onclick="glpiLimparCache()">Limpar cache</button>
+                                </div>
                             </div>
                             <div class="glpi-panel">
                                 <h4>Regras dos indicadores</h4>
@@ -319,12 +355,53 @@
                                 </label>
                                 <label>Intervalo de sincronização
                                     <select id="glpi-sync-interval" onchange="glpiAtualizarIntervaloSincronizacao()">
-                                        <option value="30000">30 segundos</option>
-                                        <option value="60000" selected>1 minuto</option>
+                                        <option value="30000" selected>30 segundos</option>
+                                        <option value="60000">1 minuto</option>
                                         <option value="300000">5 minutos</option>
                                     </select>
                                 </label>
+                                <label>Integração ativa
+                                    <select id="glpi-integration-enabled" onchange="glpiSalvarConfiguracaoLocal()">
+                                        <option value="true">Ativa</option>
+                                        <option value="false">Inativa</option>
+                                    </select>
+                                </label>
+                                <label>Modo demonstração
+                                    <select id="glpi-demo-enabled" onchange="glpiSalvarConfiguracaoLocal()">
+                                        <option value="false">Desativado</option>
+                                        <option value="true">Ativado</option>
+                                    </select>
+                                </label>
                                 <p class="glpi-muted">Tokens, senhas e URL interna do GLPI devem ser configurados como secrets da Edge Function, nunca no código-fonte.</p>
+                            </div>
+                            <div class="glpi-panel">
+                                <h4>Dashboard Diário Público</h4>
+                                <label>Permitir visualização pública
+                                    <select id="glpi-public-enabled" onchange="glpiSalvarConfiguracaoPublica()">
+                                        <option value="false">Não</option>
+                                        <option value="true">Sim</option>
+                                    </select>
+                                </label>
+                                <label>Exibição dos técnicos
+                                    <select id="glpi-public-tech-mode" onchange="glpiSalvarConfiguracaoPublica()">
+                                        <option value="first">Somente primeiro nome</option>
+                                        <option value="short">Nome abreviado</option>
+                                        <option value="hidden">Ocultar nomes</option>
+                                        <option value="full">Nome completo</option>
+                                    </select>
+                                </label>
+                                <label><input type="checkbox" id="glpi-public-show-title" onchange="glpiSalvarConfiguracaoPublica()"> Mostrar título dos chamados</label>
+                                <label><input type="checkbox" id="glpi-public-show-category" checked onchange="glpiSalvarConfiguracaoPublica()"> Mostrar categorias</label>
+                                <label><input type="checkbox" id="glpi-public-show-unit" checked onchange="glpiSalvarConfiguracaoPublica()"> Mostrar unidades</label>
+                                <label><input type="checkbox" id="glpi-public-show-ranking" checked onchange="glpiSalvarConfiguracaoPublica()"> Mostrar ranking</label>
+                                <label><input type="checkbox" id="glpi-public-show-recent" checked onchange="glpiSalvarConfiguracaoPublica()"> Mostrar chamados recentes</label>
+                                <div class="glpi-button-row mt-10">
+                                    <button type="button" class="btn-primary btn-sm" onclick="glpiCopiarLinkPublico()">Copiar link público</button>
+                                    <button type="button" class="btn-secondary btn-sm" onclick="glpiAbrirPainelPublico()">Abrir painel público</button>
+                                    <button type="button" class="btn-secondary btn-sm" onclick="glpiRegenerarTokenPublico()">Regenerar link</button>
+                                    <button type="button" class="btn-danger btn-sm" onclick="glpiRevogarPainelPublico()">Revogar acesso público</button>
+                                </div>
+                                <p id="glpi-public-link-preview" class="glpi-muted">Link público: Não disponível</p>
                             </div>
                         </div>
                     </div>
