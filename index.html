@@ -50,6 +50,7 @@
                 <button class="tab-btn" onclick="abrirAba('aba-cadastros')">📝 Solicitações TIMED</button>
                 <button class="tab-btn" onclick="window.open('https://tally.so/r/mJeJXR', '_blank')">📤 Envio de RT</button>
                 <button class="tab-btn" onclick="abrirAba('aba-inventario')">📦 Inventário</button>
+                <button class="tab-btn" onclick="abrirAba('aba-glpi')">📊 GLPI</button>
                 <button id="btn-config" class="tab-btn hidden" onclick="abrirAba('aba-config')">⚙️ Configurações</button>
                 <button id="btn-admin" data-role="admin" class="tab-btn hidden" onclick="abrirAba('aba-admin')">⚙️ Admin</button>
             </nav>
@@ -135,6 +136,205 @@
                         <ul id="dash-chaves" style="list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 10px; height: 280px; overflow-y: auto; padding-right: 5px;"></ul>
                     </div>
 
+                </div>
+            </section>
+
+            <section id="aba-glpi" class="tab-content hidden">
+                <div class="glpi-shell">
+                    <div class="glpi-header">
+                        <div>
+                            <p class="glpi-eyebrow">GLPI 10.0.18 • RioSaúde</p>
+                            <h3>Dashboard gerencial de chamados</h3>
+                            <p>Indicadores de operação, produtividade, SLA e evolução dos atendimentos.</p>
+                        </div>
+                        <div class="glpi-actions">
+                            <span id="glpi-connection-status" class="glpi-status-badge">Verificando conexão</span>
+                            <span id="glpi-last-update" class="glpi-last-update">Última atualização: Não disponível</span>
+                            <button type="button" class="btn-primary btn-sm" onclick="glpiAtualizarAgora()">Atualizar agora</button>
+                        </div>
+                    </div>
+
+                    <div id="glpi-diagnostic" class="glpi-diagnostic"></div>
+
+                    <div class="glpi-subtabs" role="tablist" aria-label="Áreas do dashboard GLPI">
+                        <button type="button" class="glpi-subtab active" onclick="glpiAbrirSubaba('geral')">Dashboard geral</button>
+                        <button type="button" class="glpi-subtab" onclick="glpiAbrirSubaba('tecnicos')">Técnicos</button>
+                        <button type="button" class="glpi-subtab" onclick="glpiAbrirSubaba('chamados')">Chamados</button>
+                        <button type="button" class="glpi-subtab" onclick="glpiAbrirSubaba('relatorios')">Relatórios</button>
+                        <button type="button" class="glpi-subtab" onclick="glpiAbrirSubaba('configuracoes')">Configurações</button>
+                        <button type="button" class="glpi-subtab" onclick="glpiAbrirSubaba('monitoramento')">Monitoramento</button>
+                    </div>
+
+                    <div class="glpi-filters">
+                        <label>Data inicial<input type="date" id="glpi-filter-start"></label>
+                        <label>Data final<input type="date" id="glpi-filter-end"></label>
+                        <label>Atalho
+                            <select id="glpi-filter-preset" onchange="glpiAplicarPresetPeriodo(this.value)">
+                                <option value="">Personalizado</option>
+                                <option value="hoje">Hoje</option>
+                                <option value="ontem">Ontem</option>
+                                <option value="ultimos7">Últimos 7 dias</option>
+                                <option value="semanaAtual">Semana atual</option>
+                                <option value="semanaAnterior">Semana anterior</option>
+                                <option value="mesAtual">Mês atual</option>
+                                <option value="mesAnterior">Mês anterior</option>
+                                <option value="anoAtual">Ano atual</option>
+                            </select>
+                        </label>
+                        <label>Técnico<select id="glpi-filter-technician"></select></label>
+                        <label>Grupo técnico<select id="glpi-filter-group"></select></label>
+                        <label>Status<select id="glpi-filter-status"></select></label>
+                        <label>Categoria<select id="glpi-filter-category"></select></label>
+                        <label>Prioridade<select id="glpi-filter-priority"></select></label>
+                        <label>Urgência<select id="glpi-filter-urgency"></select></label>
+                        <label>Impacto<select id="glpi-filter-impact"></select></label>
+                        <label>Entidade<select id="glpi-filter-entity"></select></label>
+                        <label>Unidade<select id="glpi-filter-unit"></select></label>
+                        <label>Localização<select id="glpi-filter-location"></select></label>
+                        <label>Tipo<select id="glpi-filter-type"></select></label>
+                        <label>Requerente<input type="search" id="glpi-filter-requester" placeholder="Nome ou e-mail"></label>
+                        <label>SLA
+                            <select id="glpi-filter-sla">
+                                <option value="">Todos</option>
+                                <option value="ok">Dentro do prazo</option>
+                                <option value="warning">Próximo do vencimento</option>
+                                <option value="breached">Vencido</option>
+                                <option value="unavailable">Não disponível</option>
+                            </select>
+                        </label>
+                        <div class="glpi-filter-actions">
+                            <button type="button" class="btn-primary btn-sm" onclick="glpiAplicarFiltros()">Aplicar filtros</button>
+                            <button type="button" class="btn-secondary btn-sm" onclick="glpiLimparFiltros()">Limpar filtros</button>
+                            <button type="button" class="btn-secondary btn-sm" onclick="glpiSalvarFiltroFavorito()">Salvar favorito</button>
+                            <button type="button" class="btn-success btn-sm" onclick="glpiExportar('csv')">Exportar resultado</button>
+                        </div>
+                    </div>
+
+                    <div id="glpi-view-geral" class="glpi-view">
+                        <div id="glpi-kpis" class="glpi-kpi-grid"></div>
+                        <div class="glpi-grid two">
+                            <div class="glpi-panel"><h4>Chamados abertos por status</h4><div id="glpi-chart-status" class="glpi-chart"></div></div>
+                            <div class="glpi-panel"><h4>Evolução por dia</h4><div id="glpi-chart-evolution" class="glpi-chart"></div></div>
+                            <div class="glpi-panel"><h4>Produtividade por técnico</h4><div id="glpi-ranking-productivity"></div></div>
+                            <div class="glpi-panel"><h4>SLA</h4><div id="glpi-chart-sla" class="glpi-chart"></div></div>
+                        </div>
+                    </div>
+
+                    <div id="glpi-view-tecnicos" class="glpi-view hidden">
+                        <div id="glpi-technician-cards" class="glpi-technician-grid"></div>
+                    </div>
+
+                    <div id="glpi-view-chamados" class="glpi-view hidden">
+                        <div class="glpi-table-toolbar">
+                            <input type="search" id="glpi-ticket-search" placeholder="Buscar por ID, título, técnico, categoria ou requerente" oninput="glpiRenderizarTabelaChamados()">
+                            <button type="button" class="btn-secondary btn-sm" onclick="glpiExportar('xlsx')">Excel</button>
+                            <button type="button" class="btn-secondary btn-sm" onclick="glpiExportar('csv')">CSV</button>
+                        </div>
+                        <div class="table-responsive glpi-table-wrap">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th onclick="glpiOrdenarTabela('id')">ID</th>
+                                        <th onclick="glpiOrdenarTabela('title')">Título</th>
+                                        <th onclick="glpiOrdenarTabela('status')">Status</th>
+                                        <th onclick="glpiOrdenarTabela('technician')">Técnico</th>
+                                        <th>Grupo</th>
+                                        <th>Requerente</th>
+                                        <th>Categoria</th>
+                                        <th>Prioridade</th>
+                                        <th>Entidade</th>
+                                        <th>Unidade/Localização</th>
+                                        <th onclick="glpiOrdenarTabela('openedAt')">Abertura</th>
+                                        <th>Atribuição</th>
+                                        <th>Primeira resposta</th>
+                                        <th>Solução</th>
+                                        <th>Fechamento</th>
+                                        <th>Tempo em aberto</th>
+                                        <th>Tempo atendimento</th>
+                                        <th>SLA</th>
+                                        <th>Situação SLA</th>
+                                        <th>GLPI</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="glpi-ticket-table"></tbody>
+                            </table>
+                        </div>
+                        <div class="glpi-pagination">
+                            <button type="button" class="btn-secondary btn-sm" onclick="glpiMudarPagina(-1)">Anterior</button>
+                            <span id="glpi-page-info">Página 1</span>
+                            <button type="button" class="btn-secondary btn-sm" onclick="glpiMudarPagina(1)">Próxima</button>
+                        </div>
+                    </div>
+
+                    <div id="glpi-view-relatorios" class="glpi-view hidden">
+                        <div class="glpi-grid two">
+                            <div class="glpi-panel">
+                                <h4>Gerar relatório</h4>
+                                <label>Modelo
+                                    <select id="glpi-report-template">
+                                        <option value="diario">Diário</option>
+                                        <option value="semanal">Semanal</option>
+                                        <option value="mensal">Mensal</option>
+                                        <option value="trimestral">Trimestral</option>
+                                        <option value="semestral">Semestral</option>
+                                        <option value="anual">Anual</option>
+                                        <option value="personalizado">Período personalizado</option>
+                                    </select>
+                                </label>
+                                <label>Indicadores
+                                    <select id="glpi-report-scope">
+                                        <option value="geral">Geral</option>
+                                        <option value="tecnico">Por técnico</option>
+                                        <option value="grupo">Por grupo</option>
+                                        <option value="categoria">Por categoria</option>
+                                        <option value="status">Por status</option>
+                                        <option value="entidade">Por entidade</option>
+                                        <option value="sla">Por SLA</option>
+                                    </select>
+                                </label>
+                                <div class="glpi-button-row">
+                                    <button type="button" class="btn-primary btn-sm" onclick="glpiExportar('pdf')">PDF</button>
+                                    <button type="button" class="btn-success btn-sm" onclick="glpiExportar('xlsx')">Excel</button>
+                                    <button type="button" class="btn-secondary btn-sm" onclick="glpiExportar('csv')">CSV</button>
+                                </div>
+                            </div>
+                            <div id="glpi-report-preview" class="glpi-panel glpi-report-preview"></div>
+                        </div>
+                    </div>
+
+                    <div id="glpi-view-configuracoes" class="glpi-view hidden">
+                        <div class="glpi-grid two">
+                            <div class="glpi-panel">
+                                <h4>Integração</h4>
+                                <dl id="glpi-config-summary" class="glpi-definition-list"></dl>
+                            </div>
+                            <div class="glpi-panel">
+                                <h4>Regras dos indicadores</h4>
+                                <label>Chamado atendido no dia
+                                    <select id="glpi-attended-rule" onchange="glpiAplicarFiltros()">
+                                        <option value="solved">Chamado solucionado pelo técnico</option>
+                                        <option value="assigned">Chamado atribuído ao técnico</option>
+                                        <option value="closed">Chamado fechado pelo técnico</option>
+                                    </select>
+                                </label>
+                                <label>Intervalo de sincronização
+                                    <select id="glpi-sync-interval" onchange="glpiAtualizarIntervaloSincronizacao()">
+                                        <option value="30000">30 segundos</option>
+                                        <option value="60000" selected>1 minuto</option>
+                                        <option value="300000">5 minutos</option>
+                                    </select>
+                                </label>
+                                <p class="glpi-muted">Tokens, senhas e URL interna do GLPI devem ser configurados como secrets da Edge Function, nunca no código-fonte.</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div id="glpi-view-monitoramento" class="glpi-view hidden">
+                        <div class="glpi-grid two">
+                            <div class="glpi-panel"><h4>Sincronização</h4><dl id="glpi-sync-summary" class="glpi-definition-list"></dl></div>
+                            <div class="glpi-panel"><h4>Logs da integração</h4><div id="glpi-sync-logs" class="glpi-log-list"></div></div>
+                        </div>
+                    </div>
                 </div>
             </section>
             
@@ -1717,6 +1917,7 @@
     <script src="auth.js"></script>
     <script src="signature.js"></script>
     <script src="app.js"></script>
+    <script src="glpi-dashboard.js"></script>
     <script src="inventory-scanner.js"></script>
     <script src="inventory-transfer.js"></script>
 </body>

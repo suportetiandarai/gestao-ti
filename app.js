@@ -149,6 +149,7 @@ function abrirAba(idAba, atualizarHash = true) {
         carregarInventario();
         if (typeof inicializarInventarioScanner === 'function') inicializarInventarioScanner();
     }
+    if (idAba === 'aba-glpi' && typeof inicializarDashboardGlpi === 'function') inicializarDashboardGlpi();
     if (idAba === 'aba-config') carregarMeusDados();
     if (idAba === 'aba-admin') carregarPlantoesAdmin();
 }
