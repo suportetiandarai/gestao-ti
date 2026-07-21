@@ -16,6 +16,38 @@ No GLPI, acesse o caminho equivalente da versão instalada, normalmente:
 Configurar > Geral > API
 ```
 
+Se a aba `API` não aparecer em `Configurar > Geral`, verifique estes pontos antes de concluir que a API não existe:
+
+1. Acesse diretamente a documentação da API:
+
+```text
+https://os.riosaude.rio.br/apirest.php
+```
+
+Se abrir a documentação da API, a API REST está disponível no servidor. Se retornar erro de API desativada, bloqueio ou permissão, será necessário ajustar a configuração no GLPI ou no servidor.
+
+2. Tente acessar a tela de clientes de API diretamente:
+
+```text
+https://os.riosaude.rio.br/front/apiclient.php
+```
+
+ou:
+
+```text
+https://os.riosaude.rio.br/front/apiclient.form.php
+```
+
+3. Tente abrir a aba pelo parâmetro direto de tabulação:
+
+```text
+https://os.riosaude.rio.br/front/config.form.php?forcetab=Config$5
+```
+
+O número da aba pode variar conforme versão, plugins e permissões. Se abrir em branco ou redirecionar, use os caminhos anteriores.
+
+4. Confirme se o usuário logado possui perfil `Super-Admin` ou permissão administrativa suficiente para configuração geral/API. Alguns perfis conseguem abrir `Configurar > Geral`, mas não exibem todas as abas sensíveis.
+
 Verifique:
 
 - API REST ativada.
