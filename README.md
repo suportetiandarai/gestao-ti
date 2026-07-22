@@ -94,13 +94,18 @@ Publique a função:
 npx supabase functions deploy glpi-dashboard
 ```
 
-Configure secrets sem gravar valores no repositório:
+Configure secrets sem gravar valores no repositório. Preencha localmente
+`supabase/.env.secrets.local` (já ignorado pelo Git) e digite os valores somente
+nesse arquivo ou em um prompt seguro:
 
 ```bash
-npx supabase secrets set GLPI_BASE_URL="..." GLPI_API_URL="..."
-npx supabase secrets set GLPI_APP_TOKEN="..." GLPI_USER_TOKEN="..."
-npx supabase secrets set GLPI_TIMEZONE_OFFSET="-03:00"
+npx supabase secrets set --env-file supabase/.env.secrets.local
+npx supabase secrets list
 ```
+
+Na área administrativa, `GLPI > Configurações > Conectar serviços` apresenta o
+estado do Supabase e do GLPI, links oficiais e testes sanitizados. A tela nunca
+recebe os valores dos tokens; informa apenas se cada secret está configurado.
 
 Consulte todas as variáveis em `.env.example`. `SUPABASE_URL` e `SUPABASE_SERVICE_ROLE_KEY` são fornecidos pelo runtime da Edge Function; a service role nunca pertence ao navegador.
 

@@ -35,7 +35,9 @@
         panelMode: false,
         publicMode: false,
         publicConfig: {},
-        localConfig: {}
+        localConfig: {},
+        serviceChecking: false,
+        serviceChecks: { supabase: null, glpi: null }
     };
 
     const DEFAULT_PUBLIC_CONFIG = Object.freeze({
@@ -51,6 +53,42 @@
         return (value === null || value === undefined || value === '')
             ? 'Não disponível'
             : String(value).replace(/[&<>'"]/g, tag => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[tag]));
+    }
+
+    function publicSupabaseConfig() {
+        const config = window.GESTAO_TI_CONFIG || {};
+        const url = String(config.SUPABASE_URL || '').replace(/\/+$/, '');
+        const projectRef = url.match(/^https:\/\/([a-z0-9]+)\.supabase\.co$/i)?.[1] || '';
+        return { url, projectRef, publicKey: String(config.SUPABASE_PUBLIC_KEY || '') };
+    }
+
+    function safeExternalUrl(value) {
+        try {
+            const url = new URL(String(value || ''));
+            return ['http:', 'https:'].includes(url.protocol) ? url.href : '';
+        } catch {
+            return '';
+        }
+    }
+
+    function openExternal(value) {
+        const url = safeExternalUrl(value);
+        if (!url) return false;
+        window.open(url, '_blank', 'noopener,noreferrer');
+        return true;
+    }
+
+    function serviceStatus(id, status) {
+        const field = getField(id);
+        if (!field) return;
+        const map = {
+            connected: ['Conectado', 'ok'],
+            disconnected: ['Não conectado', 'error'],
+            incomplete: ['Configuração incompleta', 'warning']
+        };
+        const [label, className] = map[status] || map.incomplete;
+        field.textContent = label;
+        field.className = `glpi-status-badge ${className}`;
     }
 
     function parseDate(value) {
@@ -677,13 +715,14 @@
     }
 
     function renderConfig() {
+        const glpiCheck = state.serviceChecks.glpi;
         getField('glpi-config-summary').innerHTML = `
-            <dt>Versão identificada</dt><dd>GLPI ${GLPI_VERSION}</dd>
+            <dt>Versão identificada</dt><dd>GLPI ${esc(glpiCheck?.glpiVersion || state.metadata.glpi_version || GLPI_VERSION)}</dd>
             <dt>API REST</dt><dd>${esc(state.metadata.api_enabled)}</dd>
             <dt>URL da API</dt><dd><code>{GLPI_BASE_URL}/apirest.php</code></dd>
             <dt>URL base do GLPI</dt><dd>${esc(state.metadata.base_url || 'Configurada por GLPI_BASE_URL no back-end')}</dd>
-            <dt>App-Token</dt><dd>••••••••••••••••••••</dd>
-            <dt>User-Token</dt><dd>••••••••••••••••••••</dd>
+            <dt>App-Token</dt><dd>${glpiCheck ? (glpiCheck.credentials?.appToken ? 'Configurado' : 'Não configurado') : 'A confirmar no back-end'}</dd>
+            <dt>User-Token</dt><dd>${glpiCheck ? (glpiCheck.credentials?.userToken ? 'Configurado' : 'Não configurado') : 'A confirmar no back-end'}</dd>
             <dt>Entidade</dt><dd>${esc(state.metadata.entity_id || 'Não disponível')}</dd>
             <dt>Perfil</dt><dd>${esc(state.metadata.profile_id || 'Não disponível')}</dd>
             <dt>Credenciais necessárias</dt><dd>GLPI_BASE_URL, GLPI_APP_TOKEN e GLPI_USER_TOKEN; alternativa controlada: GLPI_LOGIN e GLPI_PASSWORD.</dd>
@@ -691,7 +730,36 @@
             <dt>Banco próprio</dt><dd>PostgreSQL/Supabase, com tabelas de tickets, configurações, favoritos e logs.</dd>
             <dt>Tempo real</dt><dd>Sincronização incremental por data de modificação, cache no banco e atualização automática configurável.</dd>
         `;
+        renderServiceConnections();
         renderConfigFields();
+    }
+
+    function renderServiceConnections() {
+        const supabaseConfig = publicSupabaseConfig();
+        const supabaseCheck = state.serviceChecks.supabase;
+        const supabaseConfigured = Boolean(supabaseConfig.url && supabaseConfig.projectRef && supabaseConfig.publicKey);
+        serviceStatus('glpi-supabase-service-status', supabaseCheck?.ok ? 'connected' : (supabaseConfigured ? 'incomplete' : 'disconnected'));
+        getField('glpi-supabase-service-details').innerHTML = `
+            <dt>Project Reference</dt><dd>${esc(supabaseConfig.projectRef || 'Não configurado')}</dd>
+            <dt>URL do projeto</dt><dd>${esc(supabaseConfig.url || 'Não configurada')}</dd>
+            <dt>Sessão autenticada</dt><dd>${supabaseCheck ? (supabaseCheck.authenticated ? 'Sim' : 'Não') : 'Não verificada'}</dd>
+            <dt>Última verificação</dt><dd>${supabaseCheck?.checkedAt ? formatDateTime(supabaseCheck.checkedAt) : 'Não realizada'}</dd>
+        `;
+
+        const glpiCheck = state.serviceChecks.glpi;
+        const baseUrl = glpiCheck?.baseUrl || state.metadata.base_url || '';
+        const hasKnownConfiguration = Boolean(baseUrl || glpiCheck?.configured);
+        serviceStatus('glpi-glpi-service-status', glpiCheck?.ok && glpiCheck.apiRest === 'online'
+            ? 'connected'
+            : (glpiCheck?.failed ? 'disconnected' : (hasKnownConfiguration ? 'incomplete' : 'incomplete')));
+        getField('glpi-glpi-service-details').innerHTML = `
+            <dt>URL da instância</dt><dd>${esc(baseUrl || 'Não informada pelo back-end')}</dd>
+            <dt>Versão identificada</dt><dd>${esc(glpiCheck?.glpiVersion || state.metadata.glpi_version || GLPI_VERSION)}${glpiCheck?.glpiVersion ? '' : ' (a confirmar)'}</dd>
+            <dt>API REST</dt><dd>${glpiCheck?.apiRest === 'online' ? 'Ativa e acessível' : (glpiCheck?.apiRest === 'not-tested' ? 'Não testada' : 'Não confirmada')}</dd>
+            <dt>App-Token</dt><dd>${glpiCheck ? (glpiCheck.credentials?.appToken ? 'Configurado' : 'Não configurado') : 'Não verificado'}</dd>
+            <dt>User-Token</dt><dd>${glpiCheck ? (glpiCheck.credentials?.userToken ? 'Configurado' : 'Não configurado') : 'Não verificado'}</dd>
+            <dt>Última verificação</dt><dd>${glpiCheck?.checkedAt ? formatDateTime(glpiCheck.checkedAt) : 'Não realizada'}</dd>
+        `;
     }
 
     function publicDashboardUrl(pathMode = false) {
@@ -845,6 +913,9 @@
         document.querySelectorAll('.glpi-subtab').forEach(btn => btn.classList.toggle('active', btn.getAttribute('onclick')?.includes(`'${name}'`)));
         document.querySelectorAll('.glpi-view').forEach(view => view.classList.add('hidden'));
         getField(`glpi-view-${name}`)?.classList.remove('hidden');
+        if (name === 'configuracoes' && state.initialized && !state.serviceChecks.glpi) {
+            void window.glpiTestarConfiguracaoServicos(true);
+        }
         if (state.initialized) window.glpiAtualizarIntervaloSincronizacao();
     };
 
@@ -913,14 +984,104 @@
 
     window.glpiSincronizarAgora = window.glpiAtualizarAgora;
 
+    window.glpiAbrirSupabase = function () {
+        const { projectRef } = publicSupabaseConfig();
+        openExternal(projectRef
+            ? `https://supabase.com/dashboard/project/${encodeURIComponent(projectRef)}`
+            : 'https://supabase.com/dashboard');
+    };
+
+    window.glpiAbrirInstrucoesSupabase = function () {
+        openExternal('https://supabase.com/dashboard/account/tokens');
+    };
+
+    window.glpiAbrirGlpi = function () {
+        const baseUrl = state.serviceChecks.glpi?.baseUrl || state.metadata.base_url;
+        if (!openExternal(baseUrl)) mostrarAviso('GLPI_BASE_URL ainda não foi informado pelo back-end.', 'aviso');
+    };
+
+    window.glpiAbrirConfiguracaoApiGlpi = function () {
+        const baseUrl = state.serviceChecks.glpi?.baseUrl || state.metadata.base_url;
+        if (!openExternal(baseUrl)) {
+            mostrarAviso('Configure GLPI_BASE_URL antes de abrir a instância.', 'aviso');
+            return;
+        }
+        mostrarAviso('No GLPI, acesse Configurar → Geral → API. A rota administrativa varia conforme a instalação.', 'aviso');
+    };
+
+    window.glpiTestarSupabase = async function (silent = false) {
+        const config = publicSupabaseConfig();
+        const checkedAt = new Date().toISOString();
+        try {
+            if (!config.url || !config.projectRef || !config.publicKey) throw new Error('Configuração pública incompleta.');
+            if (!window.supabase?.auth) throw new Error('Cliente Supabase indisponível.');
+            const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+            if (sessionError || !sessionData?.session) throw new Error('Sessão Supabase não autenticada.');
+            const { error } = await supabase.from('profiles').select('id').limit(1);
+            if (error) throw error;
+            state.serviceChecks.supabase = { ok: true, authenticated: true, checkedAt };
+            renderServiceConnections();
+            if (!silent) mostrarAviso('Configuração do Supabase validada.', 'sucesso');
+            return true;
+        } catch {
+            state.serviceChecks.supabase = { ok: false, authenticated: false, checkedAt };
+            renderServiceConnections();
+            if (!silent) mostrarAviso('Supabase não conectado ou com configuração incompleta.', 'erro');
+            return false;
+        }
+    };
+
+    async function testGlpiConfiguration(silent = false) {
+        const checkedAt = new Date().toISOString();
+        try {
+            if (!window.supabase?.functions) throw new Error('Edge Function indisponível.');
+            const { data, error } = await supabase.functions.invoke('glpi-dashboard', { body: { action: 'configuration-status' } });
+            if (error) throw error;
+            state.serviceChecks.glpi = { ...data, ok: false, checkedAt: data?.checkedAt || checkedAt };
+            if (data?.baseUrl) state.metadata.base_url = data.baseUrl;
+            if (data?.apiUrl) state.metadata.api_url = data.apiUrl;
+            renderConfig();
+            if (!silent) mostrarAviso(data?.configured ? 'Secrets do GLPI configurados; falta testar a API.' : 'Configuração GLPI incompleta.', data?.configured ? 'aviso' : 'erro');
+            return Boolean(data?.configured);
+        } catch {
+            state.serviceChecks.glpi = { ...(state.serviceChecks.glpi || {}), ok: false, failed: true, checkedAt };
+            renderServiceConnections();
+            if (!silent) mostrarAviso('Não foi possível consultar a configuração GLPI no back-end.', 'erro');
+            return false;
+        }
+    }
+
+    window.glpiTestarConfiguracaoServicos = async function (silent = false) {
+        if (state.serviceChecking) return false;
+        state.serviceChecking = true;
+        try {
+            const [supabaseOk, glpiConfigured] = await Promise.all([
+                window.glpiTestarSupabase(true),
+                testGlpiConfiguration(true)
+            ]);
+            if (!silent) mostrarAviso(`Verificação concluída: Supabase ${supabaseOk ? 'conectado' : 'incompleto'}; GLPI ${glpiConfigured ? 'configurado, aguardando teste' : 'incompleto'}.`, supabaseOk && glpiConfigured ? 'sucesso' : 'aviso');
+            return supabaseOk && glpiConfigured;
+        } finally {
+            state.serviceChecking = false;
+        }
+    };
+
     window.glpiTestarConexao = async function () {
         try {
             if (!window.supabase?.functions) throw new Error('Edge Function indisponível no ambiente local.');
             const { data, error } = await supabase.functions.invoke('glpi-dashboard', { body: { action: 'test-connection' } });
             if (error) throw error;
+            state.serviceChecks.glpi = { ...data, ok: true, checkedAt: new Date().toISOString() };
+            if (data?.baseUrl) state.metadata.base_url = data.baseUrl;
+            if (data?.apiUrl) state.metadata.api_url = data.apiUrl;
+            if (data?.glpiVersion) state.metadata.glpi_version = data.glpiVersion;
+            state.metadata.api_enabled = data?.apiRest === 'online' ? 'Ativa e acessível' : state.metadata.api_enabled;
+            renderConfig();
             mostrarAviso(`Conexão somente leitura validada em ${data?.elapsedMs ?? 'tempo não informado'} ms. Amostra de chamados: ${data?.tickets ?? 'Não disponível'}. Usuários, grupos e categorias: ${data?.access?.users && data?.access?.groups && data?.access?.categories ? 'acessíveis' : 'verificação incompleta'}.`, 'sucesso');
         } catch (error) {
-            console.error('Teste GLPI falhou:', error);
+            state.serviceChecks.glpi = { ...(state.serviceChecks.glpi || {}), ok: false, failed: true, checkedAt: new Date().toISOString() };
+            renderServiceConnections();
+            console.warn('Teste GLPI falhou; detalhes sensíveis não foram registrados.', error?.name || 'Erro');
             mostrarAviso('Não foi possível validar a conexão. Verifique URL, tokens, API habilitada, permissões, rede e logs.', 'erro');
         }
     };

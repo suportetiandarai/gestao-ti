@@ -34,3 +34,14 @@ test('atualização é manual/automática, exclusiva e preserva o último estado
 test('módulo de regras é carregado antes do dashboard', () => {
   assert.ok(html.indexOf('glpi-dashboard-core.js') < html.indexOf('glpi-dashboard.js'));
 });
+
+test('administração oferece conexão segura com Supabase e GLPI', () => {
+  assert.match(html, /Conectar serviços/);
+  assert.equal((html.match(/class="glpi-service-card"/g) || []).length, 2);
+  assert.match(html, /Abrir Supabase/);
+  assert.match(html, /Ver instruções de autenticação/);
+  assert.match(html, /Abrir GLPI/);
+  assert.match(html, /Abrir configuração da API/);
+  assert.match(source, /https:\/\/supabase\.com\/dashboard\/account\/tokens/);
+  assert.doesNotMatch(html, /GLPI_(?:APP|USER)_TOKEN\s*=\s*[^<\s]+/);
+});

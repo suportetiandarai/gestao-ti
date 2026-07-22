@@ -100,3 +100,20 @@ test('Tela cheia pode ser acionada no desktop', async ({ page }) => {
     await page.evaluate(() => document.exitFullscreen());
   }
 });
+
+test('Conectar serviços é responsivo e não exibe credenciais', async ({ page }) => {
+  for (const viewport of [{ width: 1366, height: 768 }, { width: 390, height: 844 }]) {
+    await prepareAuthenticatedDashboard(page, viewport);
+    await page.evaluate(() => window.glpiAbrirSubaba('configuracoes'));
+    await expect(page.getByText('Conectar serviços', { exact: true })).toBeVisible();
+    await expect(page.locator('.glpi-service-card')).toHaveCount(2);
+    await expect(page.getByRole('button', { name: 'Abrir Supabase' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Abrir GLPI' })).toBeVisible();
+    const serviceView = await page.locator('.glpi-connect-services').evaluate((element) => ({
+      overflow: element.scrollWidth > element.clientWidth,
+      text: element.textContent,
+    }));
+    expect(serviceView.overflow).toBe(false);
+    expect(serviceView.text).not.toMatch(/eyJ[A-Za-z0-9_-]{20,}|GLPI_(?:APP|USER)_TOKEN\s*=\s*\S+/);
+  }
+});

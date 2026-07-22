@@ -332,6 +332,41 @@
                     </div>
 
                     <div id="glpi-view-configuracoes" class="glpi-view hidden">
+                        <section class="glpi-panel glpi-connect-services" aria-labelledby="glpi-connect-services-title">
+                            <div class="glpi-connect-services-head">
+                                <div>
+                                    <h4 id="glpi-connect-services-title">Conectar serviços</h4>
+                                    <p class="glpi-muted">Verifique a configuração sem expor tokens, senhas ou chaves no navegador.</p>
+                                </div>
+                                <button type="button" class="btn-secondary btn-sm" onclick="glpiTestarConfiguracaoServicos()">Testar configurações</button>
+                            </div>
+                            <div class="glpi-service-grid">
+                                <article class="glpi-service-card" data-service="supabase">
+                                    <div class="glpi-service-title">
+                                        <h5>Supabase</h5>
+                                        <span id="glpi-supabase-service-status" class="glpi-status-badge warning">Configuração incompleta</span>
+                                    </div>
+                                    <dl id="glpi-supabase-service-details" class="glpi-definition-list"></dl>
+                                    <div class="glpi-button-row mt-10">
+                                        <button type="button" class="btn-primary btn-sm" onclick="glpiAbrirSupabase()">Abrir Supabase</button>
+                                        <button type="button" class="btn-secondary btn-sm" onclick="glpiAbrirInstrucoesSupabase()">Ver instruções de autenticação</button>
+                                        <button type="button" class="btn-secondary btn-sm" onclick="glpiTestarSupabase()">Testar configuração</button>
+                                    </div>
+                                </article>
+                                <article class="glpi-service-card" data-service="glpi">
+                                    <div class="glpi-service-title">
+                                        <h5>GLPI</h5>
+                                        <span id="glpi-glpi-service-status" class="glpi-status-badge warning">Configuração incompleta</span>
+                                    </div>
+                                    <dl id="glpi-glpi-service-details" class="glpi-definition-list"></dl>
+                                    <div class="glpi-button-row mt-10">
+                                        <button type="button" class="btn-primary btn-sm" onclick="glpiAbrirGlpi()">Abrir GLPI</button>
+                                        <button type="button" class="btn-secondary btn-sm" onclick="glpiAbrirConfiguracaoApiGlpi()">Abrir configuração da API</button>
+                                        <button type="button" class="btn-secondary btn-sm" onclick="glpiTestarConexao()">Testar conexão</button>
+                                    </div>
+                                </article>
+                            </div>
+                        </section>
                         <div class="glpi-grid two">
                             <div class="glpi-panel">
                                 <h4>Integração</h4>

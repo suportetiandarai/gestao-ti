@@ -342,7 +342,26 @@ Deno.serve(async (request) => {
 
     const body = await request.json().catch(() => ({})) as JsonRecord;
     action = String(body.action || '');
-    if (!['sync-incremental', 'test-connection'].includes(action)) return json({ error: 'Ação inválida.' }, 400);
+    if (!['configuration-status', 'sync-incremental', 'test-connection'].includes(action)) return json({ error: 'Ação inválida.' }, 400);
+
+    if (action === 'configuration-status') {
+      const baseUrl = env('GLPI_BASE_URL').replace(/\/+$/, '');
+      const apiUrl = (env('GLPI_API_URL') || (baseUrl ? `${baseUrl}/apirest.php` : '')).replace(/\/+$/, '');
+      return json({
+        ok: true,
+        configured: Boolean(baseUrl && env('GLPI_APP_TOKEN') && (env('GLPI_USER_TOKEN') || (env('GLPI_LOGIN') && env('GLPI_PASSWORD')))),
+        baseUrl: baseUrl || null,
+        apiUrl: apiUrl || null,
+        apiRest: 'not-tested',
+        credentials: {
+          appToken: Boolean(env('GLPI_APP_TOKEN')),
+          userToken: Boolean(env('GLPI_USER_TOKEN')),
+          loginFallback: Boolean(env('GLPI_LOGIN') && env('GLPI_PASSWORD')),
+        },
+        timezone: env('GLPI_TIMEZONE') || 'America/Sao_Paulo',
+        checkedAt: new Date().toISOString(),
+      });
+    }
 
     if (action === 'sync-incremental') {
       const { data: acquired, error: lockError } = await admin.rpc('acquire_glpi_sync_lock', {
@@ -374,6 +393,10 @@ Deno.serve(async (request) => {
       return json({
         ok: true,
         glpiVersion: glpi.glpiVersion,
+        baseUrl: env('GLPI_BASE_URL').replace(/\/+$/, '') || null,
+        apiUrl: (env('GLPI_API_URL') || `${env('GLPI_BASE_URL').replace(/\/+$/, '')}/apirest.php`).replace(/\/+$/, '') || null,
+        apiRest: 'online',
+        credentials: { appToken: Boolean(env('GLPI_APP_TOKEN')), userToken: Boolean(env('GLPI_USER_TOKEN')) },
         tickets: sample.length,
         technicians: usersCount,
         access: { tickets: true, users: usersCount >= 0, groups: groupsCount >= 0, categories: categoriesCount >= 0 },

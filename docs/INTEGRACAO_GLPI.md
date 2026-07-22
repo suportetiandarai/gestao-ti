@@ -12,13 +12,39 @@ Navegador -> Supabase Edge Function -> GLPI REST
 
 Tokens GLPI e `SUPABASE_SERVICE_ROLE_KEY` são secrets exclusivos da Edge Function. O navegador recebe somente a URL Supabase e chave pública.
 
+## Links de autenticação e configuração
+
+### Supabase
+
+- Painel principal: <https://supabase.com/dashboard>
+- Tokens pessoais: <https://supabase.com/dashboard/account/tokens>
+- Guia oficial do CLI: <https://supabase.com/docs/guides/local-development/cli/getting-started>
+- Referência do CLI: <https://supabase.com/docs/reference/cli/introduction>
+
+Use `npx supabase login`. Se o ambiente não oferecer um terminal interativo, abra a página de tokens, crie um PAT com nome identificável como `gestao-ti-cli` e informe-o somente no prompt seguro do CLI. Nunca cole o PAT em chat, arquivo versionado ou linha de comando com `--token`.
+
+### GLPI
+
+O GLPI 10.0.18 não depende de um fluxo OAuth externo. Todos os endereços abaixo devem partir do `GLPI_BASE_URL` real, sem presumir host ou rota administrativa:
+
+```text
+Página de login: <GLPI_BASE_URL>
+API REST: <GLPI_BASE_URL>/apirest.php
+Documentação local candidata: <GLPI_BASE_URL>/apirest.php/
+```
+
+Teste os dois formatos da API na instalação antes de publicar um link. Se a documentação local com barra final não responder, mantenha apenas o endpoint confirmado. Documentação oficial: <https://help.glpi-project.org/documentation/modules/configuration/general/api/api>.
+
 ## Preparação do GLPI
 
-1. Confirme a versão real na interface administrativa ou resposta suportada da API.
-2. Habilite `/apirest.php` e crie um cliente de API.
-3. Crie um usuário exclusivo, sem permissão de alteração/exclusão.
-4. Autorize leitura de tickets, usuários, grupos, categorias, entidades, localizações, SLA/OLA e relações necessárias.
-5. Gere `App-Token` e `User-Token`.
+1. Entre com uma conta administradora e acesse `Configurar → Geral → API` ou `Setup → General → API`.
+2. Ative a API REST, confirme a URL normalmente terminada em `/apirest.php` e salve.
+3. Na mesma área, crie e ative o cliente `Dashboard Gestão TI`; limite IPs quando aplicável e gere o `App-Token`.
+4. Crie ou use o usuário exclusivo `integracao.dashboard`.
+5. Conceda somente leitura de chamados, usuários/técnicos, grupos, entidades, categorias, SLA/OLA, acompanhamentos necessários, datas e status.
+6. Não conceda criação, alteração, exclusão ou fechamento de chamados, gestão de usuários ou configurações.
+7. No perfil/preferências do usuário de integração, gere o `Token da API`/`API token`.
+8. Confirme a versão real na interface administrativa ou resposta suportada da API.
 
 Endpoints usados:
 
@@ -39,6 +65,7 @@ Obrigatórios:
 GLPI_BASE_URL=
 GLPI_APP_TOKEN=
 GLPI_USER_TOKEN=
+GLPI_TIMEZONE=America/Sao_Paulo
 GLPI_TIMEZONE_OFFSET=-03:00
 ```
 
@@ -59,6 +86,21 @@ GLPI_SYNC_LOCK_SECONDS=120
 ```
 
 `GLPI_LOGIN`/`GLPI_PASSWORD` são alternativa ao User-Token e não devem ser usados simultaneamente sem necessidade. O certificado TLS do GLPI deve ser válido; a função não oferece opção para ignorar SSL.
+
+Prefira o arquivo local ignorado pelo Git:
+
+```text
+supabase/.env.secrets.local
+```
+
+Preencha-o localmente, sem compartilhar seu conteúdo, e envie os secrets de uma vez:
+
+```bash
+npx supabase secrets set --env-file supabase/.env.secrets.local
+npx supabase secrets list
+```
+
+`secrets list` deve ser usado apenas para confirmar nomes/digests; não registre valores. O arquivo está no `.gitignore` e não pode ser adicionado ao commit.
 
 ## Vincular e validar o Supabase
 
@@ -105,9 +147,7 @@ where id = 1;
 ## Deploy da Edge Function
 
 ```bash
-npx supabase secrets set GLPI_BASE_URL="..." GLPI_API_URL="..."
-npx supabase secrets set GLPI_APP_TOKEN="..." GLPI_USER_TOKEN="..."
-npx supabase secrets set GLPI_TIMEZONE_OFFSET="-03:00"
+npx supabase secrets set --env-file supabase/.env.secrets.local
 npx supabase functions deploy glpi-dashboard
 ```
 
@@ -117,6 +157,12 @@ Corpo para diagnóstico somente leitura:
 
 ```json
 { "action": "test-connection" }
+```
+
+Para verificar somente presença dos secrets e URLs públicas/sanitizadas, sem iniciar uma sessão GLPI:
+
+```json
+{ "action": "configuration-status" }
 ```
 
 A resposta segura contém disponibilidade, amostra de tickets, campos/status observados, versão quando fornecida pelo GLPI e tempo de execução. Tokens e detalhes técnicos não são retornados.
