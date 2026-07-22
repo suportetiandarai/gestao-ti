@@ -78,6 +78,15 @@ function label(value: unknown) {
   return String(value);
 }
 
+function comparable(value: unknown) {
+  return String(value || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
 function numberOrNull(value: unknown) {
   const number = Number(value);
   return Number.isFinite(number) ? number : null;
@@ -128,6 +137,7 @@ class GlpiClient {
   private baseUrl: string;
   private appToken: string;
   private sessionToken = '';
+  private userCache = new Map<number, string>();
   glpiVersion: string | null = null;
 
   constructor() {
@@ -265,6 +275,71 @@ class GlpiClient {
     const result = await this.request(`Ticket?${params.toString()}`, { method: 'GET' });
     return Array.isArray(result) ? result as JsonRecord[] : [];
   }
+
+  private async technicianName(userId: number) {
+    const cached = this.userCache.get(userId);
+    if (cached) return cached;
+    const user = await this.request(`User/${userId}`, { method: 'GET' }) as JsonRecord;
+    const fullName = [label(user.realname), label(user.firstname)].filter(Boolean).join(' ').trim();
+    const name = fullName || label(user.name) || `Técnico ${userId}`;
+    this.userCache.set(userId, name);
+    return name;
+  }
+
+  async enrichTicketAssignments(ticket: JsonRecord) {
+    const ticketId = numberOrNull(ticket.id);
+    if (!ticketId) return ticket;
+
+    const [relationsResult, logsResult] = await Promise.all([
+      this.request(`Ticket/${ticketId}/Ticket_User`, { method: 'GET' }),
+      this.request(`Ticket/${ticketId}/Log?range=0-99`, { method: 'GET' }),
+    ]);
+    const relations = Array.isArray(relationsResult) ? relationsResult as JsonRecord[] : [];
+    const logs = Array.isArray(logsResult) ? logsResult as JsonRecord[] : [];
+    const technicianRelations = relations.filter((relation) => Number(relation.type) === 2 && numberOrNull(relation.users_id));
+    const assignmentEvents = logs
+      .filter((entry) => Number(entry.id_search_option) === 5 && normalizeDate(entry.date_mod))
+      .sort((left, right) => String(right.date_mod).localeCompare(String(left.date_mod)));
+
+    const technicians = await Promise.all(technicianRelations.map(async (relation) => {
+      const id = Number(relation.users_id);
+      const name = await this.technicianName(id);
+      const match = assignmentEvents.find((entry) => {
+        const changedTo = comparable(entry.new_value);
+        return changedTo.includes(comparable(name)) || changedTo.includes(String(id));
+      });
+      const fallback = technicianRelations.length === 1 ? assignmentEvents[0] : null;
+      return {
+        id,
+        name,
+        assigned_at: normalizeDate(match?.date_mod || fallback?.date_mod || ticket.date_assign),
+        source: ticket.date_assign ? 'ticket_date_assign' : 'history',
+      };
+    }));
+
+    return {
+      ...ticket,
+      date_assign: normalizeDate(ticket.date_assign) || technicians.find((technician) => technician.assigned_at)?.assigned_at || null,
+      technician_id: technicians[0]?.id || null,
+      technician_name: technicians[0]?.name || null,
+      _dashboard_technicians: technicians,
+    };
+  }
+
+  async enrichTickets(tickets: JsonRecord[]) {
+    const concurrency = boundedNumber('GLPI_ENRICH_CONCURRENCY', 6, 1, 12);
+    const enriched = new Array<JsonRecord>(tickets.length);
+    let nextIndex = 0;
+    const workers = Array.from({ length: Math.min(concurrency, tickets.length) }, async () => {
+      while (nextIndex < tickets.length) {
+        const index = nextIndex;
+        nextIndex += 1;
+        enriched[index] = await this.enrichTicketAssignments(tickets[index]);
+      }
+    });
+    await Promise.all(workers);
+    return enriched;
+  }
 }
 
 function mapTicket(ticket: JsonRecord) {
@@ -275,8 +350,8 @@ function mapTicket(ticket: JsonRecord) {
     title: label(ticket.name),
     status_id: numberOrNull(ticket.status),
     status: statusName(ticket.status),
-    technician_id: numberOrNull(ticket.users_id_assign || ticket.technician_id),
-    technician_name: label(ticket.users_id_assign || ticket.technician_name || ticket._users_id_assign),
+    technician_id: numberOrNull(ticket.technician_id || ticket.users_id_assign),
+    technician_name: label(ticket.technician_name || ticket.users_id_assign || ticket._users_id_assign),
     group_id: numberOrNull(ticket.groups_id_assign || ticket.group_id),
     group_name: label(ticket.groups_id_assign || ticket.group_name || ticket._groups_id_assign),
     requester_id: numberOrNull(ticket.users_id_recipient),
@@ -313,6 +388,25 @@ function mapTicket(ticket: JsonRecord) {
     source_environment: 'real',
     synced_at: new Date().toISOString(),
   };
+}
+
+function mapTicketAssignments(ticket: JsonRecord) {
+  const ticketId = numberOrNull(ticket.id);
+  const technicians = Array.isArray(ticket._dashboard_technicians)
+    ? ticket._dashboard_technicians as JsonRecord[]
+    : [];
+  return technicians.flatMap((technician) => {
+    const technicianId = numberOrNull(technician.id);
+    if (!ticketId || !technicianId) return [];
+    return [{
+      ticket_glpi_id: ticketId,
+      technician_id: technicianId,
+      technician_name: label(technician.name),
+      assigned_at: normalizeDate(technician.assigned_at),
+      assignment_source: label(technician.source) || 'history',
+      synced_at: new Date().toISOString(),
+    }];
+  });
 }
 
 Deno.serve(async (request) => {
@@ -375,15 +469,16 @@ Deno.serve(async (request) => {
     glpi = new GlpiClient();
     await glpi.initSession();
     if (action === 'test-connection') {
-      const [sample, usersCount, groupsCount, categoriesCount] = await Promise.all([
+      const [rawSample, usersCount, groupsCount, categoriesCount] = await Promise.all([
         glpi.sampleTickets(),
         glpi.countItems('User'),
         glpi.countItems('Group'),
         glpi.countItems('ITILCategory'),
       ]);
+      const sample = await glpi.enrichTickets(rawSample);
       const fields = Object.fromEntries(REQUIRED_TICKET_FIELDS.map((field) => [
         field,
-        sample.some((ticket) => Object.hasOwn(ticket, field)),
+        rawSample.some((ticket) => Object.hasOwn(ticket, field)),
       ]));
       const statuses = [...new Map(sample.map((ticket) => [
         Number(ticket.status),
@@ -402,17 +497,39 @@ Deno.serve(async (request) => {
         access: { tickets: true, users: usersCount >= 0, groups: groupsCount >= 0, categories: categoriesCount >= 0 },
         fields,
         statuses,
+        assignmentFallback: {
+          required: !fields.date_assign,
+          currentTechnicianSource: 'Ticket_User.type=2',
+          assignedAtSource: fields.date_assign ? 'Ticket.date_assign' : 'Log.date_mod where id_search_option=5',
+          techniciansFound: sample.reduce((total, ticket) => total + (Array.isArray(ticket._dashboard_technicians) ? ticket._dashboard_technicians.length : 0), 0),
+        },
         elapsedMs: Date.now() - startedAt,
       });
     }
 
     const { data: syncState } = await admin.from('glpi_sync_state').select('last_cursor').eq('id', 1).maybeSingle();
     const previousCursor = syncState?.last_cursor ? String(syncState.last_cursor) : null;
-    const tickets = await glpi.getTickets(previousCursor);
+    const rawTickets = await glpi.getTickets(previousCursor);
+    const tickets = await glpi.enrichTickets(rawTickets);
     const mapped = tickets.map(mapTicket).filter((ticket) => ticket.glpi_id);
     if (mapped.length) {
       const { error } = await admin.from('glpi_tickets_dashboard').upsert(mapped, { onConflict: 'glpi_id' });
       if (error) throw error;
+    }
+    const ticketIds = mapped.map((ticket) => ticket.glpi_id);
+    if (ticketIds.length) {
+      const assignments = tickets.flatMap(mapTicketAssignments);
+      const { error: deleteAssignmentsError } = await admin
+        .from('glpi_ticket_assignments_dashboard')
+        .delete()
+        .in('ticket_glpi_id', ticketIds);
+      if (deleteAssignmentsError) throw deleteAssignmentsError;
+      if (assignments.length) {
+        const { error: assignmentError } = await admin
+          .from('glpi_ticket_assignments_dashboard')
+          .upsert(assignments, { onConflict: 'ticket_glpi_id,technician_id' });
+        if (assignmentError) throw assignmentError;
+      }
     }
     const cursor = mapped.reduce<string | null>((latest, ticket) => {
       if (!ticket.modified_at) return latest;

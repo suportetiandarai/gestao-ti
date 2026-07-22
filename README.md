@@ -66,8 +66,10 @@ Navegador (30 s)
     -> lock glpi_sync_state
     -> GLPI REST somente leitura
     -> busca incremental ordenada por date_mod
+    -> enriquece técnico atual via Ticket_User e atribuição via Log
     -> paginação + retry controlado + timeout
     -> upsert glpi_tickets_dashboard
+    -> upsert glpi_ticket_assignments_dashboard (par chamado/técnico)
     -> cursor/saúde/log em PostgreSQL
   -> navegador lê o cache com RLS
 ```
@@ -87,6 +89,11 @@ npx supabase db push
 ```
 
 Antes do `db push`, confirme que o `project-ref` corresponde ao `SUPABASE_URL` autorizado. As migrações do dashboard são aditivas, não desativam RLS e não apagam chamados.
+
+Quando a rede não permitir a conexão PostgreSQL do CLI, execute
+`node scripts/prepare-glpi-sql.mjs` e siga o procedimento controlado pelo SQL
+Editor descrito em `docs/INTEGRACAO_GLPI.md`. Esse caminho exige reconciliar o
+histórico de migrações antes do próximo `db push`.
 
 Publique a função:
 

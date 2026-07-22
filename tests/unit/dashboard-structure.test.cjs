@@ -6,6 +6,8 @@ const { join } = require('node:path');
 const root = join(__dirname, '..', '..');
 const html = readFileSync(join(root, 'index.html'), 'utf8');
 const source = readFileSync(join(root, 'glpi-dashboard.js'), 'utf8');
+const edgeSource = readFileSync(join(root, 'supabase', 'functions', 'glpi-dashboard', 'index.ts'), 'utf8');
+const assignmentsMigration = readFileSync(join(root, 'supabase', 'migrations', '20260722110000_glpi_ticket_assignments.sql'), 'utf8');
 const dailyView = html.match(/<div id="glpi-view-diario"[\s\S]*?<div id="glpi-view-geral"/)?.[0] || '';
 const dailyRenderer = source.match(/function renderDailyDashboard\(\)[\s\S]*?function renderBarChart/)?.[0] || '';
 
@@ -44,4 +46,13 @@ test('administração oferece conexão segura com Supabase e GLPI', () => {
   assert.match(html, /Abrir configuração da API/);
   assert.match(source, /https:\/\/supabase\.com\/dashboard\/account\/tokens/);
   assert.doesNotMatch(html, /GLPI_(?:APP|USER)_TOKEN\s*=\s*[^<\s]+/);
+});
+
+test('atribuição real usa relações e histórico quando date_assign não é exposto', () => {
+  assert.match(edgeSource, /Ticket\/\$\{ticketId\}\/Ticket_User/);
+  assert.match(edgeSource, /Ticket\/\$\{ticketId\}\/Log\?range=0-99/);
+  assert.match(edgeSource, /Number\(entry\.id_search_option\) === 5/);
+  assert.match(edgeSource, /Number\(relation\.type\) === 2/);
+  assert.match(assignmentsMigration, /primary key \(ticket_glpi_id, technician_id\)/i);
+  assert.match(source, /glpi_ticket_assignments_dashboard/);
 });

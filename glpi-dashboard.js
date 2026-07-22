@@ -18,6 +18,7 @@
         initialized: false,
         demo: false,
         tickets: [],
+        dailyAssignments: [],
         filtered: [],
         syncLogs: [],
         metadata: {},
@@ -239,6 +240,15 @@
         };
     }
 
+    function normalizeAssignment(row) {
+        return {
+            id: row.ticket_glpi_id,
+            technician: row.technician_name || 'Não disponível',
+            technicianId: row.technician_id || null,
+            assignedAt: row.assigned_at || null
+        };
+    }
+
     function calculateSlaStatus(row) {
         const due = parseDate(row.sla_due_at || row.time_to_resolve);
         if (!due) return 'unavailable';
@@ -318,6 +328,7 @@
         if (!window.supabase || state.localConfig.demoEnabled) {
             state.demo = true;
             state.tickets = demoTickets();
+            state.dailyAssignments = state.tickets;
             state.syncLogs = [{ level: 'aviso', message: 'Supabase não configurado. Modo demonstração local ativado.', created_at: new Date().toISOString() }];
             return;
         }
@@ -332,6 +343,16 @@
                 .order('modified_at', { ascending: false })
                 .limit(2000);
             if (error) throw error;
+
+            const { start: todayStart, end: todayEnd } = CORE.todayRange();
+            const { data: assignmentRows, error: assignmentError } = await supabase
+                .from('glpi_ticket_assignments_dashboard')
+                .select('ticket_glpi_id, technician_id, technician_name, assigned_at')
+                .gte('assigned_at', todayStart.toISOString())
+                .lte('assigned_at', todayEnd.toISOString())
+                .limit(5000);
+            if (!assignmentError) state.dailyAssignments = (assignmentRows || []).map(normalizeAssignment);
+            else console.warn('Atribuições detalhadas ainda não estão disponíveis; usando dados do chamado.');
 
             const { data: logs } = await supabase
                 .from('glpi_sync_logs')
@@ -350,6 +371,7 @@
             if ((!data || data.length === 0) && !state.tickets.length) {
                 state.demo = true;
                 state.tickets = demoTickets();
+                state.dailyAssignments = state.tickets;
                 state.syncLogs.unshift({ level: 'aviso', message: 'Nenhum chamado real sincronizado. Modo demonstração ativado sem gravar dados fictícios.', created_at: new Date().toISOString() });
             } else if (data?.length) {
                 state.demo = false;
@@ -361,6 +383,7 @@
             if (!state.tickets.length) {
                 state.demo = true;
                 state.tickets = demoTickets();
+                state.dailyAssignments = state.tickets;
                 state.syncLogs[0].message = 'Não foi possível ler as tabelas GLPI. Modo demonstração ativado.';
             }
         }
@@ -536,7 +559,7 @@
             </article>
         `).join('');
 
-        const techRows = CORE.technicianAssignmentsToday(state.tickets);
+        const techRows = CORE.technicianAssignmentsToday(state.dailyAssignments.length ? state.dailyAssignments : state.tickets);
 
         renderBarChart('glpi-daily-technicians', techRows.map(tech => ({
             label: technicianDisplayName(tech.label),

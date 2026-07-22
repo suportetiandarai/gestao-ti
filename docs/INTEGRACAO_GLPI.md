@@ -117,6 +117,7 @@ As migrações novas são:
 
 - `20260722090000_glpi_daily_dashboard_deadlines.sql`: adiciona prazos externos/internos de atendimento e solução.
 - `20260722100000_glpi_sync_state.sql`: adiciona cursor, saúde e lock atômico.
+- `20260722110000_glpi_ticket_assignments.sql`: registra uma única atribuição diária por par chamado/técnico, obtida de `date_assign` ou do histórico do GLPI.
 
 Elas são aditivas, preservam dados, mantêm RLS e não recriam `glpi_tickets_dashboard`. Os prazos não receberam índices porque o dashboard atual calcula os cinco indicadores após carregar seu cache limitado; não há consulta SQL filtrando essas colunas. Crie índices somente quando esse padrão mudar.
 
@@ -126,6 +127,18 @@ Aplicação:
 npx supabase db push
 npx supabase migration list --linked
 ```
+
+Se a rede bloquear a conexão PostgreSQL usada pelo CLI, gere os arquivos para o
+SQL Editor oficial com `node scripts/prepare-glpi-sql.mjs`. Execute primeiro
+`supabase/.temp/glpi-dry-run.sql`; o resultado esperado é
+`dry_run_rolled_back = true`, com as duas verificações seguintes iguais a
+`true`. Somente depois execute `supabase/.temp/glpi-apply.sql` e valide tabelas,
+colunas e RLS. Os arquivos gerados ficam em diretório ignorado pelo Git.
+
+Aplicar pelo SQL Editor não grava a versão em
+`supabase_migrations.schema_migrations`. Quando a conectividade PostgreSQL do
+CLI estiver disponível, reconcilie o histórico antes de um novo `db push`; não
+reaplique migrações sem comparar o schema remoto.
 
 Validação SQL após aplicar:
 
@@ -184,15 +197,25 @@ status
 
 `test-connection` informa quais chaves aparecem na amostra. Ausência na amostra não prova inexistência global; confirme também o schema/documentação da instância.
 
+### Resultado validado em `os.riosaude.rio.br`
+
+- `initSession`, perfil ativo, perfis, entidades, chamados, usuários, grupos, categorias, SLA, OLA e `killSession`: acessíveis em modo somente leitura.
+- Presentes no payload de Ticket: `date`, `date_mod`, `takeintoaccount_delay_stat`, `time_to_own`, `time_to_resolve`, `internal_time_to_own`, `internal_time_to_resolve`, `users_id_lastupdater` e `status`.
+- Ausente no payload de lista e item individual: `date_assign`.
+- Alternativa confirmada: técnico atual em `Ticket_User.type=2`; data do evento em `Log.date_mod` com `id_search_option=5`, identificado pela própria instalação como “Técnico”.
+- Os códigos `2 Atribuído` e `5 Solucionado` foram observados na amostra. Os demais códigos permanecem no mapeamento central do GLPI 10, mas não foram artificialmente gerados para teste.
+- A API não retornou a versão em `initSession`/`getGlpiConfig`; `10.0.18` continua sendo a versão informada pela administração, não inferida da resposta.
+
 ## Sincronização incremental
 
 1. A Edge Function adquire `acquire_glpi_sync_lock`.
 2. Lê `glpi_sync_state.last_cursor`.
 3. Consulta páginas ordenadas por `date_mod DESC`.
 4. Para ao atingir registros anteriores ao cursor.
-5. Normaliza e faz `upsert` por `glpi_id`.
-6. Atualiza cursor, saúde e log.
-7. Encerra a sessão GLPI em `finally`.
+5. Enriquece o técnico atual por `Ticket_User` e a atribuição pelo histórico quando `date_assign` está ausente.
+6. Faz `upsert` por `glpi_id` e pelo par chamado/técnico.
+7. Atualiza cursor, saúde e log.
+8. Encerra a sessão GLPI em `finally`.
 
 Erros 429/5xx, falhas de rede e timeout recebem até três tentativas por padrão. Erros definitivos preservam o cache anterior e marcam a integração como `offline`. O front-end considera a sincronização atrasada após 90 segundos sem sucesso.
 
