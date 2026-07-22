@@ -158,8 +158,8 @@
                             <span id="glpi-current-time" class="glpi-last-update">Hora atual: Não disponível</span>
                             <span id="glpi-next-refresh" class="glpi-last-update">Próxima atualização: Não disponível</span>
                             <button type="button" class="btn-primary btn-sm" onclick="glpiAtualizarAgora()">Atualizar agora</button>
-                            <button type="button" class="btn-secondary btn-sm" onclick="glpiAlternarPainel()">Modo Painel</button>
-                            <button type="button" class="btn-secondary btn-sm" onclick="glpiTelaCheia()">Tela cheia</button>
+                            <button type="button" class="btn-secondary btn-sm glpi-daily-extra-action" onclick="glpiAlternarPainel()">Modo Painel</button>
+                            <button type="button" class="btn-secondary btn-sm glpi-daily-extra-action" onclick="glpiTelaCheia()">Tela cheia</button>
                             <button type="button" class="glpi-filter-button" onclick="glpiAbrirFiltros()">☷ Filtros <span id="glpi-active-filter-count">0</span></button>
                         </div>
                     </div>
@@ -232,12 +232,10 @@
                     </aside>
 
                     <div id="glpi-view-diario" class="glpi-view">
-                        <div id="glpi-daily-kpis" class="glpi-kpi-grid"></div>
-                        <div class="glpi-grid two">
-                            <div class="glpi-panel"><h4>Ranking diário dos técnicos</h4><div id="glpi-daily-ranking"></div></div>
-                            <div class="glpi-panel"><h4>Chamados por técnico hoje</h4><div id="glpi-daily-technicians" class="glpi-chart"></div></div>
-                            <div class="glpi-panel"><h4>Últimos chamados registrados</h4><div id="glpi-daily-recent" class="glpi-log-list"></div></div>
-                            <div class="glpi-panel"><h4>Chamados antigos ainda abertos</h4><div id="glpi-daily-oldest" class="glpi-log-list"></div></div>
+                        <div id="glpi-daily-kpis" class="glpi-kpi-grid glpi-daily-kpi-grid"></div>
+                        <div class="glpi-daily-content">
+                            <section class="glpi-panel"><h4>Chamados por técnico hoje</h4><div id="glpi-daily-technicians" class="glpi-chart"></div></section>
+                            <section class="glpi-panel"><h4>Últimos chamados registrados</h4><div id="glpi-daily-recent" class="glpi-daily-tickets"></div></section>
                         </div>
                     </div>
 
@@ -372,6 +370,14 @@
                                         <option value="true">Ativado</option>
                                     </select>
                                 </label>
+                                <label>Chamados recentes no Dashboard Diário
+                                    <select id="glpi-daily-recent-limit" onchange="glpiSalvarConfiguracaoLocal()">
+                                        <option value="5">5 chamados</option>
+                                        <option value="10" selected>10 chamados</option>
+                                        <option value="15">15 chamados</option>
+                                        <option value="20">20 chamados</option>
+                                    </select>
+                                </label>
                                 <p class="glpi-muted">Tokens, senhas e URL interna do GLPI devem ser configurados como secrets da Edge Function, nunca no código-fonte.</p>
                             </div>
                             <div class="glpi-panel">
@@ -393,8 +399,6 @@
                                 <label><input type="checkbox" id="glpi-public-show-title" onchange="glpiSalvarConfiguracaoPublica()"> Mostrar título dos chamados</label>
                                 <label><input type="checkbox" id="glpi-public-show-category" checked onchange="glpiSalvarConfiguracaoPublica()"> Mostrar categorias</label>
                                 <label><input type="checkbox" id="glpi-public-show-unit" checked onchange="glpiSalvarConfiguracaoPublica()"> Mostrar unidades</label>
-                                <label><input type="checkbox" id="glpi-public-show-ranking" checked onchange="glpiSalvarConfiguracaoPublica()"> Mostrar ranking</label>
-                                <label><input type="checkbox" id="glpi-public-show-recent" checked onchange="glpiSalvarConfiguracaoPublica()"> Mostrar chamados recentes</label>
                                 <div class="glpi-button-row mt-10">
                                     <button type="button" class="btn-primary btn-sm" onclick="glpiCopiarLinkPublico()">Copiar link público</button>
                                     <button type="button" class="btn-secondary btn-sm" onclick="glpiAbrirPainelPublico()">Abrir painel público</button>
@@ -1994,6 +1998,7 @@
     <script src="auth.js"></script>
     <script src="signature.js"></script>
     <script src="app.js"></script>
+    <script src="glpi-dashboard-core.js"></script>
     <script src="glpi-dashboard.js"></script>
     <script src="inventory-scanner.js"></script>
     <script src="inventory-transfer.js"></script>
