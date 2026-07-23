@@ -32,6 +32,7 @@ function normalizarCabecalhoInventario(valor) {
 }
 
 function normalizarTextoInventario(valor, limite = 500) {
+    // eslint-disable-next-line no-control-regex -- remove caracteres de controle de arquivos CSV importados.
     return String(valor ?? '').replace(/[\u0000-\u001F\u007F]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, limite);
 }
 

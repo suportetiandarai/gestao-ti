@@ -1,4 +1,4 @@
-const SUPABASE_URL = 'https://ditygnxttjvlfrdpvaxe.supabase.co';
+const SUPABASE_URL = window.GESTAO_TI_CONFIG?.SUPABASE_URL || 'https://ditygnxttjvlfrdpvaxe.supabase.co';
 const SUPABASE_PUBLIC_KEY = window.GESTAO_TI_CONFIG?.SUPABASE_PUBLIC_KEY || '';
 const PERFIS_VALIDOS = Object.freeze(['admin', 'gestor', 'supervisor', 'tecnico', 'operacional']);
 

@@ -9,6 +9,28 @@ const corsHeaders = {
 
 type JsonRecord = Record<string, unknown>;
 
+const GLPI_STATUS: Readonly<Record<number, string>> = Object.freeze({
+  1: 'Novo',
+  2: 'Atribuído',
+  3: 'Planejado',
+  4: 'Pendente',
+  5: 'Solucionado',
+  6: 'Fechado',
+});
+
+const REQUIRED_TICKET_FIELDS = Object.freeze([
+  'date',
+  'date_mod',
+  'date_assign',
+  'takeintoaccount_delay_stat',
+  'time_to_own',
+  'time_to_resolve',
+  'internal_time_to_own',
+  'internal_time_to_resolve',
+  'users_id_lastupdater',
+  'status',
+]);
+
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
     status,
@@ -20,10 +42,31 @@ function env(name: string) {
   return Deno.env.get(name)?.trim() || '';
 }
 
+function boundedNumber(name: string, fallback: number, minimum: number, maximum: number) {
+  const value = Number(env(name) || fallback);
+  return Number.isFinite(value) ? Math.max(minimum, Math.min(maximum, value)) : fallback;
+}
+
+function safeError(error: unknown) {
+  const message = error instanceof Error ? error.message : String(error);
+  return message
+    .replace(/(user_token|app-token|session-token|authorization|password)\s*[:=]\s*[^\s,;]+/gi, '$1=[REDACTED]')
+    .slice(0, 4000);
+}
+
 function normalizeDate(value: unknown) {
   if (!value || value === 'NULL') return null;
-  const date = new Date(String(value).replace(' ', 'T'));
+  const raw = String(value).trim().replace(' ', 'T');
+  const hasTimezone = /(?:Z|[+-]\d{2}:\d{2})$/i.test(raw);
+  const date = new Date(hasTimezone ? raw : `${raw}${env('GLPI_TIMEZONE_OFFSET') || '-03:00'}`);
   return Number.isNaN(date.getTime()) ? null : date.toISOString();
+}
+
+function datePlusSeconds(value: unknown, seconds: unknown) {
+  const start = normalizeDate(value);
+  const delay = Number(seconds);
+  if (!start || !Number.isFinite(delay) || delay < 0) return null;
+  return new Date(new Date(start).getTime() + delay * 1000).toISOString();
 }
 
 function label(value: unknown) {
@@ -35,21 +78,22 @@ function label(value: unknown) {
   return String(value);
 }
 
+function comparable(value: unknown) {
+  return String(value || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
 function numberOrNull(value: unknown) {
   const number = Number(value);
   return Number.isFinite(number) ? number : null;
 }
 
 function statusName(status: unknown) {
-  const map: Record<number, string> = {
-    1: 'Novo',
-    2: 'Atribuído',
-    3: 'Planejado',
-    4: 'Pendente',
-    5: 'Solucionado',
-    6: 'Fechado',
-  };
-  return map[Number(status)] || label(status) || 'Não disponível';
+  return GLPI_STATUS[Number(status)] || label(status) || 'Não disponível';
 }
 
 function priorityName(value: unknown) {
@@ -84,10 +128,17 @@ async function logSync(client: ReturnType<typeof createClient>, level: string, m
   });
 }
 
+async function updateSyncState(client: ReturnType<typeof createClient>, values: JsonRecord) {
+  const { error } = await client.from('glpi_sync_state').update({ ...values, updated_at: new Date().toISOString() }).eq('id', 1);
+  if (error) console.warn('Falha ao atualizar estado da sincronização:', safeError(error));
+}
+
 class GlpiClient {
   private baseUrl: string;
   private appToken: string;
   private sessionToken = '';
+  private userCache = new Map<number, string>();
+  glpiVersion: string | null = null;
 
   constructor() {
     const apiUrl = env('GLPI_API_URL');
@@ -112,26 +163,43 @@ class GlpiClient {
   }
 
   private async request(path: string, init: RequestInit = {}) {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), Number(env('GLPI_REQUEST_TIMEOUT') || env('GLPI_TIMEOUT_MS') || 15000));
-    try {
-      const response = await fetch(`${this.baseUrl}/${path.replace(/^\/+/, '')}`, {
-        ...init,
-        headers: this.headers(init.headers || {}),
-        signal: controller.signal,
-      });
-      const text = await response.text();
-      let body: unknown = null;
+    const attempts = boundedNumber('GLPI_RETRY_ATTEMPTS', 3, 1, 5);
+    const baseDelay = boundedNumber('GLPI_RETRY_BASE_DELAY_MS', 300, 100, 5000);
+    let lastError: unknown = new Error('Falha desconhecida na API GLPI.');
+
+    for (let attempt = 1; attempt <= attempts; attempt += 1) {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), boundedNumber('GLPI_REQUEST_TIMEOUT', Number(env('GLPI_TIMEOUT_MS') || 15000), 1000, 60000));
       try {
-        body = text ? JSON.parse(text) : null;
-      } catch (_) {
-        body = text;
+        const response = await fetch(`${this.baseUrl}/${path.replace(/^\/+/, '')}`, {
+          ...init,
+          headers: this.headers(init.headers || {}),
+          signal: controller.signal,
+        });
+        const text = await response.text();
+        let body: unknown = null;
+        try {
+          body = text ? JSON.parse(text) : null;
+        } catch {
+          body = text;
+        }
+        const retryable = response.status === 429 || response.status >= 500;
+        if (!response.ok && retryable && attempt < attempts) {
+          lastError = new Error(`GLPI ${response.status}: indisponibilidade temporária.`);
+        } else if (!response.ok) {
+          throw new Error(`GLPI ${response.status}: ${typeof body === 'string' ? body : JSON.stringify(body)}`);
+        } else {
+          return body;
+        }
+      } catch (error) {
+        lastError = error;
+        if (attempt >= attempts) throw error;
+      } finally {
+        clearTimeout(timeout);
       }
-      if (!response.ok) throw new Error(`GLPI ${response.status}: ${typeof body === 'string' ? body : JSON.stringify(body)}`);
-      return body;
-    } finally {
-      clearTimeout(timeout);
+      await new Promise((resolve) => setTimeout(resolve, baseDelay * attempt));
     }
+    throw lastError;
   }
 
   async initSession() {
@@ -145,6 +213,7 @@ class GlpiClient {
 
     const response = await this.request('initSession', { method: 'GET', headers }) as JsonRecord;
     this.sessionToken = String(response.session_token || '');
+    this.glpiVersion = label(response.glpi_version || response.version);
     if (!this.sessionToken) throw new Error('GLPI não retornou session_token.');
   }
 
@@ -153,14 +222,16 @@ class GlpiClient {
     try {
       await this.request('killSession', { method: 'GET' });
     } catch (error) {
-      console.warn('Falha ao encerrar sessão GLPI:', error);
+      console.warn('Falha ao encerrar sessão GLPI:', safeError(error));
+    } finally {
+      this.sessionToken = '';
     }
   }
 
-  async getTickets() {
-    const pageSize = Number(env('GLPI_SYNC_PAGE_SIZE') || 100);
-    const maxPages = Number(env('GLPI_SYNC_MAX_PAGES') || 10);
-    const modifiedAfter = env('GLPI_SYNC_MODIFIED_AFTER');
+  async getTickets(cursor: string | null = null) {
+    const pageSize = boundedNumber('GLPI_SYNC_PAGE_SIZE', 100, 1, 1000);
+    const maxPages = boundedNumber('GLPI_SYNC_MAX_PAGES', 10, 1, 100);
+    const modifiedAfter = env('GLPI_SYNC_MODIFIED_AFTER') || cursor;
     const tickets: JsonRecord[] = [];
 
     for (let page = 0; page < maxPages; page += 1) {
@@ -175,14 +246,16 @@ class GlpiClient {
       const result = await this.request(`Ticket?${params.toString()}`, { method: 'GET' }) as unknown;
       const pageRows = Array.isArray(result) ? result as JsonRecord[] : [];
       if (!pageRows.length) break;
+      let pageHasRecentTicket = false;
       for (const ticket of pageRows) {
         if (modifiedAfter) {
           const modified = normalizeDate(ticket.date_mod);
           if (modified && modified < new Date(modifiedAfter).toISOString()) continue;
         }
+        pageHasRecentTicket = true;
         tickets.push(ticket);
       }
-      if (pageRows.length < pageSize) break;
+      if (pageRows.length < pageSize || (modifiedAfter && !pageHasRecentTicket)) break;
     }
 
     return tickets;
@@ -196,6 +269,77 @@ class GlpiClient {
     const result = await this.request(`${itemType}?${params.toString()}`, { method: 'GET' }) as unknown;
     return Array.isArray(result) ? result.length : 0;
   }
+
+  async sampleTickets() {
+    const params = new URLSearchParams({ range: '0-4', sort: 'date_mod', order: 'DESC', expand_dropdowns: 'false' });
+    const result = await this.request(`Ticket?${params.toString()}`, { method: 'GET' });
+    return Array.isArray(result) ? result as JsonRecord[] : [];
+  }
+
+  private async technicianName(userId: number) {
+    const cached = this.userCache.get(userId);
+    if (cached) return cached;
+    const user = await this.request(`User/${userId}`, { method: 'GET' }) as JsonRecord;
+    const fullName = [label(user.realname), label(user.firstname)].filter(Boolean).join(' ').trim();
+    const name = fullName || label(user.name) || `Técnico ${userId}`;
+    this.userCache.set(userId, name);
+    return name;
+  }
+
+  async enrichTicketAssignments(ticket: JsonRecord) {
+    const ticketId = numberOrNull(ticket.id);
+    if (!ticketId) return ticket;
+
+    const [relationsResult, logsResult] = await Promise.all([
+      this.request(`Ticket/${ticketId}/Ticket_User`, { method: 'GET' }),
+      this.request(`Ticket/${ticketId}/Log?range=0-99`, { method: 'GET' }),
+    ]);
+    const relations = Array.isArray(relationsResult) ? relationsResult as JsonRecord[] : [];
+    const logs = Array.isArray(logsResult) ? logsResult as JsonRecord[] : [];
+    const technicianRelations = relations.filter((relation) => Number(relation.type) === 2 && numberOrNull(relation.users_id));
+    const assignmentEvents = logs
+      .filter((entry) => Number(entry.id_search_option) === 5 && normalizeDate(entry.date_mod))
+      .sort((left, right) => String(right.date_mod).localeCompare(String(left.date_mod)));
+
+    const technicians = await Promise.all(technicianRelations.map(async (relation) => {
+      const id = Number(relation.users_id);
+      const name = await this.technicianName(id);
+      const match = assignmentEvents.find((entry) => {
+        const changedTo = comparable(entry.new_value);
+        return changedTo.includes(comparable(name)) || changedTo.includes(String(id));
+      });
+      const fallback = technicianRelations.length === 1 ? assignmentEvents[0] : null;
+      return {
+        id,
+        name,
+        assigned_at: normalizeDate(match?.date_mod || fallback?.date_mod || ticket.date_assign),
+        source: ticket.date_assign ? 'ticket_date_assign' : 'history',
+      };
+    }));
+
+    return {
+      ...ticket,
+      date_assign: normalizeDate(ticket.date_assign) || technicians.find((technician) => technician.assigned_at)?.assigned_at || null,
+      technician_id: technicians[0]?.id || null,
+      technician_name: technicians[0]?.name || null,
+      _dashboard_technicians: technicians,
+    };
+  }
+
+  async enrichTickets(tickets: JsonRecord[]) {
+    const concurrency = boundedNumber('GLPI_ENRICH_CONCURRENCY', 6, 1, 12);
+    const enriched = new Array<JsonRecord>(tickets.length);
+    let nextIndex = 0;
+    const workers = Array.from({ length: Math.min(concurrency, tickets.length) }, async () => {
+      while (nextIndex < tickets.length) {
+        const index = nextIndex;
+        nextIndex += 1;
+        enriched[index] = await this.enrichTicketAssignments(tickets[index]);
+      }
+    });
+    await Promise.all(workers);
+    return enriched;
+  }
 }
 
 function mapTicket(ticket: JsonRecord) {
@@ -206,8 +350,8 @@ function mapTicket(ticket: JsonRecord) {
     title: label(ticket.name),
     status_id: numberOrNull(ticket.status),
     status: statusName(ticket.status),
-    technician_id: numberOrNull(ticket.users_id_assign || ticket.technician_id),
-    technician_name: label(ticket.users_id_assign || ticket.technician_name || ticket._users_id_assign),
+    technician_id: numberOrNull(ticket.technician_id || ticket.users_id_assign),
+    technician_name: label(ticket.technician_name || ticket.users_id_assign || ticket._users_id_assign),
     group_id: numberOrNull(ticket.groups_id_assign || ticket.group_id),
     group_name: label(ticket.groups_id_assign || ticket.group_name || ticket._groups_id_assign),
     requester_id: numberOrNull(ticket.users_id_recipient),
@@ -229,11 +373,14 @@ function mapTicket(ticket: JsonRecord) {
     type_name: Number(ticket.type) === 2 ? 'Requisição' : 'Incidente',
     opened_at: normalizeDate(ticket.date),
     assigned_at: normalizeDate(ticket.date_assign),
-    first_response_at: normalizeDate(ticket.takeintoaccount_delay_stat),
+    first_response_at: datePlusSeconds(ticket.date, ticket.takeintoaccount_delay_stat),
     solved_at: normalizeDate(ticket.solvedate),
     closed_at: normalizeDate(ticket.closedate),
     modified_at: normalizeDate(ticket.date_mod),
     sla_due_at: normalizeDate(ticket.time_to_resolve),
+    attention_due_at: normalizeDate(ticket.time_to_own),
+    internal_sla_due_at: normalizeDate(ticket.internal_time_to_resolve),
+    internal_attention_due_at: normalizeDate(ticket.internal_time_to_own),
     sla_status: slaStatus(ticket),
     pending_reason: label(ticket.pending_reason),
     glpi_url: id ? `${base}/front/ticket.form.php?id=${id}` : null,
@@ -241,6 +388,25 @@ function mapTicket(ticket: JsonRecord) {
     source_environment: 'real',
     synced_at: new Date().toISOString(),
   };
+}
+
+function mapTicketAssignments(ticket: JsonRecord) {
+  const ticketId = numberOrNull(ticket.id);
+  const technicians = Array.isArray(ticket._dashboard_technicians)
+    ? ticket._dashboard_technicians as JsonRecord[]
+    : [];
+  return technicians.flatMap((technician) => {
+    const technicianId = numberOrNull(technician.id);
+    if (!ticketId || !technicianId) return [];
+    return [{
+      ticket_glpi_id: ticketId,
+      technician_id: technicianId,
+      technician_name: label(technician.name),
+      assigned_at: normalizeDate(technician.assigned_at),
+      assignment_source: label(technician.source) || 'history',
+      synced_at: new Date().toISOString(),
+    }];
+  });
 }
 
 Deno.serve(async (request) => {
@@ -255,6 +421,10 @@ Deno.serve(async (request) => {
   const admin = createClient(supabaseUrl, serviceKey, {
     auth: { autoRefreshToken: false, persistSession: false },
   });
+  const startedAt = Date.now();
+  let glpi: GlpiClient | null = null;
+  let lockAcquired = false;
+  let action = '';
 
   try {
     const token = auth.replace(/^Bearer\s+/i, '');
@@ -264,36 +434,131 @@ Deno.serve(async (request) => {
     const role = String(profile?.role || '').toLowerCase();
     if (!['admin', 'gestor'].includes(role)) return json({ error: 'Acesso restrito a administradores e gestores.' }, 403);
 
-    const body = await request.json().catch(() => ({}));
-    if (!['sync-incremental', 'test-connection'].includes(body.action)) return json({ error: 'Ação inválida.' }, 400);
+    const body = await request.json().catch(() => ({})) as JsonRecord;
+    action = String(body.action || '');
+    if (!['configuration-status', 'sync-incremental', 'test-connection'].includes(action)) return json({ error: 'Ação inválida.' }, 400);
 
-    const glpi = new GlpiClient();
-    await glpi.initSession();
-    if (body.action === 'test-connection') {
-      const ticketsCount = await glpi.countItems('Ticket');
-      const usersCount = await glpi.countItems('User');
-      await glpi.killSession();
-      await logSync(admin, 'info', 'Conexão com GLPI validada.', ticketsCount);
-      return json({ ok: true, tickets: ticketsCount, technicians: usersCount });
+    if (action === 'configuration-status') {
+      const baseUrl = env('GLPI_BASE_URL').replace(/\/+$/, '');
+      const apiUrl = (env('GLPI_API_URL') || (baseUrl ? `${baseUrl}/apirest.php` : '')).replace(/\/+$/, '');
+      return json({
+        ok: true,
+        configured: Boolean(baseUrl && env('GLPI_APP_TOKEN') && (env('GLPI_USER_TOKEN') || (env('GLPI_LOGIN') && env('GLPI_PASSWORD')))),
+        baseUrl: baseUrl || null,
+        apiUrl: apiUrl || null,
+        apiRest: 'not-tested',
+        credentials: {
+          appToken: Boolean(env('GLPI_APP_TOKEN')),
+          userToken: Boolean(env('GLPI_USER_TOKEN')),
+          loginFallback: Boolean(env('GLPI_LOGIN') && env('GLPI_PASSWORD')),
+        },
+        timezone: env('GLPI_TIMEZONE') || 'America/Sao_Paulo',
+        checkedAt: new Date().toISOString(),
+      });
     }
 
-    const tickets = await glpi.getTickets();
+    if (action === 'sync-incremental') {
+      const { data: acquired, error: lockError } = await admin.rpc('acquire_glpi_sync_lock', {
+        lock_seconds: boundedNumber('GLPI_SYNC_LOCK_SECONDS', 120, 30, 600),
+      });
+      if (lockError) throw lockError;
+      lockAcquired = Boolean(acquired);
+      if (!lockAcquired) return json({ error: 'Sincronização GLPI já está em andamento.' }, 409);
+    }
+
+    glpi = new GlpiClient();
+    await glpi.initSession();
+    if (action === 'test-connection') {
+      const [rawSample, usersCount, groupsCount, categoriesCount] = await Promise.all([
+        glpi.sampleTickets(),
+        glpi.countItems('User'),
+        glpi.countItems('Group'),
+        glpi.countItems('ITILCategory'),
+      ]);
+      const sample = await glpi.enrichTickets(rawSample);
+      const fields = Object.fromEntries(REQUIRED_TICKET_FIELDS.map((field) => [
+        field,
+        rawSample.some((ticket) => Object.hasOwn(ticket, field)),
+      ]));
+      const statuses = [...new Map(sample.map((ticket) => [
+        Number(ticket.status),
+        statusName(ticket.status),
+      ])).entries()].filter(([code]) => Number.isFinite(code)).map(([code, name]) => ({ code, name }));
+      await logSync(admin, 'info', 'Conexão somente leitura com GLPI validada.', sample.length);
+      return json({
+        ok: true,
+        glpiVersion: glpi.glpiVersion,
+        baseUrl: env('GLPI_BASE_URL').replace(/\/+$/, '') || null,
+        apiUrl: (env('GLPI_API_URL') || `${env('GLPI_BASE_URL').replace(/\/+$/, '')}/apirest.php`).replace(/\/+$/, '') || null,
+        apiRest: 'online',
+        credentials: { appToken: Boolean(env('GLPI_APP_TOKEN')), userToken: Boolean(env('GLPI_USER_TOKEN')) },
+        tickets: sample.length,
+        technicians: usersCount,
+        access: { tickets: true, users: usersCount >= 0, groups: groupsCount >= 0, categories: categoriesCount >= 0 },
+        fields,
+        statuses,
+        assignmentFallback: {
+          required: !fields.date_assign,
+          currentTechnicianSource: 'Ticket_User.type=2',
+          assignedAtSource: fields.date_assign ? 'Ticket.date_assign' : 'Log.date_mod where id_search_option=5',
+          techniciansFound: sample.reduce((total, ticket) => total + (Array.isArray(ticket._dashboard_technicians) ? ticket._dashboard_technicians.length : 0), 0),
+        },
+        elapsedMs: Date.now() - startedAt,
+      });
+    }
+
+    const { data: syncState } = await admin.from('glpi_sync_state').select('last_cursor').eq('id', 1).maybeSingle();
+    const previousCursor = syncState?.last_cursor ? String(syncState.last_cursor) : null;
+    const rawTickets = await glpi.getTickets(previousCursor);
+    const tickets = await glpi.enrichTickets(rawTickets);
     const mapped = tickets.map(mapTicket).filter((ticket) => ticket.glpi_id);
     if (mapped.length) {
       const { error } = await admin.from('glpi_tickets_dashboard').upsert(mapped, { onConflict: 'glpi_id' });
       if (error) throw error;
     }
+    const ticketIds = mapped.map((ticket) => ticket.glpi_id);
+    if (ticketIds.length) {
+      const assignments = tickets.flatMap(mapTicketAssignments);
+      const { error: deleteAssignmentsError } = await admin
+        .from('glpi_ticket_assignments_dashboard')
+        .delete()
+        .in('ticket_glpi_id', ticketIds);
+      if (deleteAssignmentsError) throw deleteAssignmentsError;
+      if (assignments.length) {
+        const { error: assignmentError } = await admin
+          .from('glpi_ticket_assignments_dashboard')
+          .upsert(assignments, { onConflict: 'ticket_glpi_id,technician_id' });
+        if (assignmentError) throw assignmentError;
+      }
+    }
     const cursor = mapped.reduce<string | null>((latest, ticket) => {
       if (!ticket.modified_at) return latest;
       return !latest || ticket.modified_at > latest ? ticket.modified_at : latest;
-    }, null);
-    await glpi.killSession();
+    }, previousCursor);
+    await updateSyncState(admin, {
+      status: 'online',
+      locked_until: null,
+      last_success_at: new Date().toISOString(),
+      last_cursor: cursor,
+      last_records_processed: mapped.length,
+      last_error: null,
+    });
     await logSync(admin, 'info', 'Sincronização incremental concluída.', mapped.length, '', cursor);
-    return json({ ok: true, records: mapped.length, lastCursor: cursor });
+    return json({ ok: true, records: mapped.length, lastCursor: cursor, elapsedMs: Date.now() - startedAt });
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
+    const message = safeError(error);
+    if (lockAcquired || action === 'sync-incremental') {
+      await updateSyncState(admin, {
+        status: 'offline',
+        locked_until: null,
+        last_error_at: new Date().toISOString(),
+        last_error: message,
+      });
+    }
     await logSync(admin, 'erro', 'Falha na sincronização com o GLPI.', 0, message);
-    console.error('glpi-dashboard failed:', message, error);
+    console.error('glpi-dashboard failed:', message);
     return json({ error: 'Falha na integração com o GLPI. Detalhes registrados nos logs.' }, 500);
+  } finally {
+    await glpi?.killSession();
   }
 });

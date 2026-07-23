@@ -28,7 +28,7 @@ function formatError(error: unknown) {
     if (parts.length) return parts.join(' | ');
     try {
       return JSON.stringify(payload);
-    } catch (_) {
+    } catch {
       return 'Erro interno.';
     }
   }

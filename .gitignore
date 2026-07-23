@@ -7,3 +7,10 @@ __pycache__/
 .tmp-sheet/
 data/
 .codex-solicitacoes/
+node_modules/
+dist/
+playwright-report/
+test-results/
+supabase/.temp/
+supabase/.env.secrets.local
+debug.log

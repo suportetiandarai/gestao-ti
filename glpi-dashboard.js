@@ -1,6 +1,8 @@
 // Dashboard GLPI: camada de apresentação, filtros, métricas e exportações.
 (function () {
-    const TZ = 'America/Sao_Paulo';
+    const CORE = window.GLPI_DASHBOARD_CORE;
+    if (!CORE) throw new Error('Módulo de regras do Dashboard GLPI não carregado.');
+    const TZ = CORE.TIME_ZONE;
     const GLPI_VERSION = '10.0.18';
     const GLPI_STATUS = Object.freeze({
         1: 'Novo',
@@ -16,9 +18,11 @@
         initialized: false,
         demo: false,
         tickets: [],
+        dailyAssignments: [],
         filtered: [],
         syncLogs: [],
         metadata: {},
+        integrationState: null,
         page: 1,
         pageSize: 12,
         sortKey: 'openedAt',
@@ -27,11 +31,14 @@
         countdownTimer: null,
         secondsToRefresh: 30,
         refreshing: false,
+        lastUpdatedAt: null,
         subtab: 'diario',
         panelMode: false,
         publicMode: false,
         publicConfig: {},
-        localConfig: {}
+        localConfig: {},
+        serviceChecking: false,
+        serviceChecks: { supabase: null, glpi: null }
     };
 
     const DEFAULT_PUBLIC_CONFIG = Object.freeze({
@@ -40,15 +47,49 @@
         techMode: 'first',
         showTitle: false,
         showCategory: true,
-        showUnit: true,
-        showRanking: true,
-        showRecent: true
+        showUnit: true
     });
 
     function esc(value) {
         return (value === null || value === undefined || value === '')
             ? 'Não disponível'
             : String(value).replace(/[&<>'"]/g, tag => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[tag]));
+    }
+
+    function publicSupabaseConfig() {
+        const config = window.GESTAO_TI_CONFIG || {};
+        const url = String(config.SUPABASE_URL || '').replace(/\/+$/, '');
+        const projectRef = url.match(/^https:\/\/([a-z0-9]+)\.supabase\.co$/i)?.[1] || '';
+        return { url, projectRef, publicKey: String(config.SUPABASE_PUBLIC_KEY || '') };
+    }
+
+    function safeExternalUrl(value) {
+        try {
+            const url = new URL(String(value || ''));
+            return ['http:', 'https:'].includes(url.protocol) ? url.href : '';
+        } catch {
+            return '';
+        }
+    }
+
+    function openExternal(value) {
+        const url = safeExternalUrl(value);
+        if (!url) return false;
+        window.open(url, '_blank', 'noopener,noreferrer');
+        return true;
+    }
+
+    function serviceStatus(id, status) {
+        const field = getField(id);
+        if (!field) return;
+        const map = {
+            connected: ['Conectado', 'ok'],
+            disconnected: ['Não conectado', 'error'],
+            incomplete: ['Configuração incompleta', 'warning']
+        };
+        const [label, className] = map[status] || map.incomplete;
+        field.textContent = label;
+        field.className = `glpi-status-badge ${className}`;
     }
 
     function parseDate(value) {
@@ -62,9 +103,7 @@
     }
 
     function dateOnlyInSaoPaulo(date = new Date()) {
-        const parts = new Intl.DateTimeFormat('en-CA', { timeZone: TZ, year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(date);
-        const map = Object.fromEntries(parts.map(part => [part.type, part.value]));
-        return `${map.year}-${map.month}-${map.day}`;
+        return CORE.dateOnlyInTimeZone(date);
     }
 
     function formatDateTime(value) {
@@ -139,17 +178,15 @@
     }
 
     function todayRangeSaoPaulo() {
-        const today = dateOnlyInSaoPaulo();
+        const range = CORE.todayRange();
         return {
-            label: today.split('-').reverse().join('/'),
-            start: new Date(`${today}T00:00:00-03:00`),
-            end: new Date(`${today}T23:59:59-03:00`)
+            ...range,
+            label: range.label.split('-').reverse().join('/')
         };
     }
 
     function isBetween(value, start, end) {
-        const date = parseDate(value);
-        return Boolean(date && date >= start && date <= end);
+        return CORE.isBetween(value, start, end);
     }
 
     function technicianDisplayName(name) {
@@ -160,25 +197,6 @@
         if (state.publicConfig.techMode === 'short') return parts.length > 1 ? `${parts[0]} ${parts.at(-1).slice(0, 1)}.` : parts[0] || 'Técnico';
         if (state.publicConfig.techMode === 'full') return clean;
         return parts[0] || 'Técnico';
-    }
-
-    function publicTicketTitle(ticket) {
-        if (!state.publicMode || state.publicConfig.showTitle) return ticket.title;
-        return `Chamado ${ticket.id}`;
-    }
-
-    function dailyTickets() {
-        const { start, end } = todayRangeSaoPaulo();
-        return state.tickets.filter(ticket =>
-            isBetween(ticket.openedAt, start, end)
-            || isBetween(ticket.assignedAt, start, end)
-            || isBetween(ticket.solvedAt, start, end)
-            || isBetween(ticket.closedAt, start, end)
-        );
-    }
-
-    function currentOpenTickets() {
-        return state.tickets.filter(ticket => STATUS_OPEN.has(ticket.status));
     }
 
     function normalizeTicket(row) {
@@ -212,10 +230,22 @@
             closedAt,
             modifiedAt: row.modified_at || row.date_mod || openedAt,
             slaDueAt: row.sla_due_at || row.time_to_resolve,
+            attentionDueAt: row.attention_due_at || row.time_to_own,
+            internalSlaDueAt: row.internal_sla_due_at || row.internal_time_to_resolve,
+            internalAttentionDueAt: row.internal_attention_due_at || row.internal_time_to_own,
             slaStatus: row.sla_status || calculateSlaStatus(row),
             pendingReason: row.pending_reason || 'Não disponível',
             glpiUrl: row.glpi_url || buildGlpiTicketUrl(row.glpi_id || row.id),
             sourceEnvironment: row.source_environment || 'real'
+        };
+    }
+
+    function normalizeAssignment(row) {
+        return {
+            id: row.ticket_glpi_id,
+            technician: row.technician_name || 'Não disponível',
+            technicianId: row.technician_id || null,
+            assignedAt: row.assigned_at || null
         };
     }
 
@@ -282,7 +312,8 @@
         state.publicConfig = readJsonStorage('glpiPublicDashboardConfig', DEFAULT_PUBLIC_CONFIG);
         state.localConfig = readJsonStorage('glpiDashboardLocalConfig', {
             integrationEnabled: true,
-            demoEnabled: false
+            demoEnabled: false,
+            dailyRecentLimit: 10
         });
         state.metadata = {
             glpi_version: GLPI_VERSION,
@@ -297,6 +328,7 @@
         if (!window.supabase || state.localConfig.demoEnabled) {
             state.demo = true;
             state.tickets = demoTickets();
+            state.dailyAssignments = state.tickets;
             state.syncLogs = [{ level: 'aviso', message: 'Supabase não configurado. Modo demonstração local ativado.', created_at: new Date().toISOString() }];
             return;
         }
@@ -312,6 +344,16 @@
                 .limit(2000);
             if (error) throw error;
 
+            const { start: todayStart, end: todayEnd } = CORE.todayRange();
+            const { data: assignmentRows, error: assignmentError } = await supabase
+                .from('glpi_ticket_assignments_dashboard')
+                .select('ticket_glpi_id, technician_id, technician_name, assigned_at')
+                .gte('assigned_at', todayStart.toISOString())
+                .lte('assigned_at', todayEnd.toISOString())
+                .limit(5000);
+            if (!assignmentError) state.dailyAssignments = (assignmentRows || []).map(normalizeAssignment);
+            else console.warn('Atribuições detalhadas ainda não estão disponíveis; usando dados do chamado.');
+
             const { data: logs } = await supabase
                 .from('glpi_sync_logs')
                 .select('level, message, records_processed, created_at')
@@ -319,11 +361,19 @@
                 .limit(20);
             state.syncLogs = logs || [];
 
-            if (!data || data.length === 0) {
+            const { data: integrationState } = await supabase
+                .from('glpi_sync_state')
+                .select('status, last_started_at, last_success_at, last_error_at, last_cursor, last_records_processed, updated_at')
+                .eq('id', 1)
+                .maybeSingle();
+            if (integrationState) state.integrationState = integrationState;
+
+            if ((!data || data.length === 0) && !state.tickets.length) {
                 state.demo = true;
                 state.tickets = demoTickets();
+                state.dailyAssignments = state.tickets;
                 state.syncLogs.unshift({ level: 'aviso', message: 'Nenhum chamado real sincronizado. Modo demonstração ativado sem gravar dados fictícios.', created_at: new Date().toISOString() });
-            } else {
+            } else if (data?.length) {
                 state.demo = false;
                 state.tickets = data.map(normalizeTicket);
             }
@@ -333,6 +383,7 @@
             if (!state.tickets.length) {
                 state.demo = true;
                 state.tickets = demoTickets();
+                state.dailyAssignments = state.tickets;
                 state.syncLogs[0].message = 'Não foi possível ler as tabelas GLPI. Modo demonstração ativado.';
             }
         }
@@ -489,30 +540,15 @@
     }
 
     function renderDailyDashboard() {
-        const { start, end, label } = todayRangeSaoPaulo();
-        const daily = dailyTickets();
-        const openNow = currentOpenTickets();
-        const createdToday = state.tickets.filter(ticket => isBetween(ticket.openedAt, start, end));
-        const assignedToday = state.tickets.filter(ticket => isBetween(ticket.assignedAt, start, end));
-        const solvedToday = state.tickets.filter(ticket => isBetween(ticket.solvedAt, start, end));
-        const closedToday = state.tickets.filter(ticket => isBetween(ticket.closedAt, start, end));
-        const pendingNow = state.tickets.filter(ticket => ticket.status === 'Pendente');
-        const slaOk = openNow.filter(ticket => ticket.slaStatus === 'ok' || ticket.slaStatus === 'warning');
-        const slaBreached = openNow.filter(ticket => ticket.slaStatus === 'breached');
-        const avgAttendance = average(solvedToday.map(ticket => diffMinutes(ticket.assignedAt || ticket.openedAt, ticket.solvedAt)));
-        const avgSolution = average(solvedToday.map(ticket => diffMinutes(ticket.openedAt, ticket.solvedAt)));
+        const { label: isoLabel, createdToday, inServiceNow, waitingNow, pendingNow, breachedNow } = CORE.dailyMetrics(state.tickets);
+        const label = isoLabel.split('-').reverse().join('/');
 
         const cards = [
-            ['Abertos agora', openNow.length, 'Chamados não solucionados nem fechados'],
-            ['Criados hoje', createdToday.length, `Período automático ${label}`],
-            ['Atendidos hoje', assignedToday.length, 'Chamados atribuídos no dia'],
-            ['Solucionados hoje', solvedToday.length, 'Solução registrada no dia'],
-            ['Fechados hoje', closedToday.length, 'Fechamento registrado no dia'],
-            ['Pendentes', pendingNow.length, 'Status pendente no momento'],
-            ['Dentro do SLA', slaOk.length, 'Abertos no prazo ou próximos do prazo'],
-            ['Fora do SLA', slaBreached.length, 'Abertos com prazo vencido'],
-            ['Atendimento médio', formatDuration(avgAttendance), 'Atribuição até solução'],
-            ['Solução média', formatDuration(avgSolution), 'Abertura até solução']
+            ['Chamados abertos hoje', createdToday.length, `00:00–23:59 • ${label}`],
+            ['Em atendimento', inServiceNow.length, 'Status 2/3 com 1ª resposta'],
+            ['Aguardando atendimento', waitingNow.length, 'Novos ou atribuídos sem 1ª resposta'],
+            ['Pendentes', pendingNow.length, 'Status 4 Pendente no momento'],
+            ['Chamados estourados', breachedNow.length, 'Prazo real SLA/OLA ultrapassado']
         ];
 
         getField('glpi-daily-kpis').innerHTML = cards.map(([labelText, value, hint]) => `
@@ -523,50 +559,31 @@
             </article>
         `).join('');
 
-        const techRows = technicianStats(daily).map(tech => {
-            const openByTech = openNow.filter(ticket => ticket.technician === tech.name).length;
-            const finalToday = solvedToday.concat(closedToday).filter(ticket => ticket.technician === tech.name).length;
-            return { ...tech, openByTech, finalToday };
-        }).sort((a, b) => (b.finalToday + b.attendedToday) - (a.finalToday + a.attendedToday));
-
-        getField('glpi-daily-ranking').innerHTML = state.publicMode && !state.publicConfig.showRanking
-            ? '<p class="glpi-empty">Ranking oculto no painel público.</p>'
-            : techRows.slice(0, 8).map((tech, index) => `
-                <div class="glpi-rank-row">
-                    <strong>${index + 1}. ${esc(technicianDisplayName(tech.name))}</strong>
-                    <span>${tech.attendedToday} atendidos • ${tech.finalToday} finalizados • ${tech.openByTech} abertos</span>
-                    <small>Solução média ${formatDuration(tech.avgSolution)}</small>
-                </div>
-            `).join('') || '<p class="glpi-empty">Nenhum atendimento registrado hoje.</p>';
+        const techRows = CORE.technicianAssignmentsToday(state.dailyAssignments.length ? state.dailyAssignments : state.tickets);
 
         renderBarChart('glpi-daily-technicians', techRows.map(tech => ({
-            label: technicianDisplayName(tech.name),
-            value: tech.attendedToday + tech.finalToday + tech.openByTech
-        })), 10);
+            label: technicianDisplayName(tech.label),
+            value: tech.value
+        })), 20);
 
         const recent = createdToday
             .sort((a, b) => parseDate(b.openedAt) - parseDate(a.openedAt))
-            .slice(0, 8);
-        getField('glpi-daily-recent').innerHTML = state.publicMode && !state.publicConfig.showRecent
-            ? '<p class="glpi-empty">Chamados recentes ocultos no painel público.</p>'
-            : recent.map(ticket => `
-                <div class="glpi-log">
-                    <strong>#${esc(ticket.id)} • ${esc(ticket.status)}</strong>
-                    <span>${esc(publicTicketTitle(ticket))}</span>
-                    <small>${formatDateTime(ticket.openedAt)}${state.publicConfig.showCategory || !state.publicMode ? ` • ${esc(ticket.category)}` : ''}${state.publicConfig.showUnit || !state.publicMode ? ` • ${esc(ticket.unit)}` : ''}</small>
-                </div>
-            `).join('') || '<p class="glpi-empty">Nenhum chamado criado hoje.</p>';
-
-        const oldest = openNow
-            .sort((a, b) => parseDate(a.openedAt) - parseDate(b.openedAt))
-            .slice(0, 8);
-        getField('glpi-daily-oldest').innerHTML = oldest.map(ticket => `
-            <div class="glpi-log ${ticket.slaStatus === 'breached' ? 'erro' : ticket.slaStatus === 'warning' ? 'aviso' : ''}">
-                <strong>#${esc(ticket.id)} • ${esc(ticket.status)}</strong>
-                <span>${esc(publicTicketTitle(ticket))}</span>
-                <small>Aberto em ${formatDateTime(ticket.openedAt)} • ${esc(technicianDisplayName(ticket.technician))}</small>
+            .slice(0, Number(state.localConfig.dailyRecentLimit) || 10);
+        getField('glpi-daily-recent').innerHTML = recent.length ? `
+            <div class="glpi-daily-ticket glpi-daily-ticket-head" aria-hidden="true">
+                <strong>Chamado</strong><span>Status</span><span>Técnico</span><span>Abertura</span><span>Categoria / unidade</span>
             </div>
-        `).join('') || '<p class="glpi-empty">Nenhum chamado aberto no momento.</p>';
+            ${recent.map(ticket => {
+                const visible = state.publicMode ? CORE.publicTicket(ticket, state.publicConfig) : ticket;
+                return `
+                <article class="glpi-daily-ticket">
+                    <strong>#${esc(visible.id)}${visible.title ? `<small>${esc(visible.title)}</small>` : ''}</strong>
+                    <span data-label="Status">${esc(visible.status)}</span>
+                    <span data-label="Técnico">${esc(technicianDisplayName(visible.technician))}</span>
+                    <time data-label="Abertura">${new Intl.DateTimeFormat('pt-BR', { timeStyle: 'short', timeZone: TZ }).format(parseDate(visible.openedAt))}</time>
+                    <span data-label="Categoria / unidade">${visible.category ? esc(visible.category) : ''}${visible.category && visible.unit ? ' • ' : ''}${visible.unit ? esc(visible.unit) : ''}</span>
+                </article>
+            `; }).join('')}` : '<p class="glpi-empty">Nenhum chamado criado hoje.</p>';
     }
 
     function renderBarChart(id, data, maxItems = 8) {
@@ -721,13 +738,14 @@
     }
 
     function renderConfig() {
+        const glpiCheck = state.serviceChecks.glpi;
         getField('glpi-config-summary').innerHTML = `
-            <dt>Versão identificada</dt><dd>GLPI ${GLPI_VERSION}</dd>
+            <dt>Versão identificada</dt><dd>GLPI ${esc(glpiCheck?.glpiVersion || state.metadata.glpi_version || GLPI_VERSION)}</dd>
             <dt>API REST</dt><dd>${esc(state.metadata.api_enabled)}</dd>
             <dt>URL da API</dt><dd><code>{GLPI_BASE_URL}/apirest.php</code></dd>
             <dt>URL base do GLPI</dt><dd>${esc(state.metadata.base_url || 'Configurada por GLPI_BASE_URL no back-end')}</dd>
-            <dt>App-Token</dt><dd>••••••••••••••••••••</dd>
-            <dt>User-Token</dt><dd>••••••••••••••••••••</dd>
+            <dt>App-Token</dt><dd>${glpiCheck ? (glpiCheck.credentials?.appToken ? 'Configurado' : 'Não configurado') : 'A confirmar no back-end'}</dd>
+            <dt>User-Token</dt><dd>${glpiCheck ? (glpiCheck.credentials?.userToken ? 'Configurado' : 'Não configurado') : 'A confirmar no back-end'}</dd>
             <dt>Entidade</dt><dd>${esc(state.metadata.entity_id || 'Não disponível')}</dd>
             <dt>Perfil</dt><dd>${esc(state.metadata.profile_id || 'Não disponível')}</dd>
             <dt>Credenciais necessárias</dt><dd>GLPI_BASE_URL, GLPI_APP_TOKEN e GLPI_USER_TOKEN; alternativa controlada: GLPI_LOGIN e GLPI_PASSWORD.</dd>
@@ -735,7 +753,36 @@
             <dt>Banco próprio</dt><dd>PostgreSQL/Supabase, com tabelas de tickets, configurações, favoritos e logs.</dd>
             <dt>Tempo real</dt><dd>Sincronização incremental por data de modificação, cache no banco e atualização automática configurável.</dd>
         `;
+        renderServiceConnections();
         renderConfigFields();
+    }
+
+    function renderServiceConnections() {
+        const supabaseConfig = publicSupabaseConfig();
+        const supabaseCheck = state.serviceChecks.supabase;
+        const supabaseConfigured = Boolean(supabaseConfig.url && supabaseConfig.projectRef && supabaseConfig.publicKey);
+        serviceStatus('glpi-supabase-service-status', supabaseCheck?.ok ? 'connected' : (supabaseConfigured ? 'incomplete' : 'disconnected'));
+        getField('glpi-supabase-service-details').innerHTML = `
+            <dt>Project Reference</dt><dd>${esc(supabaseConfig.projectRef || 'Não configurado')}</dd>
+            <dt>URL do projeto</dt><dd>${esc(supabaseConfig.url || 'Não configurada')}</dd>
+            <dt>Sessão autenticada</dt><dd>${supabaseCheck ? (supabaseCheck.authenticated ? 'Sim' : 'Não') : 'Não verificada'}</dd>
+            <dt>Última verificação</dt><dd>${supabaseCheck?.checkedAt ? formatDateTime(supabaseCheck.checkedAt) : 'Não realizada'}</dd>
+        `;
+
+        const glpiCheck = state.serviceChecks.glpi;
+        const baseUrl = glpiCheck?.baseUrl || state.metadata.base_url || '';
+        const hasKnownConfiguration = Boolean(baseUrl || glpiCheck?.configured);
+        serviceStatus('glpi-glpi-service-status', glpiCheck?.ok && glpiCheck.apiRest === 'online'
+            ? 'connected'
+            : (glpiCheck?.failed ? 'disconnected' : (hasKnownConfiguration ? 'incomplete' : 'incomplete')));
+        getField('glpi-glpi-service-details').innerHTML = `
+            <dt>URL da instância</dt><dd>${esc(baseUrl || 'Não informada pelo back-end')}</dd>
+            <dt>Versão identificada</dt><dd>${esc(glpiCheck?.glpiVersion || state.metadata.glpi_version || GLPI_VERSION)}${glpiCheck?.glpiVersion ? '' : ' (a confirmar)'}</dd>
+            <dt>API REST</dt><dd>${glpiCheck?.apiRest === 'online' ? 'Ativa e acessível' : (glpiCheck?.apiRest === 'not-tested' ? 'Não testada' : 'Não confirmada')}</dd>
+            <dt>App-Token</dt><dd>${glpiCheck ? (glpiCheck.credentials?.appToken ? 'Configurado' : 'Não configurado') : 'Não verificado'}</dd>
+            <dt>User-Token</dt><dd>${glpiCheck ? (glpiCheck.credentials?.userToken ? 'Configurado' : 'Não configurado') : 'Não verificado'}</dd>
+            <dt>Última verificação</dt><dd>${glpiCheck?.checkedAt ? formatDateTime(glpiCheck.checkedAt) : 'Não realizada'}</dd>
+        `;
     }
 
     function publicDashboardUrl(pathMode = false) {
@@ -750,17 +797,17 @@
         const techMode = getField('glpi-public-tech-mode');
         const integrationEnabled = getField('glpi-integration-enabled');
         const demoEnabled = getField('glpi-demo-enabled');
+        const dailyRecentLimit = getField('glpi-daily-recent-limit');
         if (publicEnabled) publicEnabled.value = String(Boolean(state.publicConfig.enabled));
         if (techMode) techMode.value = state.publicConfig.techMode || 'first';
         if (integrationEnabled) integrationEnabled.value = String(state.localConfig.integrationEnabled !== false);
         if (demoEnabled) demoEnabled.value = String(Boolean(state.localConfig.demoEnabled));
+        if (dailyRecentLimit) dailyRecentLimit.value = String(Number(state.localConfig.dailyRecentLimit) || 10);
 
         [
             ['glpi-public-show-title', 'showTitle'],
             ['glpi-public-show-category', 'showCategory'],
-            ['glpi-public-show-unit', 'showUnit'],
-            ['glpi-public-show-ranking', 'showRanking'],
-            ['glpi-public-show-recent', 'showRecent']
+            ['glpi-public-show-unit', 'showUnit']
         ].forEach(([id, key]) => {
             const field = getField(id);
             if (field) field.checked = Boolean(state.publicConfig[key]);
@@ -777,6 +824,7 @@
         const last = state.syncLogs[0];
         getField('glpi-sync-summary').innerHTML = `
             <dt>Conexão</dt><dd>${state.demo ? 'Modo demonstração ou aguardando configuração' : 'Dados reais disponíveis'}</dd>
+            <dt>Saúde da integração</dt><dd>${esc(state.integrationState?.status || 'Não disponível')}</dd>
             <dt>Última sincronização</dt><dd>${last ? formatDateTime(last.created_at) : 'Não disponível'}</dd>
             <dt>Registros carregados</dt><dd>${state.tickets.length}</dd>
             <dt>Erros recentes</dt><dd>${state.syncLogs.filter(log => log.level === 'erro').length}</dd>
@@ -792,9 +840,21 @@
 
     function renderStatus() {
         const status = getField('glpi-connection-status');
-        status.textContent = state.demo ? 'Demonstração' : 'Conectado ao cache GLPI';
-        status.className = `glpi-status-badge ${state.demo ? 'warning' : 'ok'}`;
-        const last = state.syncLogs[0]?.created_at || new Date();
+        const lastSuccess = parseDate(state.integrationState?.last_success_at);
+        const stale = lastSuccess && (Date.now() - lastSuccess.getTime()) / 1000 > 90;
+        const integrationStatus = state.integrationState?.status;
+        const connection = state.demo
+            ? { label: 'Offline • demonstração', className: 'error' }
+            : integrationStatus === 'offline'
+                ? { label: 'GLPI offline', className: 'error' }
+                : integrationStatus === 'syncing'
+                    ? { label: 'Sincronizando GLPI', className: 'warning' }
+                    : stale || integrationStatus === 'delayed'
+                        ? { label: 'Sincronização atrasada', className: 'warning' }
+                        : { label: 'GLPI online', className: 'ok' };
+        status.textContent = connection.label;
+        status.className = `glpi-status-badge ${connection.className}`;
+        const last = state.lastUpdatedAt || state.syncLogs[0]?.created_at;
         getField('glpi-last-update').textContent = `Última atualização: ${formatDateTime(last)}`;
         const currentTime = getField('glpi-current-time');
         const nextRefresh = getField('glpi-next-refresh');
@@ -816,7 +876,7 @@
     }
 
     async function refreshData(triggerSync = false) {
-        if (state.refreshing) return;
+        if (state.refreshing) return false;
         state.refreshing = true;
         const scrollTop = document.querySelector('.main-content')?.scrollTop || 0;
         try {
@@ -825,16 +885,26 @@
                 if (error) throw error;
             }
             await loadTickets();
-            populateFilters();
-            applyFilters();
+            state.lastUpdatedAt = new Date();
+            if (state.subtab === 'diario') {
+                renderStatus();
+                renderDailyDashboard();
+            } else {
+                populateFilters();
+                applyFilters();
+            }
+            return true;
         } catch (error) {
             console.error('Falha ao atualizar GLPI:', error);
             state.syncLogs.unshift({ level: 'erro', message: 'Falha na atualização. Os últimos dados válidos foram mantidos.', created_at: new Date().toISOString() });
             mostrarAviso('Não foi possível atualizar agora. Mantive os últimos dados válidos.', 'aviso');
             renderAll();
+            return false;
         } finally {
             state.refreshing = false;
-            state.secondsToRefresh = Number(getField('glpi-sync-interval')?.value || 30000) / 1000;
+            state.secondsToRefresh = state.subtab === 'diario'
+                ? 30
+                : Number(getField('glpi-sync-interval')?.value || 30000) / 1000;
             const main = document.querySelector('.main-content');
             if (main) main.scrollTop = scrollTop;
         }
@@ -862,9 +932,14 @@
     window.glpiAbrirSubaba = function (name) {
         if (window.GESTAO_TI_PUBLIC_DASHBOARD && name !== 'diario') name = 'diario';
         state.subtab = name;
+        document.body.classList.toggle('glpi-daily-active', name === 'diario');
         document.querySelectorAll('.glpi-subtab').forEach(btn => btn.classList.toggle('active', btn.getAttribute('onclick')?.includes(`'${name}'`)));
         document.querySelectorAll('.glpi-view').forEach(view => view.classList.add('hidden'));
         getField(`glpi-view-${name}`)?.classList.remove('hidden');
+        if (name === 'configuracoes' && state.initialized && !state.serviceChecks.glpi) {
+            void window.glpiTestarConfiguracaoServicos(true);
+        }
+        if (state.initialized) window.glpiAtualizarIntervaloSincronizacao();
     };
 
     window.glpiAplicarPresetPeriodo = function (preset) {
@@ -924,21 +999,112 @@
     };
 
     window.glpiAtualizarAgora = async function () {
+        if (state.refreshing) return;
         mostrarAviso('Atualizando dados do GLPI...', 'aviso');
-        await refreshData(!window.GESTAO_TI_PUBLIC_DASHBOARD);
-        mostrarAviso('Dashboard GLPI atualizado.', 'sucesso');
+        const updated = await refreshData(!window.GESTAO_TI_PUBLIC_DASHBOARD);
+        if (updated) mostrarAviso('Dashboard GLPI atualizado.', 'sucesso');
     };
 
     window.glpiSincronizarAgora = window.glpiAtualizarAgora;
+
+    window.glpiAbrirSupabase = function () {
+        const { projectRef } = publicSupabaseConfig();
+        openExternal(projectRef
+            ? `https://supabase.com/dashboard/project/${encodeURIComponent(projectRef)}`
+            : 'https://supabase.com/dashboard');
+    };
+
+    window.glpiAbrirInstrucoesSupabase = function () {
+        openExternal('https://supabase.com/dashboard/account/tokens');
+    };
+
+    window.glpiAbrirGlpi = function () {
+        const baseUrl = state.serviceChecks.glpi?.baseUrl || state.metadata.base_url;
+        if (!openExternal(baseUrl)) mostrarAviso('GLPI_BASE_URL ainda não foi informado pelo back-end.', 'aviso');
+    };
+
+    window.glpiAbrirConfiguracaoApiGlpi = function () {
+        const baseUrl = state.serviceChecks.glpi?.baseUrl || state.metadata.base_url;
+        if (!openExternal(baseUrl)) {
+            mostrarAviso('Configure GLPI_BASE_URL antes de abrir a instância.', 'aviso');
+            return;
+        }
+        mostrarAviso('No GLPI, acesse Configurar → Geral → API. A rota administrativa varia conforme a instalação.', 'aviso');
+    };
+
+    window.glpiTestarSupabase = async function (silent = false) {
+        const config = publicSupabaseConfig();
+        const checkedAt = new Date().toISOString();
+        try {
+            if (!config.url || !config.projectRef || !config.publicKey) throw new Error('Configuração pública incompleta.');
+            if (!window.supabase?.auth) throw new Error('Cliente Supabase indisponível.');
+            const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+            if (sessionError || !sessionData?.session) throw new Error('Sessão Supabase não autenticada.');
+            const { error } = await supabase.from('profiles').select('id').limit(1);
+            if (error) throw error;
+            state.serviceChecks.supabase = { ok: true, authenticated: true, checkedAt };
+            renderServiceConnections();
+            if (!silent) mostrarAviso('Configuração do Supabase validada.', 'sucesso');
+            return true;
+        } catch {
+            state.serviceChecks.supabase = { ok: false, authenticated: false, checkedAt };
+            renderServiceConnections();
+            if (!silent) mostrarAviso('Supabase não conectado ou com configuração incompleta.', 'erro');
+            return false;
+        }
+    };
+
+    async function testGlpiConfiguration(silent = false) {
+        const checkedAt = new Date().toISOString();
+        try {
+            if (!window.supabase?.functions) throw new Error('Edge Function indisponível.');
+            const { data, error } = await supabase.functions.invoke('glpi-dashboard', { body: { action: 'configuration-status' } });
+            if (error) throw error;
+            state.serviceChecks.glpi = { ...data, ok: false, checkedAt: data?.checkedAt || checkedAt };
+            if (data?.baseUrl) state.metadata.base_url = data.baseUrl;
+            if (data?.apiUrl) state.metadata.api_url = data.apiUrl;
+            renderConfig();
+            if (!silent) mostrarAviso(data?.configured ? 'Secrets do GLPI configurados; falta testar a API.' : 'Configuração GLPI incompleta.', data?.configured ? 'aviso' : 'erro');
+            return Boolean(data?.configured);
+        } catch {
+            state.serviceChecks.glpi = { ...(state.serviceChecks.glpi || {}), ok: false, failed: true, checkedAt };
+            renderServiceConnections();
+            if (!silent) mostrarAviso('Não foi possível consultar a configuração GLPI no back-end.', 'erro');
+            return false;
+        }
+    }
+
+    window.glpiTestarConfiguracaoServicos = async function (silent = false) {
+        if (state.serviceChecking) return false;
+        state.serviceChecking = true;
+        try {
+            const [supabaseOk, glpiConfigured] = await Promise.all([
+                window.glpiTestarSupabase(true),
+                testGlpiConfiguration(true)
+            ]);
+            if (!silent) mostrarAviso(`Verificação concluída: Supabase ${supabaseOk ? 'conectado' : 'incompleto'}; GLPI ${glpiConfigured ? 'configurado, aguardando teste' : 'incompleto'}.`, supabaseOk && glpiConfigured ? 'sucesso' : 'aviso');
+            return supabaseOk && glpiConfigured;
+        } finally {
+            state.serviceChecking = false;
+        }
+    };
 
     window.glpiTestarConexao = async function () {
         try {
             if (!window.supabase?.functions) throw new Error('Edge Function indisponível no ambiente local.');
             const { data, error } = await supabase.functions.invoke('glpi-dashboard', { body: { action: 'test-connection' } });
             if (error) throw error;
-            mostrarAviso(`Conexão realizada com sucesso. API disponível. Chamados consultáveis: ${data?.tickets ?? 'Não disponível'}. Técnicos consultáveis: ${data?.technicians ?? 'Não disponível'}.`, 'sucesso');
+            state.serviceChecks.glpi = { ...data, ok: true, checkedAt: new Date().toISOString() };
+            if (data?.baseUrl) state.metadata.base_url = data.baseUrl;
+            if (data?.apiUrl) state.metadata.api_url = data.apiUrl;
+            if (data?.glpiVersion) state.metadata.glpi_version = data.glpiVersion;
+            state.metadata.api_enabled = data?.apiRest === 'online' ? 'Ativa e acessível' : state.metadata.api_enabled;
+            renderConfig();
+            mostrarAviso(`Conexão somente leitura validada em ${data?.elapsedMs ?? 'tempo não informado'} ms. Amostra de chamados: ${data?.tickets ?? 'Não disponível'}. Usuários, grupos e categorias: ${data?.access?.users && data?.access?.groups && data?.access?.categories ? 'acessíveis' : 'verificação incompleta'}.`, 'sucesso');
         } catch (error) {
-            console.error('Teste GLPI falhou:', error);
+            state.serviceChecks.glpi = { ...(state.serviceChecks.glpi || {}), ok: false, failed: true, checkedAt: new Date().toISOString() };
+            renderServiceConnections();
+            console.warn('Teste GLPI falhou; detalhes sensíveis não foram registrados.', error?.name || 'Erro');
             mostrarAviso('Não foi possível validar a conexão. Verifique URL, tokens, API habilitada, permissões, rede e logs.', 'erro');
         }
     };
@@ -973,7 +1139,8 @@
     window.glpiSalvarConfiguracaoLocal = function () {
         state.localConfig = {
             integrationEnabled: getField('glpi-integration-enabled')?.value !== 'false',
-            demoEnabled: getField('glpi-demo-enabled')?.value === 'true'
+            demoEnabled: getField('glpi-demo-enabled')?.value === 'true',
+            dailyRecentLimit: Number(getField('glpi-daily-recent-limit')?.value || 10)
         };
         saveJsonStorage('glpiDashboardLocalConfig', state.localConfig);
         mostrarAviso('Configuração local salva.', 'sucesso');
@@ -988,9 +1155,7 @@
             techMode: getField('glpi-public-tech-mode')?.value || 'first',
             showTitle: Boolean(getField('glpi-public-show-title')?.checked),
             showCategory: Boolean(getField('glpi-public-show-category')?.checked),
-            showUnit: Boolean(getField('glpi-public-show-unit')?.checked),
-            showRanking: Boolean(getField('glpi-public-show-ranking')?.checked),
-            showRecent: Boolean(getField('glpi-public-show-recent')?.checked)
+            showUnit: Boolean(getField('glpi-public-show-unit')?.checked)
         };
         if (state.publicConfig.enabled && !state.publicConfig.token) state.publicConfig.token = generatePublicToken();
         saveJsonStorage('glpiPublicDashboardConfig', state.publicConfig);
@@ -1032,7 +1197,9 @@
     window.glpiAtualizarIntervaloSincronizacao = function () {
         clearInterval(state.refreshTimer);
         clearInterval(state.countdownTimer);
-        const interval = Number(getField('glpi-sync-interval')?.value || 30000);
+        const interval = state.subtab === 'diario'
+            ? 30000
+            : Number(getField('glpi-sync-interval')?.value || 30000);
         state.secondsToRefresh = Math.round(interval / 1000);
         state.refreshTimer = setInterval(() => {
             const aba = getField('aba-glpi');

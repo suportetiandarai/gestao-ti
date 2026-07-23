@@ -26,13 +26,12 @@ window.mostrarAviso = function(mensagem, tipo = 'info') {
 
 window.alert = function(mensagem) {
     let tipo = 'info';
-    let msgLimpa = mensagem;
     
     if (mensagem.toLowerCase().includes('erro') || mensagem.includes('❌')) tipo = 'erro';
     else if (mensagem.toLowerCase().includes('sucesso') || mensagem.includes('✅')) tipo = 'sucesso';
     else if (mensagem.toLowerCase().includes('atenção') || mensagem.includes('⚠️')) tipo = 'aviso';
     
-    msgLimpa = mensagem.replace(/[✅❌⚠️💡]/g, '').trim();
+    const msgLimpa = ['✅', '❌', '⚠️', '💡'].reduce((texto, icone) => texto.replaceAll(icone, ''), mensagem).trim();
     mostrarAviso(msgLimpa, tipo);
 };
 
@@ -1244,7 +1243,7 @@ async function carregarCadastros() {
 
             let linkDoc = c.foto_documento_url ? `<a href="${c.foto_documento_url}" target="_blank" style="color: #3498db; text-decoration: none; font-weight: bold; display: block; margin-bottom: 3px;">📄 Ver Documento</a>` : '';
             
-            let linkConselho = ''; 
+            let linkConselho;
             const numConselho = c.numero_conselho ? c.numero_conselho.toUpperCase() : '';
             const exigeConselho = numConselho && numConselho !== 'ISENTO' && numConselho !== 'NÃO POSSUI';
 
@@ -1287,7 +1286,7 @@ async function carregarCadastros() {
             const obsSegura = c.observacao ? encodeURIComponent(c.observacao) : '';
             const isAdmin = typeof window.usuarioAtual !== 'undefined' && window.usuarioAtual && window.usuarioAtual.role === 'admin';
             
-            let botoesAcao = '';
+            let botoesAcao;
             if (c.status !== 'Realizado' && c.status !== 'Cancelado') { 
                 botoesAcao = `<button class="btn-success btn-sm" style="flex: 1; margin: 0; padding: 4px 2px; font-size: 10px;" onclick="alterarStatusCadastro('${c.id}', 'Realizado')">✔️ Realizado</button>${c.status === 'Pendente' ? `<button class="btn-primary btn-sm" style="background: #3498db; flex: 1; margin: 0; padding: 4px 2px; font-size: 10px;" onclick="alterarStatusCadastro('${c.id}', 'Aguardando')">⏳ Pausa</button>` : `<button class="btn-primary btn-sm" style="background: #3498db; flex: 1; margin: 0; padding: 4px 2px; font-size: 10px;" onclick="alterarStatusCadastro('${c.id}', 'Pendente')">▶️ Retorna</button>`}<button class="btn-danger btn-sm" style="flex: 1; margin: 0; padding: 4px 2px; font-size: 10px;" onclick="darBaixaCadastro('${c.id}')">❌ Baixa</button><button class="btn-primary btn-sm" style="background: #95a5a6; flex: 1; margin: 0; padding: 4px 2px; font-size: 10px;" onclick="abrirModalObsCadastro('${c.id}', '${obsSegura}')">📝 Obs</button>`; 
             } else { 

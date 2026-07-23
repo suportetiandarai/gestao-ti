@@ -1,175 +1,163 @@
-# Dashboard GLPI RioSaúde
+# GESTÃO TI
 
-Dashboard gerencial para acompanhamento de chamados registrados no GLPI 10.0.18, integrado ao portal de Gestão de TI da RioSaúde.
+Portal estático em HTML, CSS e JavaScript, integrado ao Supabase Auth/PostgreSQL e a Edge Functions TypeScript/Deno. O GLPI nunca é consultado diretamente pelo navegador: a função `glpi-dashboard` sincroniza dados somente leitura para o cache `glpi_tickets_dashboard`.
 
-## Objetivo
+## Requisitos
 
-Apresentar indicadores operacionais de chamados, produtividade da equipe técnica, prazos de atendimento, pendências, SLA, evolução por período e relatórios exportáveis, sem expor credenciais do GLPI no navegador.
-
-## Funcionalidades
-
-- Aba GLPI com subabas: Dashboard geral, Técnicos, Chamados, Relatórios, Configurações e Monitoramento.
-- Cards de indicadores, rankings, gráficos em barras, tabela detalhada, busca, ordenação e paginação.
-- Filtros combináveis por período, técnico, grupo, status, categoria, prioridade, urgência, impacto, entidade, unidade, localização, tipo, requerente e SLA.
-- Exportação dos resultados filtrados para PDF, CSV e Excel compatível.
-- Atualização automática configurável e botão “Atualizar agora”.
-- Modo demonstração explícito quando não houver dados reais sincronizados.
-- Integração GLPI isolada em Supabase Edge Function, com tokens em secrets.
-
-## Tecnologias
-
-- Front-end existente: HTML, CSS e JavaScript.
-- Autenticação e banco: Supabase Auth e PostgreSQL.
-- Backend de integração: Supabase Edge Functions em TypeScript/Deno.
-- Relatórios PDF: `html2pdf.js`.
-
-## Diagnóstico GLPI
-
-- Versão utilizada: GLPI 10.0.18.
-- API: REST clássica em `{GLPI_BASE_URL}/apirest.php`.
-- Autenticação recomendada: `App-Token` + `User-Token`.
-- Alternativa: `GLPI_LOGIN` e `GLPI_PASSWORD`, somente se autorizada.
-- OAuth: não usado no MVP.
-- Permissões necessárias: usuário de API somente leitura com acesso aos chamados, usuários, grupos, categorias, entidades, localizações, SLA e relacionamentos necessários.
-
-## Variáveis de ambiente
-
-Copie `.env.example` e configure os valores reais apenas no ambiente local ou nos secrets do Supabase. Não publique `.env`.
-
-Principais variáveis:
-
-- `GLPI_BASE_URL`
-- `GLPI_APP_TOKEN`
-- `GLPI_USER_TOKEN`
-- `GLPI_LOGIN`
-- `GLPI_PASSWORD`
-- `SUPABASE_URL`
-- `SUPABASE_SERVICE_ROLE_KEY`
-- `DATABASE_URL`
-- `REDIS_URL`
+- Node.js 22 ou superior (validado com Node 24).
+- npm 10 ou superior.
+- Conta Supabase e Supabase CLI para migração/deploy.
+- Credenciais GLPI somente leitura para validar a integração real.
 
 ## Instalação e execução local
 
-Este projeto atual é estático. Para testar a interface localmente, sirva a pasta com um servidor HTTP simples:
-
 ```bash
-python -m http.server 8000
+npm install
+npm run dev
 ```
 
-Acesse `http://localhost:8000`.
+Abra `http://localhost:8000`. O servidor HTTP usa apenas APIs nativas do Node, escuta em `0.0.0.0` e não altera a execução por scripts clássicos.
 
-## Banco e sincronização
+Configure o navegador copiando `config.example.js` para `config.js`. Somente `SUPABASE_URL` e uma chave pública `sb_publishable_...`/`anon` podem estar nesse arquivo. Nunca adicione `service_role` ou tokens GLPI.
 
-Execute as migrations do Supabase:
+## Scripts npm
 
-```bash
-supabase db push
-```
+| Script | Finalidade |
+| --- | --- |
+| `npm run dev` | Servidor local em `0.0.0.0:8000`. |
+| `npm run serve` | Serve o build em `0.0.0.0:4173`. |
+| `npm run lint` | ESLint, Stylelint estrutural e validação HTML. |
+| `npm run typecheck` | TypeScript estrito das Edge Functions. |
+| `npm test` | Testes unitários com Node Test Runner. |
+| `npm run test:visual` | Playwright em desktop, notebook, tablet e celular. |
+| `npm run build` | Gera `dist/` com os arquivos estáticos validados. |
+| `npm run validate` | Lint, typecheck, testes e build em sequência. |
 
-Deploy da Edge Function:
-
-```bash
-supabase functions deploy glpi-dashboard
-```
-
-Configure secrets:
-
-```bash
-supabase secrets set GLPI_BASE_URL=... GLPI_APP_TOKEN=... GLPI_USER_TOKEN=...
-```
-
-Estratégia do MVP: consulta incremental por API REST do GLPI, cache em `glpi_tickets_dashboard`, logs em `glpi_sync_logs` e atualização padrão a cada 1 minuto.
-
-Estratégia robusta para produção: adicionar fila/Redis, job agendado no servidor, enriquecimento por subitens (`Ticket_User`, acompanhamentos e soluções), retenção histórica e métricas materializadas.
-
-## Segurança
-
-- Nenhum token do GLPI fica no front-end.
-- A função `glpi-dashboard` exige sessão Supabase e restringe sincronização a `admin` e `gestor`.
-- As tabelas GLPI têm RLS habilitado.
-- `.env` e variações são ignorados pelo Git.
-- A integração com GLPI é somente leitura.
-
-## Critérios dos indicadores
-
-Consulte [docs/GLPI_DASHBOARD_CRITERIOS.md](docs/GLPI_DASHBOARD_CRITERIOS.md).
-
-## Como integrar com o GLPI
-
-1. Verifique a versão instalada do GLPI e confirme compatibilidade com a API REST em `/apirest.php`.
-2. No GLPI, habilite a API em `Configurar > Geral > API` ou caminho equivalente da versão.
-3. Crie um cliente de API e gere/localize o `App-Token`.
-4. Crie um usuário exclusivo, como `integracao.dashboard`.
-5. Gere/localize o `User-Token` desse usuário.
-6. Libere somente permissões de leitura para chamados, técnicos, grupos, entidades, categorias, acompanhamentos, soluções e SLA.
-7. Configure as variáveis em `.env` ou nos secrets do Supabase, usando `.env.example` como referência.
-8. Faça deploy da função `glpi-dashboard`.
-9. Na aba GLPI, acesse `Configurações` e clique em `Testar conexão com o GLPI`.
-10. Clique em `Sincronizar agora` e acompanhe os logs em `Monitoramento`.
-
-Exemplo de teste manual sem tokens reais:
+Antes de enviar alterações:
 
 ```bash
-curl -i "$GLPI_API_URL/initSession"
+npm ci
+npm run validate
+npm run test:visual
+git diff --check
 ```
+
+## Dashboard Diário
+
+O Dashboard Diário contém exatamente cinco indicadores, um gráfico e uma listagem:
+
+1. Chamados abertos hoje;
+2. Em atendimento;
+3. Aguardando atendimento;
+4. Pendentes;
+5. Chamados estourados;
+6. Chamados por técnico hoje;
+7. Últimos chamados registrados.
+
+Ele atualiza os dados a cada 30 segundos sem recarregar a página. A execução no navegador é exclusiva e o back-end também usa lock atômico, evitando sincronizações concorrentes.
+
+Critérios completos: [docs/GLPI_DASHBOARD_CRITERIOS.md](docs/GLPI_DASHBOARD_CRITERIOS.md).
+
+## Arquitetura da sincronização
+
+```text
+Navegador (30 s)
+  -> Supabase Edge Function (sessão autenticada admin/gestor)
+    -> lock glpi_sync_state
+    -> GLPI REST somente leitura
+    -> busca incremental ordenada por date_mod
+    -> enriquece técnico atual via Ticket_User e atribuição via Log
+    -> paginação + retry controlado + timeout
+    -> upsert glpi_tickets_dashboard
+    -> upsert glpi_ticket_assignments_dashboard (par chamado/técnico)
+    -> cursor/saúde/log em PostgreSQL
+  -> navegador lê o cache com RLS
+```
+
+O estado é apresentado como `online`, `atrasado`, `sincronizando` ou `offline`. Falhas preservam os últimos chamados válidos.
+
+## Supabase
+
+O projeto usa o CLI local instalado pelo npm:
+
+```bash
+npx supabase login
+npx supabase link --project-ref SEU_PROJECT_REF
+npx supabase migration list --linked
+npx supabase db push --dry-run
+npx supabase db push
+```
+
+Antes do `db push`, confirme que o `project-ref` corresponde ao `SUPABASE_URL` autorizado. As migrações do dashboard são aditivas, não desativam RLS e não apagam chamados.
+
+Quando a rede não permitir a conexão PostgreSQL do CLI, execute
+`node scripts/prepare-glpi-sql.mjs` e siga o procedimento controlado pelo SQL
+Editor descrito em `docs/INTEGRACAO_GLPI.md`. Esse caminho exige reconciliar o
+histórico de migrações antes do próximo `db push`.
+
+Publique a função:
+
+```bash
+npx supabase functions deploy glpi-dashboard
+```
+
+Configure secrets sem gravar valores no repositório. Preencha localmente
+`supabase/.env.secrets.local` (já ignorado pelo Git) e digite os valores somente
+nesse arquivo ou em um prompt seguro:
+
+```bash
+npx supabase secrets set --env-file supabase/.env.secrets.local
+npx supabase secrets list
+```
+
+Na área administrativa, `GLPI > Configurações > Conectar serviços` apresenta o
+estado do Supabase e do GLPI, links oficiais e testes sanitizados. A tela nunca
+recebe os valores dos tokens; informa apenas se cada secret está configurado.
+
+Consulte todas as variáveis em `.env.example`. `SUPABASE_URL` e `SUPABASE_SERVICE_ROLE_KEY` são fornecidos pelo runtime da Edge Function; a service role nunca pertence ao navegador.
+
+## Validação GLPI
+
+Na aba `GLPI > Configurações`, use `Testar conexão com o GLPI`. A ação valida sessão, leitura de chamados, usuários, grupos e categorias, campos operacionais, status observados, duração e encerramento da sessão. Nenhuma escrita é feita no GLPI.
 
 Guia completo: [docs/INTEGRACAO_GLPI.md](docs/INTEGRACAO_GLPI.md).
 
-## Testes e validação
+## Validação visual
 
-Validações recomendadas:
-
-```bash
-supabase functions serve glpi-dashboard
-supabase db push --dry-run
-```
-
-No navegador, validar:
-
-- Login e permissões.
-- Filtros por período e técnico.
-- Cálculo de abertos, pendentes e finalizados.
-- Paginação e busca da tabela.
-- Exportação PDF, CSV e Excel.
-- Modo responsivo em desktop, tablet e celular.
-- Tratamento de API indisponível e tokens inválidos.
-
-## Estrutura
-
-```text
-index.html
-styles.css
-glpi-dashboard.js
-supabase/
-  functions/
-    glpi-dashboard/
-      index.ts
-  migrations/
-    20260720090000_glpi_dashboard.sql
-docs/
-  GLPI_DASHBOARD_CRITERIOS.md
-```
-
-## Publicação no GitHub
-
-Antes de publicar, confirme a conta autenticada:
+Na primeira execução:
 
 ```bash
-gh auth status
+npx playwright install chromium
+npm run test:visual
 ```
 
-Criação sugerida do repositório privado:
+Os testes cobrem 1920×1080, 1366×768, 768×1024 e 390×844, verificando cinco cards, único gráfico, ausência dos componentes removidos, overflow e responsividade do Dashboard Geral. Relatórios e traces de falha ficam em `playwright-report/` e `test-results/`.
 
-```bash
-gh repo create dashboard-glpi-riosaude --private --source=. --remote=origin --push
-```
+## Produção
 
-Nunca publique tokens, senhas, URLs internas sensíveis, dados pessoais, logs reais ou backups.
+1. Execute `npm ci` e `npm run validate`.
+2. Revise `npx supabase db push --dry-run` no projeto vinculado.
+3. Faça backup conforme a política institucional.
+4. Aplique migrações e valide as novas colunas.
+5. Configure secrets no Supabase.
+6. Publique `glpi-dashboard`.
+7. Teste a conexão pela aplicação autenticada.
+8. Execute uma sincronização incremental e valide `glpi_sync_state`/`glpi_sync_logs`.
+9. Publique o conteúdo de `dist/` em servidor HTTPS com rewrite de SPA quando usar `/dashboard/publico/{token}`.
 
-## Próximas melhorias
+## Rollback
 
-- Enriquecer técnicos e primeira resposta com subitens do GLPI.
-- Criar job agendado fora da interação do usuário.
-- Adicionar Redis/fila para ambientes com alto volume.
-- Criar relatórios materializados por mês e ano.
-- Refinar regras de supervisor por grupo técnico.
+O rollback é manual e deve ocorrer somente após interromper a função e confirmar que nenhum consumidor usa as novas colunas. Os comandos exatos e a ordem segura estão em [docs/INTEGRACAO_GLPI.md](docs/INTEGRACAO_GLPI.md#rollback).
+
+## Solução de problemas
+
+- `UNABLE_TO_GET_ISSUER_CERT_LOCALLY`: configure a CA corporativa; em Node moderno, use temporariamente `NODE_OPTIONS=--use-system-ca`. Não desative `strict-ssl`.
+- Dashboard em demonstração: confira `config.js`, sessão Supabase, RLS, migrações e logs da função.
+- Sincronização 409: outra execução possui o lock; aguarde a expiração configurada.
+- GLPI 401/403: valide App-Token, User-Token, IP autorizado e perfil somente leitura.
+- Campos ausentes: confira a versão real do GLPI e o payload retornado por `test-connection`.
+- Datas incorretas: valide `GLPI_TIMEZONE_OFFSET` e o fuso configurado no GLPI.
+
+## CI
+
+`.github/workflows/validate.yml` executa `npm ci`, lint, typecheck, testes, build e Playwright em `push` e `pull_request`. Os testes estruturais usam dados fictícios e não dependem de tokens GLPI/Supabase.

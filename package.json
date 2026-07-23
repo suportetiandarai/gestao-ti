@@ -1,0 +1,32 @@
+{
+  "name": "gestao-ti",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Portal estático de Gestão de TI com dashboard GLPI e Supabase.",
+  "scripts": {
+    "dev": "node scripts/serve.mjs --host 0.0.0.0 --port 8000",
+    "serve": "node scripts/serve.mjs --root dist --host 0.0.0.0 --port 4173",
+    "lint:js": "eslint . --max-warnings 0",
+    "lint:css": "stylelint \"styles.css\"",
+    "lint:html": "node scripts/validate-html.mjs",
+    "lint": "npm run lint:js && npm run lint:css && npm run lint:html",
+    "typecheck": "tsc -p tsconfig.edge.json",
+    "test": "node --test \"tests/unit/*.test.cjs\"",
+    "test:visual": "playwright test",
+    "build": "node scripts/build.mjs",
+    "validate": "npm run lint && npm run typecheck && npm test && npm run build"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@playwright/test": "^1.61.1",
+    "eslint": "^10.7.0",
+    "globals": "^17.7.0",
+    "stylelint": "^17.14.1",
+    "supabase": "^2.109.1",
+    "typescript": "^6.0.3",
+    "typescript-eslint": "^8.65.0"
+  }
+}

@@ -1,166 +1,262 @@
-# Integração do GESTÃO TI com o GLPI
+# Integração Supabase e GLPI
 
-Este guia descreve como preparar o GLPI real para alimentar o Dashboard GLPI do sistema GESTÃO TI com segurança.
+## Segurança e fluxo
 
-## 1. Verificar a versão do GLPI
-
-No GLPI, consulte a versão em áreas como `Configurar > Geral`, rodapé administrativo ou página de informações do sistema. A versão é importante porque campos, nomes de menus e recursos da API podem variar.
-
-O sistema foi preparado para GLPI 10.0.18 usando a API REST clássica em `/apirest.php`. Não assuma endpoints novos sem testar no ambiente real.
-
-## 2. Habilitar a API REST
-
-No GLPI, acesse o caminho equivalente da versão instalada, normalmente:
+A integração é somente leitura no GLPI:
 
 ```text
-Configurar > Geral > API
+Navegador -> Supabase Edge Function -> GLPI REST
+                         |
+                         -> cache PostgreSQL protegido por RLS
 ```
 
-Verifique:
+Tokens GLPI e `SUPABASE_SERVICE_ROLE_KEY` são secrets exclusivos da Edge Function. O navegador recebe somente a URL Supabase e chave pública.
 
-- API REST ativada.
-- Intervalos de IP autorizados, quando a instalação exigir.
-- Cliente de API criado.
-- `App-Token` gerado ou localizado.
-- Permissão para criar sessões pela API.
+## Links de autenticação e configuração
 
-Depois, valide a URL:
+### Supabase
+
+- Painel principal: <https://supabase.com/dashboard>
+- Tokens pessoais: <https://supabase.com/dashboard/account/tokens>
+- Guia oficial do CLI: <https://supabase.com/docs/guides/local-development/cli/getting-started>
+- Referência do CLI: <https://supabase.com/docs/reference/cli/introduction>
+
+Use `npx supabase login`. Se o ambiente não oferecer um terminal interativo, abra a página de tokens, crie um PAT com nome identificável como `gestao-ti-cli` e informe-o somente no prompt seguro do CLI. Nunca cole o PAT em chat, arquivo versionado ou linha de comando com `--token`.
+
+### GLPI
+
+O GLPI 10.0.18 não depende de um fluxo OAuth externo. Todos os endereços abaixo devem partir do `GLPI_BASE_URL` real, sem presumir host ou rota administrativa:
 
 ```text
-{GLPI_BASE_URL}/apirest.php
+Página de login: <GLPI_BASE_URL>
+API REST: <GLPI_BASE_URL>/apirest.php
+Documentação local candidata: <GLPI_BASE_URL>/apirest.php/
 ```
 
-## 3. Usuário exclusivo de integração
+Teste os dois formatos da API na instalação antes de publicar um link. Se a documentação local com barra final não responder, mantenha apenas o endpoint confirmado. Documentação oficial: <https://help.glpi-project.org/documentation/modules/configuration/general/api/api>.
 
-Crie um usuário exclusivo, por exemplo:
+## Preparação do GLPI
 
-```text
-integracao.dashboard
-```
+1. Entre com uma conta administradora e acesse `Configurar → Geral → API` ou `Setup → General → API`.
+2. Ative a API REST, confirme a URL normalmente terminada em `/apirest.php` e salve.
+3. Na mesma área, crie e ative o cliente `Dashboard Gestão TI`; limite IPs quando aplicável e gere o `App-Token`.
+4. Crie ou use o usuário exclusivo `integracao.dashboard`.
+5. Conceda somente leitura de chamados, usuários/técnicos, grupos, entidades, categorias, SLA/OLA, acompanhamentos necessários, datas e status.
+6. Não conceda criação, alteração, exclusão ou fechamento de chamados, gestão de usuários ou configurações.
+7. No perfil/preferências do usuário de integração, gere o `Token da API`/`API token`.
+8. Confirme a versão real na interface administrativa ou resposta suportada da API.
 
-Não use conta pessoal nem perfil administrador geral.
+Endpoints usados:
 
-Permissões recomendadas: somente leitura para chamados, usuários/técnicos, grupos, entidades, categorias, status, acompanhamentos, soluções, SLA, datas e tempos de atendimento. Não conceda alteração, exclusão, fechamento ou edição de chamados.
+- `GET initSession`;
+- `GET killSession`;
+- `GET Ticket`;
+- `GET User`;
+- `GET Group`;
+- `GET ITILCategory`.
 
-Gere ou localize o `User-Token` desse usuário.
+A função não executa `POST`, `PUT`, `PATCH` ou `DELETE` no GLPI.
 
-## 4. Variáveis de ambiente
+## Variáveis e secrets
 
-Configure os secrets no ambiente do back-end/Supabase Edge Function. Nunca coloque tokens no front-end.
+Obrigatórios:
 
 ```env
 GLPI_BASE_URL=
-GLPI_API_URL=
 GLPI_APP_TOKEN=
 GLPI_USER_TOKEN=
+GLPI_TIMEZONE=America/Sao_Paulo
+GLPI_TIMEZONE_OFFSET=-03:00
+```
+
+Opcionais:
+
+```env
+GLPI_API_URL=
+GLPI_LOGIN=
+GLPI_PASSWORD=
 GLPI_REQUEST_TIMEOUT=15000
-GLPI_SYNC_INTERVAL_SECONDS=30
-GLPI_VERIFY_SSL=true
-GLPI_ENTITY_ID=
-GLPI_PROFILE_ID=
-PUBLIC_DASHBOARD_ENABLED=false
-PUBLIC_DASHBOARD_TOKEN=
-NEXT_PUBLIC_APP_NAME=GESTÃO TI
-APP_TIMEZONE=America/Sao_Paulo
+GLPI_SYNC_PAGE_SIZE=100
+GLPI_SYNC_MAX_PAGES=10
+GLPI_SYNC_MODIFIED_AFTER=
+GLPI_SLA_WARNING_MINUTES=240
+GLPI_RETRY_ATTEMPTS=3
+GLPI_RETRY_BASE_DELAY_MS=300
+GLPI_SYNC_LOCK_SECONDS=120
 ```
 
-## 5. Testar conexão com o GLPI
+`GLPI_LOGIN`/`GLPI_PASSWORD` são alternativa ao User-Token e não devem ser usados simultaneamente sem necessidade. O certificado TLS do GLPI deve ser válido; a função não oferece opção para ignorar SSL.
 
-Na aba GLPI, acesse `Configurações` e clique em `Testar conexão com o GLPI`.
-
-O teste deve validar:
-
-1. URL acessível.
-2. API ativa.
-3. `App-Token` válido.
-4. `User-Token` válido.
-5. Sessão criada.
-6. Consulta de chamados permitida.
-7. Consulta de técnicos permitida.
-8. Sessão encerrada corretamente.
-
-Mensagens prováveis de erro:
-
-- URL incorreta.
-- API desativada.
-- `App-Token` inválido.
-- `User-Token` inválido.
-- Permissão insuficiente.
-- Certificado SSL inválido.
-- Timeout.
-- Bloqueio de rede.
-- CORS, caso alguém tente acessar o GLPI direto pelo navegador.
-- Erro do servidor GLPI.
-
-Detalhes técnicos devem ficar apenas nos logs protegidos.
-
-## 6. Comunicação segura
-
-Fluxo correto:
+Prefira o arquivo local ignorado pelo Git:
 
 ```text
-Navegador
-  -> Back-end do GESTÃO TI
-  -> API do GLPI
+supabase/.env.secrets.local
 ```
 
-Fluxo proibido:
+Preencha-o localmente, sem compartilhar seu conteúdo, e envie os secrets de uma vez:
+
+```bash
+npx supabase secrets set --env-file supabase/.env.secrets.local
+npx supabase secrets list
+```
+
+`secrets list` deve ser usado apenas para confirmar nomes/digests; não registre valores. O arquivo está no `.gitignore` e não pode ser adicionado ao commit.
+
+## Vincular e validar o Supabase
+
+```bash
+npx supabase login
+npx supabase link --project-ref SEU_PROJECT_REF
+npx supabase migration list --linked
+npx supabase db push --dry-run
+```
+
+Confirme que `supabase/.temp/project-ref` corresponde ao host de `SUPABASE_URL`. Não execute `db push` se o projeto estiver ausente, divergente ou não autorizado.
+
+As migrações novas são:
+
+- `20260722090000_glpi_daily_dashboard_deadlines.sql`: adiciona prazos externos/internos de atendimento e solução.
+- `20260722100000_glpi_sync_state.sql`: adiciona cursor, saúde e lock atômico.
+- `20260722110000_glpi_ticket_assignments.sql`: registra uma única atribuição diária por par chamado/técnico, obtida de `date_assign` ou do histórico do GLPI.
+
+Elas são aditivas, preservam dados, mantêm RLS e não recriam `glpi_tickets_dashboard`. Os prazos não receberam índices porque o dashboard atual calcula os cinco indicadores após carregar seu cache limitado; não há consulta SQL filtrando essas colunas. Crie índices somente quando esse padrão mudar.
+
+Aplicação:
+
+```bash
+npx supabase db push
+npx supabase migration list --linked
+```
+
+Se a rede bloquear a conexão PostgreSQL usada pelo CLI, gere os arquivos para o
+SQL Editor oficial com `node scripts/prepare-glpi-sql.mjs`. Execute primeiro
+`supabase/.temp/glpi-dry-run.sql`; o resultado esperado é
+`dry_run_rolled_back = true`, com as duas verificações seguintes iguais a
+`true`. Somente depois execute `supabase/.temp/glpi-apply.sql` e valide tabelas,
+colunas e RLS. Os arquivos gerados ficam em diretório ignorado pelo Git.
+
+Aplicar pelo SQL Editor não grava a versão em
+`supabase_migrations.schema_migrations`. Quando a conectividade PostgreSQL do
+CLI estiver disponível, reconcilie o histórico antes de um novo `db push`; não
+reaplique migrações sem comparar o schema remoto.
+
+Validação SQL após aplicar:
+
+```sql
+select column_name, data_type
+from information_schema.columns
+where table_schema = 'public'
+  and table_name = 'glpi_tickets_dashboard'
+  and column_name in (
+    'attention_due_at', 'sla_due_at',
+    'internal_attention_due_at', 'internal_sla_due_at'
+  );
+
+select status, last_cursor, last_success_at, locked_until
+from public.glpi_sync_state
+where id = 1;
+```
+
+## Deploy da Edge Function
+
+```bash
+npx supabase secrets set --env-file supabase/.env.secrets.local
+npx supabase functions deploy glpi-dashboard
+```
+
+Teste pela aplicação autenticada ou invoque a função com JWT de administrador/gestor. Não coloque JWT em histórico de shell compartilhado.
+
+Corpo para diagnóstico somente leitura:
+
+```json
+{ "action": "test-connection" }
+```
+
+Para verificar somente presença dos secrets e URLs públicas/sanitizadas, sem iniciar uma sessão GLPI:
+
+```json
+{ "action": "configuration-status" }
+```
+
+A resposta segura contém disponibilidade, amostra de tickets, campos/status observados, versão quando fornecida pelo GLPI e tempo de execução. Tokens e detalhes técnicos não são retornados.
+
+## Campos que devem ser confirmados no GLPI real
 
 ```text
-Navegador
-  -> API do GLPI usando tokens expostos
+date
+date_mod
+date_assign
+takeintoaccount_delay_stat
+time_to_own
+time_to_resolve
+internal_time_to_own
+internal_time_to_resolve
+users_id_lastupdater
+status
 ```
 
-A integração implementa sessão, timeout, paginação, cache, normalização e encerramento de sessão. Para produção, recomenda-se adicionar job agendado e fila/Redis quando houver alto volume.
+`test-connection` informa quais chaves aparecem na amostra. Ausência na amostra não prova inexistência global; confirme também o schema/documentação da instância.
 
-## 7. Atualização a cada 30 segundos
+### Resultado validado em `os.riosaude.rio.br`
 
-O painel diário atualiza o estado visual a cada 30 segundos e impede consultas simultâneas. Em produção, não consulte todo o histórico a cada ciclo.
+- `initSession`, perfil ativo, perfis, entidades, chamados, usuários, grupos, categorias, SLA, OLA e `killSession`: acessíveis em modo somente leitura.
+- Presentes no payload de Ticket: `date`, `date_mod`, `takeintoaccount_delay_stat`, `time_to_own`, `time_to_resolve`, `internal_time_to_own`, `internal_time_to_resolve`, `users_id_lastupdater` e `status`.
+- Ausente no payload de lista e item individual: `date_assign`.
+- Alternativa confirmada: técnico atual em `Ticket_User.type=2`; data do evento em `Log.date_mod` com `id_search_option=5`, identificado pela própria instalação como “Técnico”.
+- Os códigos `2 Atribuído` e `5 Solucionado` foram observados na amostra. Os demais códigos permanecem no mapeamento central do GLPI 10, mas não foram artificialmente gerados para teste.
+- A API não retornou a versão em `initSession`/`getGlpiConfig`; `10.0.18` continua sendo a versão informada pela administração, não inferida da resposta.
 
-Estratégia recomendada:
+## Sincronização incremental
 
-- Buscar somente registros alterados desde a última sincronização.
-- Usar `date_mod` ou campo equivalente.
-- Paginção com limite por ciclo.
-- Salvar último horário de sincronização.
-- Atualizar cache local.
-- Preservar últimos dados válidos em caso de falha.
+1. A Edge Function adquire `acquire_glpi_sync_lock`.
+2. Lê `glpi_sync_state.last_cursor`.
+3. Consulta páginas ordenadas por `date_mod DESC`.
+4. Para ao atingir registros anteriores ao cursor.
+5. Enriquece o técnico atual por `Ticket_User` e a atribuição pelo histórico quando `date_assign` está ausente.
+6. Faz `upsert` por `glpi_id` e pelo par chamado/técnico.
+7. Atualiza cursor, saúde e log.
+8. Encerra a sessão GLPI em `finally`.
 
-Para poucos dados, a consulta direta via back-end pode bastar. Para relatórios, vários painéis e histórico, priorize banco intermediário.
+Erros 429/5xx, falhas de rede e timeout recebem até três tentativas por padrão. Erros definitivos preservam o cache anterior e marcam a integração como `offline`. O front-end considera a sincronização atrasada após 90 segundos sem sucesso.
 
-## 8. Mapeamento dos status
+## Critérios operacionais
 
-No GLPI 10, os status comuns são:
+- Status esperados para GLPI 10: `1 Novo`, `2 Atribuído`, `3 Planejado`, `4 Pendente`, `5 Solucionado`, `6 Fechado`.
+- Esses nomes são mapeados centralmente; a confirmação real depende do teste da instância.
+- Primeira resposta: `date + takeintoaccount_delay_stat` enquanto esse campo for confiável.
+- Alternativa, se não for confiável: sincronizar o primeiro `ITILFollowup`, `TicketTask` ou evento de histórico executado por técnico. A alternativa exige enriquecimento explícito e não deve ser inferida pela idade do ticket.
 
-- `1`: Novo.
-- `2`: Atribuído.
-- `3`: Planejado.
-- `4`: Pendente.
-- `5`: Solucionado.
-- `6`: Fechado.
+## Validação visual reproduzível
 
-Confirme no ambiente real antes de congelar regras gerenciais. O dashboard possui camada de normalização para evitar espalhar números mágicos na interface.
-
-## 9. Critérios das métricas
-
-- Chamados criados hoje: abertura entre `00:00:00` e `23:59:59` em `America/Sao_Paulo`.
-- Chamados atendidos hoje: regra padrão baseada em atribuição no dia; pode ser adaptada para acompanhamento, solução ou fechamento.
-- Chamados por técnico: técnico atribuído ao chamado conforme dados sincronizados do GLPI.
-- Tempo médio de atendimento: atribuição até solução.
-- Tempo médio de solução: abertura até solução.
-- SLA vencido: chamado aberto cujo prazo de solução foi ultrapassado.
-- Valores ausentes: exibidos como `Não disponível` e não entram nas médias.
-
-## 10. Dashboard público
-
-O painel público deve exibir somente indicadores gerenciais autorizados. Não exponha tokens, e-mails, telefones, requerentes, descrições confidenciais, dados de pacientes ou acompanhamentos.
-
-No projeto estático atual, a interface permite gerar token local e abrir o painel público para validação visual. Para produção, armazene e valide o token no back-end, com possibilidade de revogação, expiração, restrição por IP e PIN.
-
-Configure o servidor para reescrever:
-
-```text
-/dashboard/publico/[token] -> /index.html
+```bash
+npm ci
+npx playwright install chromium
+npm run test:visual
 ```
 
-Sem essa regra de rewrite, use a URL de teste com query string gerada pelo botão `Abrir painel público`.
+Resoluções: 1920×1080, 1366×768, 768×1024 e 390×844. Em falha, abra `playwright-report/index.html` com `npx playwright show-report`.
+
+## Rollback
+
+Faça backup e interrompa novas sincronizações. Em seguida, somente se a aplicação anterior já estiver publicada:
+
+```sql
+drop function if exists public.acquire_glpi_sync_lock(integer);
+drop table if exists public.glpi_sync_state;
+
+alter table public.glpi_tickets_dashboard
+  drop column if exists attention_due_at,
+  drop column if exists internal_attention_due_at,
+  drop column if exists internal_sla_due_at;
+```
+
+`sla_due_at` não é removida porque pertence à migração original. O rollback das novas colunas descarta apenas os prazos recém-sincronizados; o payload bruto existente continua armazenado. Revise dependências antes de executar.
+
+## Diagnóstico de falhas
+
+- `401/403`: sessão Supabase, papel `admin`/`gestor`, tokens ou permissões GLPI.
+- `409`: lock de sincronização ativo; aguarde até `locked_until`.
+- `429/5xx`: limite/indisponibilidade GLPI; verifique retry e logs.
+- `offline`: consulte `glpi_sync_state.last_error_at` e `glpi_sync_logs` com perfil autorizado.
+- Horários deslocados: confirme o fuso do GLPI e `GLPI_TIMEZONE_OFFSET`.
+- Campos SLA/OLA vazios: confirme que o ticket possui SLA/OLA atribuído no GLPI.
