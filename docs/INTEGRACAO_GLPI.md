@@ -219,6 +219,16 @@ status
 
 Erros 429/5xx, falhas de rede e timeout recebem até três tentativas por padrão. Erros definitivos preservam o cache anterior e marcam a integração como `offline`. O front-end considera a sincronização atrasada após 90 segundos sem sucesso.
 
+No primeiro bootstrap, quando ainda não existe cursor, a função limita a carga a
+`GLPI_SYNC_INITIAL_MAX_PAGES` (padrão `1`, com 100 chamados por página). Isso
+evita tentar enriquecer todo o histórico dentro de uma única execução. Depois
+do primeiro cursor, `GLPI_SYNC_MAX_PAGES` controla as páginas incrementais.
+
+O modo demonstração é exclusivamente local e opt-in. Cache vazio, falha de RLS,
+sessão ausente ou indisponibilidade do GLPI exibem `Offline • GLPI` e não criam
+chamados fictícios. A sincronização inicial e o temporizador de 30 segundos não
+dependem da existência prévia de registros no cache.
+
 ## Critérios operacionais
 
 - Status esperados para GLPI 10: `1 Novo`, `2 Atribuído`, `3 Planejado`, `4 Pendente`, `5 Solucionado`, `6 Fechado`.

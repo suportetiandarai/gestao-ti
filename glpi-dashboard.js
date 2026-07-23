@@ -49,6 +49,11 @@
         showCategory: true,
         showUnit: true
     });
+    const DEFAULT_LOCAL_CONFIG = Object.freeze({
+        integrationEnabled: true,
+        demoEnabled: false,
+        dailyRecentLimit: 10
+    });
 
     function esc(value) {
         return (value === null || value === undefined || value === '')
@@ -165,6 +170,19 @@
         } catch (_) {
             return { ...fallback };
         }
+    }
+
+    function loadLocalConfig() {
+        state.localConfig = readJsonStorage('glpiDashboardLocalConfig', DEFAULT_LOCAL_CONFIG);
+        return state.localConfig;
+    }
+
+    function canTriggerSync() {
+        const role = String(window.perfilAtual?.role || '').toLowerCase();
+        return !window.GESTAO_TI_PUBLIC_DASHBOARD
+            && ['admin', 'gestor'].includes(role)
+            && state.localConfig.integrationEnabled !== false
+            && state.localConfig.demoEnabled !== true;
     }
 
     function saveJsonStorage(key, value) {
@@ -310,11 +328,7 @@
     async function loadTickets() {
         state.publicMode = Boolean(window.GESTAO_TI_PUBLIC_DASHBOARD);
         state.publicConfig = readJsonStorage('glpiPublicDashboardConfig', DEFAULT_PUBLIC_CONFIG);
-        state.localConfig = readJsonStorage('glpiDashboardLocalConfig', {
-            integrationEnabled: true,
-            demoEnabled: false,
-            dailyRecentLimit: 10
-        });
+        loadLocalConfig();
         state.metadata = {
             glpi_version: GLPI_VERSION,
             api_enabled: 'A confirmar no endpoint /apirest.php/initSession',
@@ -325,11 +339,23 @@
             base_url: ''
         };
 
-        if (!window.supabase || state.localConfig.demoEnabled) {
+        if (state.localConfig.demoEnabled) {
             state.demo = true;
             state.tickets = demoTickets();
             state.dailyAssignments = state.tickets;
-            state.syncLogs = [{ level: 'aviso', message: 'Supabase não configurado. Modo demonstração local ativado.', created_at: new Date().toISOString() }];
+            state.syncLogs = [{ level: 'aviso', message: 'Modo demonstração ativado explicitamente na configuração local.', created_at: new Date().toISOString() }];
+            return;
+        }
+
+        if (state.demo) {
+            state.tickets = [];
+            state.dailyAssignments = [];
+        }
+        state.demo = false;
+
+        if (!window.supabase) {
+            state.integrationState = { ...(state.integrationState || {}), status: 'offline' };
+            state.syncLogs = [{ level: 'erro', message: 'Supabase não configurado. Nenhum dado fictício foi carregado.', created_at: new Date().toISOString() }];
             return;
         }
 
@@ -369,22 +395,22 @@
             if (integrationState) state.integrationState = integrationState;
 
             if ((!data || data.length === 0) && !state.tickets.length) {
-                state.demo = true;
-                state.tickets = demoTickets();
-                state.dailyAssignments = state.tickets;
-                state.syncLogs.unshift({ level: 'aviso', message: 'Nenhum chamado real sincronizado. Modo demonstração ativado sem gravar dados fictícios.', created_at: new Date().toISOString() });
+                state.tickets = [];
+                state.dailyAssignments = [];
+                state.syncLogs.unshift({ level: 'aviso', message: 'Nenhum chamado real foi sincronizado. Nenhum dado fictício foi carregado.', created_at: new Date().toISOString() });
             } else if (data?.length) {
                 state.demo = false;
                 state.tickets = data.map(normalizeTicket);
             }
         } catch (error) {
-            console.warn('Dashboard GLPI em modo demonstração:', error);
+            console.warn('Dashboard GLPI offline; detalhes sensíveis não foram registrados.', error?.name || 'Erro');
+            state.demo = false;
+            state.integrationState = { ...(state.integrationState || {}), status: 'offline' };
             state.syncLogs = [{ level: 'erro', message: 'Não foi possível ler as tabelas GLPI. Últimos dados válidos preservados quando disponíveis.', created_at: new Date().toISOString() }];
             if (!state.tickets.length) {
-                state.demo = true;
-                state.tickets = demoTickets();
-                state.dailyAssignments = state.tickets;
-                state.syncLogs[0].message = 'Não foi possível ler as tabelas GLPI. Modo demonstração ativado.';
+                state.tickets = [];
+                state.dailyAssignments = [];
+                state.syncLogs[0].message = 'Não foi possível ler as tabelas GLPI. Nenhum dado fictício foi carregado.';
             }
         }
     }
@@ -823,7 +849,7 @@
     function renderMonitoring() {
         const last = state.syncLogs[0];
         getField('glpi-sync-summary').innerHTML = `
-            <dt>Conexão</dt><dd>${state.demo ? 'Modo demonstração ou aguardando configuração' : 'Dados reais disponíveis'}</dd>
+            <dt>Conexão</dt><dd>${state.demo ? 'Modo demonstração ativado explicitamente' : (state.tickets.length ? 'Dados reais disponíveis' : 'GLPI offline ou aguardando a primeira sincronização')}</dd>
             <dt>Saúde da integração</dt><dd>${esc(state.integrationState?.status || 'Não disponível')}</dd>
             <dt>Última sincronização</dt><dd>${last ? formatDateTime(last.created_at) : 'Não disponível'}</dd>
             <dt>Registros carregados</dt><dd>${state.tickets.length}</dd>
@@ -843,15 +869,16 @@
         const lastSuccess = parseDate(state.integrationState?.last_success_at);
         const stale = lastSuccess && (Date.now() - lastSuccess.getTime()) / 1000 > 90;
         const integrationStatus = state.integrationState?.status;
+        const hasRealTickets = state.tickets.some(ticket => ticket.sourceEnvironment !== 'demo');
         const connection = state.demo
-            ? { label: 'Offline • demonstração', className: 'error' }
-            : integrationStatus === 'offline'
-                ? { label: 'GLPI offline', className: 'error' }
-                : integrationStatus === 'syncing'
+            ? { label: 'Offline • Demonstração', className: 'error' }
+            : integrationStatus === 'syncing'
                     ? { label: 'Sincronizando GLPI', className: 'warning' }
-                    : stale || integrationStatus === 'delayed'
+                : stale || integrationStatus === 'delayed'
                         ? { label: 'Sincronização atrasada', className: 'warning' }
-                        : { label: 'GLPI online', className: 'ok' };
+                    : integrationStatus === 'online' && lastSuccess && hasRealTickets
+                        ? { label: 'Online • GLPI', className: 'ok' }
+                        : { label: 'Offline • GLPI', className: 'error' };
         status.textContent = connection.label;
         status.className = `glpi-status-badge ${connection.className}`;
         const last = state.lastUpdatedAt || state.syncLogs[0]?.created_at;
@@ -880,7 +907,7 @@
         state.refreshing = true;
         const scrollTop = document.querySelector('.main-content')?.scrollTop || 0;
         try {
-            if (triggerSync && window.supabase?.functions && !state.demo && state.localConfig.integrationEnabled !== false) {
+            if (triggerSync && window.supabase?.functions && canTriggerSync()) {
                 const { error } = await supabase.functions.invoke('glpi-dashboard', { body: { action: 'sync-incremental' } });
                 if (error) throw error;
             }
@@ -896,6 +923,8 @@
             return true;
         } catch (error) {
             console.error('Falha ao atualizar GLPI:', error);
+            state.demo = false;
+            state.integrationState = { ...(state.integrationState || {}), status: 'offline' };
             state.syncLogs.unshift({ level: 'erro', message: 'Falha na atualização. Os últimos dados válidos foram mantidos.', created_at: new Date().toISOString() });
             mostrarAviso('Não foi possível atualizar agora. Mantive os últimos dados válidos.', 'aviso');
             renderAll();
@@ -922,7 +951,8 @@
             return;
         }
         state.initialized = true;
-        await refreshData(false);
+        loadLocalConfig();
+        await refreshData(canTriggerSync());
         setDefaultPeriod();
         applyFilters();
         window.glpiAbrirSubaba(window.GESTAO_TI_PUBLIC_DASHBOARD ? 'diario' : state.subtab || 'diario');
@@ -1001,7 +1031,7 @@
     window.glpiAtualizarAgora = async function () {
         if (state.refreshing) return;
         mostrarAviso('Atualizando dados do GLPI...', 'aviso');
-        const updated = await refreshData(!window.GESTAO_TI_PUBLIC_DASHBOARD);
+        const updated = await refreshData(canTriggerSync());
         if (updated) mostrarAviso('Dashboard GLPI atualizado.', 'sucesso');
     };
 
@@ -1112,9 +1142,15 @@
     window.glpiLimparCache = function () {
         if (!window.exigirAdmin?.()) return;
         state.tickets = [];
+        state.dailyAssignments = [];
         state.filtered = [];
-        state.demo = true;
-        state.tickets = demoTickets();
+        state.demo = state.localConfig.demoEnabled === true;
+        if (state.demo) {
+            state.tickets = demoTickets();
+            state.dailyAssignments = state.tickets;
+        } else {
+            state.integrationState = { ...(state.integrationState || {}), status: 'offline' };
+        }
         applyFilters();
         mostrarAviso('Cache visual local limpo. O cache real do banco deve ser limpo pela rotina administrativa do back-end.', 'aviso');
     };
@@ -1203,7 +1239,7 @@
         state.secondsToRefresh = Math.round(interval / 1000);
         state.refreshTimer = setInterval(() => {
             const aba = getField('aba-glpi');
-            if (aba && !aba.classList.contains('hidden')) refreshData(!state.demo && !window.GESTAO_TI_PUBLIC_DASHBOARD);
+            if (aba && !aba.classList.contains('hidden')) refreshData(canTriggerSync());
         }, interval);
         state.countdownTimer = setInterval(() => {
             state.secondsToRefresh = state.secondsToRefresh <= 1 ? Math.round(interval / 1000) : state.secondsToRefresh - 1;

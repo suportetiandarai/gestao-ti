@@ -42,6 +42,16 @@ function env(name: string) {
   return Deno.env.get(name)?.trim() || '';
 }
 
+function jwtRole(token: string) {
+  try {
+    const payload = token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
+    const decoded = JSON.parse(atob(payload)) as JsonRecord;
+    return String(decoded.role || '').toLowerCase();
+  } catch {
+    return '';
+  }
+}
+
 function boundedNumber(name: string, fallback: number, minimum: number, maximum: number) {
   const value = Number(env(name) || fallback);
   return Number.isFinite(value) ? Math.max(minimum, Math.min(maximum, value)) : fallback;
@@ -232,9 +242,12 @@ class GlpiClient {
     const pageSize = boundedNumber('GLPI_SYNC_PAGE_SIZE', 100, 1, 1000);
     const maxPages = boundedNumber('GLPI_SYNC_MAX_PAGES', 10, 1, 100);
     const modifiedAfter = env('GLPI_SYNC_MODIFIED_AFTER') || cursor;
+    const effectiveMaxPages = modifiedAfter
+      ? maxPages
+      : boundedNumber('GLPI_SYNC_INITIAL_MAX_PAGES', 1, 1, maxPages);
     const tickets: JsonRecord[] = [];
 
-    for (let page = 0; page < maxPages; page += 1) {
+    for (let page = 0; page < effectiveMaxPages; page += 1) {
       const start = page * pageSize;
       const end = start + pageSize - 1;
       const params = new URLSearchParams({
@@ -425,14 +438,20 @@ Deno.serve(async (request) => {
   let glpi: GlpiClient | null = null;
   let lockAcquired = false;
   let action = '';
+  let stage = 'authorize';
+  let trustedOperationalCall = false;
 
   try {
     const token = auth.replace(/^Bearer\s+/i, '');
-    const { data: { user }, error: userError } = await admin.auth.getUser(token);
-    if (userError || !user) return json({ error: 'Sessão inválida.' }, 401);
-    const { data: profile } = await admin.from('profiles').select('role').eq('id', user.id).single();
-    const role = String(profile?.role || '').toLowerCase();
-    if (!['admin', 'gestor'].includes(role)) return json({ error: 'Acesso restrito a administradores e gestores.' }, 403);
+    const operationalRole = jwtRole(token);
+    trustedOperationalCall = token === serviceKey || ['service_role', 'postgres'].includes(operationalRole);
+    if (!trustedOperationalCall) {
+      const { data: { user }, error: userError } = await admin.auth.getUser(token);
+      if (userError || !user) return json({ error: 'Sessão inválida.' }, 401);
+      const { data: profile } = await admin.from('profiles').select('role').eq('id', user.id).single();
+      const role = String(profile?.role || '').toLowerCase();
+      if (!['admin', 'gestor'].includes(role)) return json({ error: 'Acesso restrito a administradores e gestores.' }, 403);
+    }
 
     const body = await request.json().catch(() => ({})) as JsonRecord;
     action = String(body.action || '');
@@ -441,6 +460,23 @@ Deno.serve(async (request) => {
     if (action === 'configuration-status') {
       const baseUrl = env('GLPI_BASE_URL').replace(/\/+$/, '');
       const apiUrl = (env('GLPI_API_URL') || (baseUrl ? `${baseUrl}/apirest.php` : '')).replace(/\/+$/, '');
+      const [ticketsResult, assignmentsResult, syncStateResult] = await Promise.all([
+        admin.from('glpi_tickets_dashboard').select('glpi_id', { count: 'exact', head: true }),
+        admin.from('glpi_ticket_assignments_dashboard').select('technician_id').limit(5000),
+        admin
+          .from('glpi_sync_state')
+          .select('status, last_success_at, last_cursor, last_records_processed, last_error_at')
+          .eq('id', 1)
+          .maybeSingle(),
+      ]);
+      if (ticketsResult.error) throw ticketsResult.error;
+      if (assignmentsResult.error) throw assignmentsResult.error;
+      if (syncStateResult.error) throw syncStateResult.error;
+      const technicianIds = new Set(
+        (assignmentsResult.data || [])
+          .map((row: { technician_id: unknown }) => row.technician_id)
+          .filter(Boolean),
+      );
       return json({
         ok: true,
         configured: Boolean(baseUrl && env('GLPI_APP_TOKEN') && (env('GLPI_USER_TOKEN') || (env('GLPI_LOGIN') && env('GLPI_PASSWORD')))),
@@ -452,12 +488,19 @@ Deno.serve(async (request) => {
           userToken: Boolean(env('GLPI_USER_TOKEN')),
           loginFallback: Boolean(env('GLPI_LOGIN') && env('GLPI_PASSWORD')),
         },
+        cache: {
+          tickets: ticketsResult.count || 0,
+          technicians: technicianIds.size,
+          assignments: assignmentsResult.data?.length || 0,
+        },
+        syncState: syncStateResult.data || null,
         timezone: env('GLPI_TIMEZONE') || 'America/Sao_Paulo',
         checkedAt: new Date().toISOString(),
       });
     }
 
     if (action === 'sync-incremental') {
+      stage = 'acquire-lock';
       const { data: acquired, error: lockError } = await admin.rpc('acquire_glpi_sync_lock', {
         lock_seconds: boundedNumber('GLPI_SYNC_LOCK_SECONDS', 120, 30, 600),
       });
@@ -466,6 +509,7 @@ Deno.serve(async (request) => {
       if (!lockAcquired) return json({ error: 'Sincronização GLPI já está em andamento.' }, 409);
     }
 
+    stage = 'init-session';
     glpi = new GlpiClient();
     await glpi.initSession();
     if (action === 'test-connection') {
@@ -507,17 +551,23 @@ Deno.serve(async (request) => {
       });
     }
 
-    const { data: syncState } = await admin.from('glpi_sync_state').select('last_cursor').eq('id', 1).maybeSingle();
+    stage = 'read-sync-state';
+    const { data: syncState, error: syncStateError } = await admin.from('glpi_sync_state').select('last_cursor').eq('id', 1).maybeSingle();
+    if (syncStateError) throw syncStateError;
     const previousCursor = syncState?.last_cursor ? String(syncState.last_cursor) : null;
+    stage = 'fetch-tickets';
     const rawTickets = await glpi.getTickets(previousCursor);
+    stage = 'enrich-tickets';
     const tickets = await glpi.enrichTickets(rawTickets);
     const mapped = tickets.map(mapTicket).filter((ticket) => ticket.glpi_id);
     if (mapped.length) {
+      stage = 'upsert-tickets';
       const { error } = await admin.from('glpi_tickets_dashboard').upsert(mapped, { onConflict: 'glpi_id' });
       if (error) throw error;
     }
     const ticketIds = mapped.map((ticket) => ticket.glpi_id);
     if (ticketIds.length) {
+      stage = 'replace-assignments';
       const assignments = tickets.flatMap(mapTicketAssignments);
       const { error: deleteAssignmentsError } = await admin
         .from('glpi_ticket_assignments_dashboard')
@@ -535,6 +585,7 @@ Deno.serve(async (request) => {
       if (!ticket.modified_at) return latest;
       return !latest || ticket.modified_at > latest ? ticket.modified_at : latest;
     }, previousCursor);
+    stage = 'update-sync-state';
     await updateSyncState(admin, {
       status: 'online',
       locked_until: null,
@@ -543,6 +594,7 @@ Deno.serve(async (request) => {
       last_records_processed: mapped.length,
       last_error: null,
     });
+    stage = 'write-sync-log';
     await logSync(admin, 'info', 'Sincronização incremental concluída.', mapped.length, '', cursor);
     return json({ ok: true, records: mapped.length, lastCursor: cursor, elapsedMs: Date.now() - startedAt });
   } catch (error) {
@@ -557,7 +609,11 @@ Deno.serve(async (request) => {
     }
     await logSync(admin, 'erro', 'Falha na sincronização com o GLPI.', 0, message);
     console.error('glpi-dashboard failed:', message);
-    return json({ error: 'Falha na integração com o GLPI. Detalhes registrados nos logs.' }, 500);
+    return json({
+      error: 'Falha na integração com o GLPI. Detalhes registrados nos logs.',
+      stage,
+      ...(trustedOperationalCall ? { diagnostic: message } : {}),
+    }, 500);
   } finally {
     await glpi?.killSession();
   }
