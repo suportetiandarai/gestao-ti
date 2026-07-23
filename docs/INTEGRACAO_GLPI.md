@@ -203,6 +203,9 @@ status
 - Presentes no payload de Ticket: `date`, `date_mod`, `takeintoaccount_delay_stat`, `time_to_own`, `time_to_resolve`, `internal_time_to_own`, `internal_time_to_resolve`, `users_id_lastupdater` e `status`.
 - Ausente no payload de lista e item individual: `date_assign`.
 - Alternativa confirmada: técnico atual em `Ticket_User.type=2`; data do evento em `Log.date_mod` com `id_search_option=5`, identificado pela própria instalação como “Técnico”.
+- Grupo técnico confirmado: `SUPORTE TI`, ID `1`, pela relação `Ticket/{id}/Group_Ticket` com `type=2`. Configure `GLPI_TECH_GROUP_ID=1` e `GLPI_TECH_GROUP_NAME=Suporte TI`; o ID tem prioridade.
+- Responsável pela solução: `Ticket/{id}/ITILSolution.users_id`; data da solução em `date_creation` (com `date_mod` como alternativa).
+- Nome de usuário confirmado em campos separados. A ordem correta é `firstname + realname`; `display_name`/`completename` são priorizados somente quando preenchidos.
 - Os códigos `2 Atribuído` e `5 Solucionado` foram observados na amostra. Os demais códigos permanecem no mapeamento central do GLPI 10, mas não foram artificialmente gerados para teste.
 - A API não retornou a versão em `initSession`/`getGlpiConfig`; `10.0.18` continua sendo a versão informada pela administração, não inferida da resposta.
 
@@ -212,7 +215,7 @@ status
 2. Lê `glpi_sync_state.last_cursor`.
 3. Consulta páginas ordenadas por `date_mod DESC`.
 4. Para ao atingir registros anteriores ao cursor.
-5. Enriquece o técnico atual por `Ticket_User` e a atribuição pelo histórico quando `date_assign` está ausente.
+5. Enriquece técnico por `Ticket_User`, grupo responsável por `Group_Ticket`, solução por `ITILSolution` e atribuição pelo histórico quando `date_assign` está ausente.
 6. Faz `upsert` por `glpi_id` e pelo par chamado/técnico.
 7. Atualiza cursor, saúde e log.
 8. Encerra a sessão GLPI em `finally`.
@@ -228,6 +231,19 @@ O modo demonstração é exclusivamente local e opt-in. Cache vazio, falha de RL
 sessão ausente ou indisponibilidade do GLPI exibem `Offline • GLPI` e não criam
 chamados fictícios. A sincronização inicial e o temporizador de 30 segundos não
 dependem da existência prévia de registros no cache.
+
+## Plantões e grupo operacional
+
+O Dashboard Diário calcula o período no fuso `America/Sao_Paulo`:
+
+- Diurno: 07:00 até 19:00 do mesmo dia.
+- Noturno: 19:00 até 07:00 do dia seguinte.
+- Entre 00:00 e 06:59:59, o início é 19:00 do dia anterior.
+
+Todas as consultas visuais do Diário usam somente o grupo técnico ID `1`. Se o
+ID configurado não existir ou se a busca exata por `GLPI_TECH_GROUP_NAME` falhar,
+a Edge Function registra erro de configuração e o Dashboard Diário não inclui
+chamados de outros grupos.
 
 ## Critérios operacionais
 

@@ -12,11 +12,26 @@ const dailyView = html.match(/<div id="glpi-view-diario"[\s\S]*?<div id="glpi-vi
 const dailyRenderer = source.match(/function renderDailyDashboard\(\)[\s\S]*?function renderBarChart/)?.[0] || '';
 
 test('Dashboard Diário contém somente a estrutura autorizada', () => {
-  const labels = ['Chamados abertos hoje', 'Em atendimento', 'Aguardando atendimento', 'Pendentes', 'Chamados estourados'];
+  const labels = ['Chamados abertos no plantão', 'Em atendimento', 'Aguardando atendimento', 'Pendentes', 'Chamados estourados'];
   assert.equal((dailyView.match(/class="glpi-chart"/g) || []).length, 1);
+  assert.match(dailyView, /id="glpi-current-shift"/);
+  assert.match(dailyView, /Chamados resolvidos por técnico no plantão/);
   assert.match(dailyView, /Últimos chamados registrados/);
   assert.doesNotMatch(dailyView, /Ranking diário dos técnicos|Chamados antigos ainda abertos/);
   assert.equal(labels.filter((label) => dailyRenderer.includes(`['${label}'`)).length, 5);
+});
+
+test('modo painel não existe no Diário e permanece disponível no Geral', () => {
+  assert.match(html, /class="[^"]*glpi-general-panel-action[^"]*"[^>]*>Modo Painel/);
+  assert.match(source, /if \(state\.subtab === 'diario'\)/);
+  assert.match(source, /O modo painel está disponível somente no Dashboard Geral/);
+  assert.doesNotMatch(dailyView, />Modo Painel</);
+  assert.doesNotMatch(dailyView, />Tela cheia</);
+});
+
+test('texto detalhado de diagnóstico não aparece na interface', () => {
+  assert.doesNotMatch(html, /id="glpi-diagnostic"|Diagnóstico: versão GLPI/);
+  assert.doesNotMatch(source, /function renderDiagnostics/);
 });
 
 test('HTML não contém IDs duplicados', () => {
@@ -70,6 +85,21 @@ test('atribuição real usa relações e histórico quando date_assign não é e
   assert.match(edgeSource, /Number\(relation\.type\) === 2/);
   assert.match(assignmentsMigration, /primary key \(ticket_glpi_id, technician_id\)/i);
   assert.match(source, /glpi_ticket_assignments_dashboard/);
+});
+
+test('grupo técnico e responsável pela solução usam as relações reais do GLPI', () => {
+  assert.match(edgeSource, /Group_Ticket/);
+  assert.match(edgeSource, /Number\(relation\.type\) === 2/);
+  assert.match(edgeSource, /ITILSolution/);
+  assert.match(edgeSource, /latestSolution/);
+  assert.match(edgeSource, /GLPI_TECH_GROUP_ID/);
+  assert.match(edgeSource, /GLPI_TECH_GROUP_NAME/);
+  assert.match(edgeSource, /Grupo técnico .* não localizado no GLPI/);
+});
+
+test('nome do técnico usa firstname antes de realname', () => {
+  assert.match(edgeSource, /\[clean\(user\.firstname\), clean\(user\.realname\)\]/);
+  assert.doesNotMatch(edgeSource, /\[label\(user\.realname\), label\(user\.firstname\)\]/);
 });
 
 test('Edge Function aceita chamada operacional validada pelo gateway sem liberar acesso anônimo', () => {

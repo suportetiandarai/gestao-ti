@@ -17,13 +17,13 @@
 - `GET /apirest.php/initSession`
 - `GET /apirest.php/killSession`
 - `GET /apirest.php/Ticket`
-- Enriquecimento usado: `Ticket/{id}/Ticket_User`, `Ticket/{id}/Log` e `User/{id}`. As consultas de `Group`, `ITILCategory`, `SLA`, `OLA` e entidades também foram validadas em modo somente leitura.
+- Enriquecimento usado: `Ticket/{id}/Ticket_User`, `Ticket/{id}/Group_Ticket`, `Ticket/{id}/ITILSolution`, `Ticket/{id}/Log` e `User/{id}`.
 
 ## Identificação dos dados
 
 - Chamados: `Ticket.id`.
 - Técnicos: relações `Ticket_User` de tipo `2` (técnico), enriquecidas com `User/{id}`.
-- Grupos técnicos: grupo atribuído ao chamado.
+- Grupos técnicos: relações `Group_Ticket` de tipo `2` (grupo responsável). O grupo real `SUPORTE TI` foi confirmado com ID `1`; `GLPI_TECH_GROUP_ID=1` tem prioridade e `GLPI_TECH_GROUP_NAME=Suporte TI` é a busca alternativa exata.
 - Categorias: `itilcategories_id`.
 - Mapeamento centralizado do GLPI 10: códigos `1 Novo`, `2 Atribuído`, `3 Planejado`, `4 Pendente`, `5 Solucionado`, `6 Fechado`. A amostra real confirmou somente os códigos `2` e `5`; os demais não foram artificialmente produzidos.
 - Datas: abertura `date`, modificação `date_mod`, solução `solvedate` e fechamento `closedate`. Como `date_assign` não é exposto nesta instalação, a atribuição usa `Log.date_mod` no evento de técnico (`id_search_option=5`).
@@ -41,10 +41,13 @@
 - Chamados pendentes: chamados atualmente no status `Pendente`.
 - Chamados finalizados: chamados com `solved_at` ou `closed_at` dentro do período filtrado.
 - Chamados atendidos por técnico no Dashboard Geral: regra configurável. O padrão inicial é chamado solucionado pelo técnico no dia atual.
-- Chamados abertos hoje: `opened_at` entre `00:00:00` e `23:59:59` em `America/Sao_Paulo`.
-- Em atendimento: status atual `2 Atribuído` ou `3 Planejado`, com `first_response_at` registrado. O uso da primeira resposta torna esse indicador mutuamente exclusivo de “Aguardando atendimento”.
-- Aguardando atendimento: status atual `1 Novo`; ou status `2 Atribuído`/`3 Planejado` sem `first_response_at`. Essa regra usa a primeira resposta calculada pelo campo estatístico do GLPI. Enquanto acompanhamentos individuais não forem sincronizados, eles não são usados separadamente para retirar um chamado da espera.
-- Chamados atendidos hoje no Dashboard Diário: chamado cuja atribuição ocorreu no intervalo do dia em `America/Sao_Paulo`, agrupado pelo técnico atualmente atribuído. Cada par técnico/chamado é contado uma única vez. A instalação real não devolve `Ticket.date_assign`; por isso, o técnico atual vem de `Ticket/{id}/Ticket_User` com `type=2` e a data vem do evento `Ticket/{id}/Log` cujo `id_search_option=5` (opção real “Técnico”). Se `date_assign` passar a ser exposto, ele volta a ser a fonte preferencial. Acompanhamentos, soluções e fechamentos não são somados.
+- Plantão atual: em `America/Sao_Paulo`, o diurno é `[07:00, 19:00)` e o noturno é `[19:00, 07:00)` do dia seguinte. Entre 00:00 e 06:59:59, usa-se o plantão iniciado às 19:00 do dia anterior. O limite final é exclusivo para não duplicar chamados na virada.
+- Chamados abertos no plantão: `opened_at` dentro do plantão atual e vínculo técnico com o grupo ID `1`.
+- Em atendimento: chamado do grupo ID `1`, não solucionado/fechado, com pelo menos uma relação `Ticket_User.type=2`.
+- Aguardando atendimento: chamado do grupo ID `1`, não solucionado/fechado, sem qualquer relação `Ticket_User.type=2`.
+- Resolvido pelo técnico: status `5 Solucionado` ou `6 Fechado`. A classificação centralizada é mutuamente exclusiva, na ordem: resolvido, em atendimento, aguardando.
+- Pendentes: status `4 Pendente` no grupo ID `1`. É um indicador de status separado; por isso, um pendente com técnico também pertence operacionalmente a “Em atendimento”, e essa sobreposição é intencional.
+- Gráfico do Dashboard Diário: tickets solucionados ou fechados durante o plantão, somente do grupo ID `1`. O responsável preferencial é `ITILSolution.users_id`; na ausência de solução identificável, usa-se o técnico atual `Ticket_User.type=2`. Cada par técnico/chamado é contado uma única vez. Acompanhamentos, atribuições e fechamentos sem status final não aumentam o gráfico.
 - Tempo médio de primeira resposta: soma de `first_response_at - opened_at` dividida pela quantidade de chamados com as duas datas válidas.
 - Tempo médio de solução: soma de `solved_at - opened_at` dividida pela quantidade de chamados solucionados com datas válidas.
 - Tempo médio de fechamento: soma de `closed_at - opened_at` dividida pela quantidade de chamados fechados com datas válidas.
@@ -55,7 +58,7 @@
 
 - A lista exibe somente número, título autorizado, status, técnico, hora, categoria e unidade autorizadas.
 - Solicitante, e-mail, telefone, descrição, acompanhamentos, dados clínicos e demais dados sensíveis não são renderizados.
-- No painel público, título, nome do técnico, categoria e unidade obedecem às opções definidas pelo administrador.
+- O Dashboard Diário não oferece modo painel, tela cheia de painel nem link público. Essas funções permanecem disponíveis somente no Dashboard Geral autenticado.
 - A quantidade de chamados recentes é configurada na área administrativa; o padrão é 10.
 
 Valores indisponíveis são exibidos como “Não disponível” e não entram em médias.
@@ -68,3 +71,8 @@ Valores indisponíveis são exibidos como “Não disponível” e não entram e
 - `glpi_sync_state` bloqueia execuções concorrentes e registra `online`, `syncing`, `delayed` ou `offline`.
 - Os últimos dados válidos permanecem visíveis em falhas de rede ou GLPI.
 - A atualização visual do Dashboard Diário continua fixa em 30 segundos.
+- A cada atualização, o intervalo é recalculado; assim, a virada de plantão ocorre automaticamente sem recarregar a página.
+
+## Nomes dos técnicos
+
+O nome é formatado centralmente. A integração prioriza `display_name` ou `completename` quando preenchido; caso contrário usa `firstname + realname`, remove espaços duplicados e recorre a `name` somente como último recurso. A instalação real retornou, por exemplo, `firstname=Vinícius` e `realname=Manoel Pascoal Silva`; a concatenação anterior estava invertida como `realname + firstname`.

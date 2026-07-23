@@ -158,13 +158,11 @@
                             <span id="glpi-current-time" class="glpi-last-update">Hora atual: Não disponível</span>
                             <span id="glpi-next-refresh" class="glpi-last-update">Próxima atualização: Não disponível</span>
                             <button type="button" class="btn-primary btn-sm" onclick="glpiAtualizarAgora()">Atualizar agora</button>
-                            <button type="button" class="btn-secondary btn-sm glpi-daily-extra-action" onclick="glpiAlternarPainel()">Modo Painel</button>
-                            <button type="button" class="btn-secondary btn-sm glpi-daily-extra-action" onclick="glpiTelaCheia()">Tela cheia</button>
+                            <button type="button" class="btn-secondary btn-sm glpi-general-panel-action" onclick="glpiAlternarPainel()">Modo Painel</button>
+                            <button type="button" class="btn-secondary btn-sm glpi-general-panel-action" onclick="glpiTelaCheia()">Tela cheia</button>
                             <button type="button" class="glpi-filter-button" onclick="glpiAbrirFiltros()">☷ Filtros <span id="glpi-active-filter-count">0</span></button>
                         </div>
                     </div>
-
-                    <div id="glpi-diagnostic" class="glpi-diagnostic"></div>
 
                     <div class="glpi-subtabs" role="tablist" aria-label="Áreas do dashboard GLPI">
                         <button type="button" class="glpi-subtab active" onclick="glpiAbrirSubaba('diario')">Dashboard Diário</button>
@@ -232,9 +230,10 @@
                     </aside>
 
                     <div id="glpi-view-diario" class="glpi-view">
+                        <div id="glpi-current-shift" class="glpi-shift-banner"></div>
                         <div id="glpi-daily-kpis" class="glpi-kpi-grid glpi-daily-kpi-grid"></div>
                         <div class="glpi-daily-content">
-                            <section class="glpi-panel"><h4>Chamados por técnico hoje</h4><div id="glpi-daily-technicians" class="glpi-chart"></div></section>
+                            <section class="glpi-panel"><h4>Chamados resolvidos por técnico no plantão</h4><div id="glpi-daily-technicians" class="glpi-chart"></div></section>
                             <section class="glpi-panel"><h4>Últimos chamados registrados</h4><div id="glpi-daily-recent" class="glpi-daily-tickets"></div></section>
                         </div>
                     </div>
@@ -414,33 +413,6 @@
                                     </select>
                                 </label>
                                 <p class="glpi-muted">Tokens, senhas e URL interna do GLPI devem ser configurados como secrets da Edge Function, nunca no código-fonte.</p>
-                            </div>
-                            <div class="glpi-panel">
-                                <h4>Dashboard Diário Público</h4>
-                                <label>Permitir visualização pública
-                                    <select id="glpi-public-enabled" onchange="glpiSalvarConfiguracaoPublica()">
-                                        <option value="false">Não</option>
-                                        <option value="true">Sim</option>
-                                    </select>
-                                </label>
-                                <label>Exibição dos técnicos
-                                    <select id="glpi-public-tech-mode" onchange="glpiSalvarConfiguracaoPublica()">
-                                        <option value="first">Somente primeiro nome</option>
-                                        <option value="short">Nome abreviado</option>
-                                        <option value="hidden">Ocultar nomes</option>
-                                        <option value="full">Nome completo</option>
-                                    </select>
-                                </label>
-                                <label><input type="checkbox" id="glpi-public-show-title" onchange="glpiSalvarConfiguracaoPublica()"> Mostrar título dos chamados</label>
-                                <label><input type="checkbox" id="glpi-public-show-category" checked onchange="glpiSalvarConfiguracaoPublica()"> Mostrar categorias</label>
-                                <label><input type="checkbox" id="glpi-public-show-unit" checked onchange="glpiSalvarConfiguracaoPublica()"> Mostrar unidades</label>
-                                <div class="glpi-button-row mt-10">
-                                    <button type="button" class="btn-primary btn-sm" onclick="glpiCopiarLinkPublico()">Copiar link público</button>
-                                    <button type="button" class="btn-secondary btn-sm" onclick="glpiAbrirPainelPublico()">Abrir painel público</button>
-                                    <button type="button" class="btn-secondary btn-sm" onclick="glpiRegenerarTokenPublico()">Regenerar link</button>
-                                    <button type="button" class="btn-danger btn-sm" onclick="glpiRevogarPainelPublico()">Revogar acesso público</button>
-                                </div>
-                                <p id="glpi-public-link-preview" class="glpi-muted">Link público: Não disponível</p>
                             </div>
                         </div>
                     </div>

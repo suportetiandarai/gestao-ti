@@ -195,14 +195,6 @@
         return Array.from(bytes, byte => byte.toString(16).padStart(2, '0')).join('');
     }
 
-    function todayRangeSaoPaulo() {
-        const range = CORE.todayRange();
-        return {
-            ...range,
-            label: range.label.split('-').reverse().join('/')
-        };
-    }
-
     function isBetween(value, start, end) {
         return CORE.isBetween(value, start, end);
     }
@@ -218,6 +210,17 @@
     }
 
     function normalizeTicket(row) {
+        const raw = row.raw_payload && typeof row.raw_payload === 'object' ? row.raw_payload : row;
+        const currentTechnicians = Array.isArray(raw._dashboard_technicians)
+            ? raw._dashboard_technicians.map(technician => ({
+                id: Number(technician.id) || null,
+                name: technician.name || 'Não disponível'
+            }))
+            : [];
+        const technicalGroups = Array.isArray(raw._dashboard_technical_groups)
+            ? raw._dashboard_technical_groups
+            : [];
+        const solutionTechnician = raw._dashboard_solution_technician || {};
         const status = GLPI_STATUS[row.status_id] || row.status || 'Não disponível';
         const openedAt = row.opened_at || row.date || row.created_at;
         const solvedAt = row.solved_at || row.solvedate;
@@ -231,7 +234,13 @@
             statusId: row.status_id,
             technician: row.technician_name || row.technician || 'Não disponível',
             technicianId: row.technician_id || null,
+            currentTechnicians,
+            currentTechnicianCount: currentTechnicians.length,
+            solutionTechnician: solutionTechnician.name || null,
+            solutionTechnicianId: Number(solutionTechnician.id) || null,
             group: row.group_name || row.group || 'Não disponível',
+            groupId: Number(row.group_id) || null,
+            technicalGroupIds: technicalGroups.map(group => Number(group.id)).filter(Number.isFinite),
             requester: row.requester_name || row.requester || 'Não disponível',
             category: row.category_name || row.category || 'Não disponível',
             priority: row.priority_name || row.priority || 'Não disponível',
@@ -370,12 +379,12 @@
                 .limit(2000);
             if (error) throw error;
 
-            const { start: todayStart, end: todayEnd } = CORE.todayRange();
+            const { start: shiftStart, end: shiftEnd } = CORE.currentShift();
             const { data: assignmentRows, error: assignmentError } = await supabase
                 .from('glpi_ticket_assignments_dashboard')
                 .select('ticket_glpi_id, technician_id, technician_name, assigned_at')
-                .gte('assigned_at', todayStart.toISOString())
-                .lte('assigned_at', todayEnd.toISOString())
+                .gte('assigned_at', shiftStart.toISOString())
+                .lt('assigned_at', shiftEnd.toISOString())
                 .limit(5000);
             if (!assignmentError) state.dailyAssignments = (assignmentRows || []).map(normalizeAssignment);
             else console.warn('Atribuições detalhadas ainda não estão disponíveis; usando dados do chamado.');
@@ -532,18 +541,6 @@
         };
     }
 
-    function renderDiagnostics() {
-        const el = getField('glpi-diagnostic');
-        if (!el) return;
-        el.innerHTML = `
-            <strong>Diagnóstico:</strong>
-            versão GLPI ${GLPI_VERSION}; API REST esperada em <code>{GLPI_BASE_URL}/apirest.php</code>;
-            autenticação por <code>App-Token</code> + <code>User-Token</code> preferencialmente;
-            endpoints: <code>initSession</code>, <code>killSession</code>, <code>Ticket</code>, <code>Ticket/{id}/Ticket_User</code>, <code>User</code>, <code>Group</code>, <code>ITILCategory</code>, <code>Entity</code>, <code>Location</code> e campos de SLA do chamado.
-            ${state.demo ? '<span class="glpi-demo-flag">Modo demonstração ativo: dados fictícios não são gravados no banco.</span>' : ''}
-        `;
-    }
-
     function renderKpis() {
         const m = metricsFor(state.filtered);
         const cards = [
@@ -566,14 +563,22 @@
     }
 
     function renderDailyDashboard() {
-        const { label: isoLabel, createdToday, inServiceNow, waitingNow, pendingNow, breachedNow } = CORE.dailyMetrics(state.tickets);
-        const label = isoLabel.split('-').reverse().join('/');
+        const groupId = 1;
+        const metrics = CORE.shiftMetrics(state.tickets, new Date(), groupId);
+        const { createdInShift, inServiceNow, waitingNow, pendingNow, breachedNow } = metrics;
+        const shift = getField('glpi-current-shift');
+        if (shift) {
+            shift.innerHTML = `
+                <strong>Plantão atual: ${esc(metrics.type)} — ${esc(metrics.label)}</strong>
+                <span>${esc(formatDateTime(metrics.start))} até ${esc(formatDateTime(metrics.end))} • Grupo SUPORTE TI</span>
+            `;
+        }
 
         const cards = [
-            ['Chamados abertos hoje', createdToday.length, `00:00–23:59 • ${label}`],
-            ['Em atendimento', inServiceNow.length, 'Status 2/3 com 1ª resposta'],
-            ['Aguardando atendimento', waitingNow.length, 'Novos ou atribuídos sem 1ª resposta'],
-            ['Pendentes', pendingNow.length, 'Status 4 Pendente no momento'],
+            ['Chamados abertos no plantão', createdInShift.length, `${metrics.label} • SUPORTE TI`],
+            ['Em atendimento', inServiceNow.length, 'Não finalizados com técnico atribuído'],
+            ['Aguardando atendimento', waitingNow.length, 'Não finalizados sem técnico atribuído'],
+            ['Pendentes', pendingNow.length, 'Status 4 • pode ter técnico atribuído'],
             ['Chamados estourados', breachedNow.length, 'Prazo real SLA/OLA ultrapassado']
         ];
 
@@ -585,14 +590,14 @@
             </article>
         `).join('');
 
-        const techRows = CORE.technicianAssignmentsToday(state.dailyAssignments.length ? state.dailyAssignments : state.tickets);
+        const techRows = CORE.technicianResolutionsInShift(state.tickets, new Date(), groupId);
 
         renderBarChart('glpi-daily-technicians', techRows.map(tech => ({
             label: technicianDisplayName(tech.label),
             value: tech.value
         })), 20);
 
-        const recent = createdToday
+        const recent = [...createdInShift]
             .sort((a, b) => parseDate(b.openedAt) - parseDate(a.openedAt))
             .slice(0, Number(state.localConfig.dailyRecentLimit) || 10);
         getField('glpi-daily-recent').innerHTML = recent.length ? `
@@ -605,11 +610,11 @@
                 <article class="glpi-daily-ticket">
                     <strong>#${esc(visible.id)}${visible.title ? `<small>${esc(visible.title)}</small>` : ''}</strong>
                     <span data-label="Status">${esc(visible.status)}</span>
-                    <span data-label="Técnico">${esc(technicianDisplayName(visible.technician))}</span>
+                    <span data-label="Técnico">${esc(CORE.hasAssignedTechnician(ticket) ? technicianDisplayName(visible.technician) : 'Aguardando atendimento')}</span>
                     <time data-label="Abertura">${new Intl.DateTimeFormat('pt-BR', { timeStyle: 'short', timeZone: TZ }).format(parseDate(visible.openedAt))}</time>
                     <span data-label="Categoria / unidade">${visible.category ? esc(visible.category) : ''}${visible.category && visible.unit ? ' • ' : ''}${visible.unit ? esc(visible.unit) : ''}</span>
                 </article>
-            `; }).join('')}` : '<p class="glpi-empty">Nenhum chamado criado hoje.</p>';
+            `; }).join('')}` : '<p class="glpi-empty">Nenhum chamado aberto neste plantão.</p>';
     }
 
     function renderBarChart(id, data, maxItems = 8) {
@@ -890,7 +895,6 @@
     }
 
     function renderAll() {
-        renderDiagnostics();
         renderStatus();
         renderDailyDashboard();
         renderKpis();
@@ -960,9 +964,14 @@
     };
 
     window.glpiAbrirSubaba = function (name) {
-        if (window.GESTAO_TI_PUBLIC_DASHBOARD && name !== 'diario') name = 'diario';
+        if (window.GESTAO_TI_PUBLIC_DASHBOARD) return;
         state.subtab = name;
         document.body.classList.toggle('glpi-daily-active', name === 'diario');
+        if (name === 'diario') {
+            state.panelMode = false;
+            document.body.classList.remove('glpi-panel-mode');
+            document.body.classList.remove('menu-collapsed');
+        }
         document.querySelectorAll('.glpi-subtab').forEach(btn => btn.classList.toggle('active', btn.getAttribute('onclick')?.includes(`'${name}'`)));
         document.querySelectorAll('.glpi-view').forEach(view => view.classList.add('hidden'));
         getField(`glpi-view-${name}`)?.classList.remove('hidden');
@@ -1156,6 +1165,10 @@
     };
 
     window.glpiAlternarPainel = function () {
+        if (state.subtab === 'diario') {
+            mostrarAviso('O modo painel está disponível somente no Dashboard Geral.', 'aviso');
+            return;
+        }
         state.panelMode = !document.body.classList.contains('glpi-panel-mode');
         document.body.classList.toggle('glpi-panel-mode', state.panelMode);
         localStorage.setItem('glpiPanelMode', String(state.panelMode));
@@ -1164,6 +1177,10 @@
     };
 
     window.glpiTelaCheia = async function () {
+        if (state.subtab === 'diario') {
+            mostrarAviso('A tela cheia do modo painel está disponível somente no Dashboard Geral.', 'aviso');
+            return;
+        }
         try {
             if (!document.fullscreenElement) await document.documentElement.requestFullscreen();
             else await document.exitFullscreen();

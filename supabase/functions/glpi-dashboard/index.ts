@@ -106,6 +106,14 @@ function statusName(status: unknown) {
   return GLPI_STATUS[Number(status)] || label(status) || 'Não disponível';
 }
 
+function formatTechnicianName(user: JsonRecord) {
+  const clean = (value: unknown) => String(value || '').replace(/\s+/g, ' ').trim();
+  const complete = clean(user.display_name || user.completename);
+  if (complete) return complete;
+  return [clean(user.firstname), clean(user.realname)].filter(Boolean).join(' ')
+    || clean(user.name);
+}
+
 function priorityName(value: unknown) {
   const map: Record<number, string> = {
     1: 'Muito baixa',
@@ -148,6 +156,7 @@ class GlpiClient {
   private appToken: string;
   private sessionToken = '';
   private userCache = new Map<number, string>();
+  private technicalGroup: { id: number; name: string } | null = null;
   glpiVersion: string | null = null;
 
   constructor() {
@@ -289,12 +298,60 @@ class GlpiClient {
     return Array.isArray(result) ? result as JsonRecord[] : [];
   }
 
-  private async technicianName(userId: number) {
+  async resolveTechnicalGroup() {
+    if (this.technicalGroup) return this.technicalGroup;
+    const configuredId = numberOrNull(env('GLPI_TECH_GROUP_ID'));
+    const expectedName = env('GLPI_TECH_GROUP_NAME') || 'Suporte TI';
+
+    if (configuredId) {
+      const group = await this.request(`Group/${configuredId}`, { method: 'GET' }) as JsonRecord;
+      this.technicalGroup = {
+        id: configuredId,
+        name: label(group.completename || group.name) || expectedName,
+      };
+      return this.technicalGroup;
+    }
+
+    const result = await this.request('Group?range=0-999&expand_dropdowns=false', { method: 'GET' });
+    const groups = Array.isArray(result) ? result as JsonRecord[] : [];
+    const match = groups.find((group) =>
+      comparable(group.name) === comparable(expectedName)
+      || comparable(group.completename) === comparable(expectedName)
+    );
+    const id = numberOrNull(match?.id);
+    if (!match || !id) throw new Error(`Grupo técnico "${expectedName}" não localizado no GLPI.`);
+    this.technicalGroup = { id, name: label(match.completename || match.name) || expectedName };
+    return this.technicalGroup;
+  }
+
+  async technicalGroupTicketIds(groupId: number) {
+    const pageSize = 1000;
+    const ids = new Set<number>();
+    for (let start = 0; start < 100000; start += pageSize) {
+      const params = new URLSearchParams({
+        'criteria[0][field]': '8',
+        'criteria[0][searchtype]': 'equals',
+        'criteria[0][value]': String(groupId),
+        range: `${start}-${start + pageSize - 1}`,
+        'forcedisplay[0]': '1',
+      });
+      const result = await this.request(`search/Ticket?${params.toString()}`, { method: 'GET' }) as JsonRecord;
+      const rows = Array.isArray(result.data) ? result.data as JsonRecord[] : [];
+      rows.forEach((row) => {
+        const id = numberOrNull(row['2']);
+        if (id) ids.add(id);
+      });
+      const total = Number(result.totalcount || 0);
+      if (!rows.length || ids.size >= total || rows.length < pageSize) break;
+    }
+    return ids;
+  }
+
+  async technicianName(userId: number) {
     const cached = this.userCache.get(userId);
     if (cached) return cached;
     const user = await this.request(`User/${userId}`, { method: 'GET' }) as JsonRecord;
-    const fullName = [label(user.realname), label(user.firstname)].filter(Boolean).join(' ').trim();
-    const name = fullName || label(user.name) || `Técnico ${userId}`;
+    const name = formatTechnicianName(user) || `Técnico ${userId}`;
     this.userCache.set(userId, name);
     return name;
   }
@@ -303,13 +360,23 @@ class GlpiClient {
     const ticketId = numberOrNull(ticket.id);
     if (!ticketId) return ticket;
 
-    const [relationsResult, logsResult] = await Promise.all([
+    const isFinal = [5, 6].includes(Number(ticket.status));
+    const [relationsResult, logsResult, groupsResult, solutionsResult] = await Promise.all([
       this.request(`Ticket/${ticketId}/Ticket_User`, { method: 'GET' }),
       this.request(`Ticket/${ticketId}/Log?range=0-99`, { method: 'GET' }),
+      this.request(`Ticket/${ticketId}/Group_Ticket`, { method: 'GET' }),
+      isFinal
+        ? this.request(`Ticket/${ticketId}/ITILSolution`, { method: 'GET' })
+        : Promise.resolve([]),
     ]);
     const relations = Array.isArray(relationsResult) ? relationsResult as JsonRecord[] : [];
     const logs = Array.isArray(logsResult) ? logsResult as JsonRecord[] : [];
+    const groupRelations = Array.isArray(groupsResult) ? groupsResult as JsonRecord[] : [];
+    const solutions = Array.isArray(solutionsResult) ? solutionsResult as JsonRecord[] : [];
     const technicianRelations = relations.filter((relation) => Number(relation.type) === 2 && numberOrNull(relation.users_id));
+    const technicalGroups = groupRelations
+      .filter((relation) => Number(relation.type) === 2 && numberOrNull(relation.groups_id))
+      .map((relation) => ({ id: Number(relation.groups_id) }));
     const assignmentEvents = logs
       .filter((entry) => Number(entry.id_search_option) === 5 && normalizeDate(entry.date_mod))
       .sort((left, right) => String(right.date_mod).localeCompare(String(left.date_mod)));
@@ -329,13 +396,33 @@ class GlpiClient {
         source: ticket.date_assign ? 'ticket_date_assign' : 'history',
       };
     }));
+    const targetGroup = await this.resolveTechnicalGroup();
+    const belongsToTargetGroup = technicalGroups.some((group) => group.id === targetGroup.id);
+    const latestSolution = [...solutions]
+      .filter((solution) => numberOrNull(solution.users_id))
+      .sort((left, right) =>
+        String(right.date_creation || right.date_mod || '').localeCompare(String(left.date_creation || left.date_mod || ''))
+      )[0];
+    const solutionTechnicianId = numberOrNull(latestSolution?.users_id);
+    const solutionTechnician = solutionTechnicianId
+      ? {
+          id: solutionTechnicianId,
+          name: await this.technicianName(solutionTechnicianId),
+          resolved_at: normalizeDate(latestSolution?.date_creation || latestSolution?.date_mod || ticket.solvedate || ticket.closedate),
+        }
+      : null;
 
     return {
       ...ticket,
       date_assign: normalizeDate(ticket.date_assign) || technicians.find((technician) => technician.assigned_at)?.assigned_at || null,
       technician_id: technicians[0]?.id || null,
       technician_name: technicians[0]?.name || null,
+      group_id: belongsToTargetGroup ? targetGroup.id : technicalGroups[0]?.id || null,
+      group_name: belongsToTargetGroup ? targetGroup.name : null,
       _dashboard_technicians: technicians,
+      _dashboard_technical_groups: technicalGroups,
+      _dashboard_in_tech_group: belongsToTargetGroup,
+      _dashboard_solution_technician: solutionTechnician,
     };
   }
 
@@ -455,7 +542,7 @@ Deno.serve(async (request) => {
 
     const body = await request.json().catch(() => ({})) as JsonRecord;
     action = String(body.action || '');
-    if (!['configuration-status', 'sync-incremental', 'test-connection'].includes(action)) return json({ error: 'Ação inválida.' }, 400);
+    if (!['configuration-status', 'sync-incremental', 'sync-current-shift', 'backfill-group-cache', 'test-connection'].includes(action)) return json({ error: 'Ação inválida.' }, 400);
 
     if (action === 'configuration-status') {
       const baseUrl = env('GLPI_BASE_URL').replace(/\/+$/, '');
@@ -495,11 +582,15 @@ Deno.serve(async (request) => {
         },
         syncState: syncStateResult.data || null,
         timezone: env('GLPI_TIMEZONE') || 'America/Sao_Paulo',
+        technicalGroup: {
+          configuredId: numberOrNull(env('GLPI_TECH_GROUP_ID')),
+          configuredName: env('GLPI_TECH_GROUP_NAME') || 'Suporte TI',
+        },
         checkedAt: new Date().toISOString(),
       });
     }
 
-    if (action === 'sync-incremental') {
+    if (['sync-incremental', 'sync-current-shift', 'backfill-group-cache'].includes(action)) {
       stage = 'acquire-lock';
       const { data: acquired, error: lockError } = await admin.rpc('acquire_glpi_sync_lock', {
         lock_seconds: boundedNumber('GLPI_SYNC_LOCK_SECONDS', 120, 30, 600),
@@ -512,6 +603,59 @@ Deno.serve(async (request) => {
     stage = 'init-session';
     glpi = new GlpiClient();
     await glpi.initSession();
+    const technicalGroup = await glpi.resolveTechnicalGroup();
+    if (action === 'backfill-group-cache') {
+      stage = 'search-technical-group';
+      const groupTicketIds = await glpi.technicalGroupTicketIds(technicalGroup.id);
+      stage = 'read-cache';
+      const [{ data: cachedTickets, error: cacheError }, { data: assignments, error: assignmentsError }] = await Promise.all([
+        admin.from('glpi_tickets_dashboard').select('glpi_id, technician_id').limit(10000),
+        admin.from('glpi_ticket_assignments_dashboard').select('technician_id').limit(10000),
+      ]);
+      if (cacheError) throw cacheError;
+      if (assignmentsError) throw assignmentsError;
+      const matchingIds = (cachedTickets || [])
+        .map((ticket: { glpi_id: unknown }) => numberOrNull(ticket.glpi_id))
+        .filter((id: number | null): id is number => Boolean(id && groupTicketIds.has(id)));
+      stage = 'update-group-cache';
+      for (let index = 0; index < matchingIds.length; index += 200) {
+        const { error } = await admin
+          .from('glpi_tickets_dashboard')
+          .update({ group_id: technicalGroup.id, group_name: technicalGroup.name })
+          .in('glpi_id', matchingIds.slice(index, index + 200));
+        if (error) throw error;
+      }
+      const technicianIds = [...new Set([
+        ...(cachedTickets || []).map((ticket: { technician_id: unknown }) => numberOrNull(ticket.technician_id)),
+        ...(assignments || []).map((assignment: { technician_id: unknown }) => numberOrNull(assignment.technician_id)),
+      ].filter((id): id is number => Boolean(id)))];
+      stage = 'normalize-technician-names';
+      for (const technicianId of technicianIds) {
+        const name = await glpi.technicianName(technicianId);
+        const [{ error: ticketError }, { error: assignmentError }] = await Promise.all([
+          admin.from('glpi_tickets_dashboard').update({ technician_name: name }).eq('technician_id', technicianId),
+          admin.from('glpi_ticket_assignments_dashboard').update({ technician_name: name }).eq('technician_id', technicianId),
+        ]);
+        if (ticketError) throw ticketError;
+        if (assignmentError) throw assignmentError;
+      }
+      await updateSyncState(admin, {
+        status: 'online',
+        locked_until: null,
+        last_success_at: new Date().toISOString(),
+        last_records_processed: matchingIds.length,
+        last_error: null,
+      });
+      await logSync(admin, 'info', 'Cache do grupo técnico e nomes normalizado.', matchingIds.length);
+      return json({
+        ok: true,
+        group: technicalGroup,
+        groupTicketsFound: groupTicketIds.size,
+        cacheTicketsMatched: matchingIds.length,
+        techniciansNormalized: technicianIds.length,
+        elapsedMs: Date.now() - startedAt,
+      });
+    }
     if (action === 'test-connection') {
       const [rawSample, usersCount, groupsCount, categoriesCount] = await Promise.all([
         glpi.sampleTickets(),
@@ -541,6 +685,8 @@ Deno.serve(async (request) => {
         access: { tickets: true, users: usersCount >= 0, groups: groupsCount >= 0, categories: categoriesCount >= 0 },
         fields,
         statuses,
+        technicalGroup,
+        sampleTechnicalGroupMatches: sample.filter((ticket) => ticket._dashboard_in_tech_group === true).length,
         assignmentFallback: {
           required: !fields.date_assign,
           currentTechnicianSource: 'Ticket_User.type=2',
@@ -556,7 +702,7 @@ Deno.serve(async (request) => {
     if (syncStateError) throw syncStateError;
     const previousCursor = syncState?.last_cursor ? String(syncState.last_cursor) : null;
     stage = 'fetch-tickets';
-    const rawTickets = await glpi.getTickets(previousCursor);
+    const rawTickets = await glpi.getTickets(action === 'sync-current-shift' ? null : previousCursor);
     stage = 'enrich-tickets';
     const tickets = await glpi.enrichTickets(rawTickets);
     const mapped = tickets.map(mapTicket).filter((ticket) => ticket.glpi_id);
@@ -595,11 +741,13 @@ Deno.serve(async (request) => {
       last_error: null,
     });
     stage = 'write-sync-log';
-    await logSync(admin, 'info', 'Sincronização incremental concluída.', mapped.length, '', cursor);
+    await logSync(admin, 'info', action === 'sync-current-shift'
+      ? 'Sincronização do período operacional concluída.'
+      : 'Sincronização incremental concluída.', mapped.length, '', cursor);
     return json({ ok: true, records: mapped.length, lastCursor: cursor, elapsedMs: Date.now() - startedAt });
   } catch (error) {
     const message = safeError(error);
-    if (lockAcquired || action === 'sync-incremental') {
+    if (lockAcquired || ['sync-incremental', 'sync-current-shift', 'backfill-group-cache'].includes(action)) {
       await updateSyncState(admin, {
         status: 'offline',
         locked_until: null,
