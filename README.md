@@ -46,15 +46,20 @@ git diff --check
 
 O Dashboard Diário contém exatamente cinco indicadores, um gráfico e uma listagem:
 
-1. Chamados abertos hoje;
+1. Chamados abertos no plantão;
 2. Em atendimento;
 3. Aguardando atendimento;
 4. Pendentes;
 5. Chamados estourados;
-6. Chamados por técnico hoje;
+6. Chamados resolvidos por técnico no plantão;
 7. Últimos chamados registrados.
 
 Ele atualiza os dados a cada 30 segundos sem recarregar a página. A execução no navegador é exclusiva e o back-end também usa lock atômico, evitando sincronizações concorrentes.
+
+O plantão atual é calculado em `America/Sao_Paulo`: diurno das 07:00 às 19:00
+e noturno das 19:00 às 07:00. O Diário exibe exclusivamente chamados vinculados
+ao grupo técnico real `SUPORTE TI` (ID `1`). O modo painel e a tela cheia de
+painel permanecem disponíveis somente no Dashboard Geral.
 
 Critérios completos: [docs/GLPI_DASHBOARD_CRITERIOS.md](docs/GLPI_DASHBOARD_CRITERIOS.md).
 

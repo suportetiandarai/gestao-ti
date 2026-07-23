@@ -1383,22 +1383,6 @@ input[type="file"]::file-selector-button:hover {
     color: #991b1b;
 }
 
-.glpi-diagnostic {
-    background: #fff;
-    border: 1px solid #e2e8f0;
-    border-radius: 8px;
-    padding: 14px 16px;
-    line-height: 1.55;
-    font-size: 13px;
-    color: #334155;
-}
-
-.glpi-diagnostic code {
-    background: #f1f5f9;
-    padding: 2px 5px;
-    border-radius: 4px;
-}
-
 .glpi-subtabs {
     display: flex;
     gap: 8px;
@@ -1626,10 +1610,30 @@ input[type="file"]::file-selector-button:hover {
 }
 
 body.glpi-daily-active .glpi-filter-button,
-body.glpi-daily-active .glpi-diagnostic,
-body.glpi-daily-active .glpi-daily-extra-action,
+body.glpi-daily-active .glpi-general-panel-action,
 body.glpi-daily-active #glpi-current-time {
     display: none !important;
+}
+
+.glpi-shift-banner {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 14px 16px;
+    border: 1px solid #bfdbfe;
+    border-radius: 8px;
+    background: #eff6ff;
+    color: #1e3a8a;
+}
+
+.glpi-shift-banner strong {
+    font-size: 16px;
+}
+
+.glpi-shift-banner span {
+    font-size: 13px;
+    font-weight: 700;
 }
 
 .glpi-kpi,
@@ -1873,13 +1877,13 @@ body.glpi-daily-active #glpi-current-time {
     padding: 18px;
 }
 
-body.glpi-panel-mode #app-wrapper {
+body.glpi-panel-mode:not(.glpi-daily-active) #app-wrapper {
     height: 100vh;
 }
 
-body.glpi-panel-mode .sidebar,
-body.glpi-panel-mode .main-content > header,
-body.glpi-panel-mode .glpi-subtabs,
+body.glpi-panel-mode:not(.glpi-daily-active) .sidebar,
+body.glpi-panel-mode:not(.glpi-daily-active) .main-content > header,
+body.glpi-panel-mode:not(.glpi-daily-active) .glpi-subtabs,
 body.public-dashboard .sidebar,
 body.public-dashboard .main-content > header,
 body.public-dashboard .glpi-subtabs button:not(:first-child),
@@ -1892,30 +1896,30 @@ body.public-dashboard .glpi-filter-button {
     display: none !important;
 }
 
-body.glpi-panel-mode .main-content,
+body.glpi-panel-mode:not(.glpi-daily-active) .main-content,
 body.public-dashboard .main-content {
     padding: 18px;
     width: 100vw;
 }
 
-body.glpi-panel-mode .glpi-header {
+body.glpi-panel-mode:not(.glpi-daily-active) .glpi-header {
     align-items: center;
     padding: 18px 22px;
 }
 
-body.glpi-panel-mode .glpi-header h3 {
+body.glpi-panel-mode:not(.glpi-daily-active) .glpi-header h3 {
     font-size: clamp(24px, 2.2vw, 42px);
 }
 
-body.glpi-panel-mode .glpi-kpi-grid {
+body.glpi-panel-mode:not(.glpi-daily-active) .glpi-kpi-grid {
     grid-template-columns: repeat(5, minmax(180px, 1fr));
 }
 
-body.glpi-panel-mode .glpi-kpi strong {
+body.glpi-panel-mode:not(.glpi-daily-active) .glpi-kpi strong {
     font-size: clamp(28px, 2.6vw, 48px);
 }
 
-body.glpi-panel-mode .glpi-grid.two {
+body.glpi-panel-mode:not(.glpi-daily-active) .glpi-grid.two {
     grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
@@ -1923,7 +1927,6 @@ body.public-dashboard #aba-glpi {
     display: block;
 }
 
-body.public-dashboard .glpi-diagnostic,
 body.public-dashboard .glpi-subtabs {
     display: none;
 }

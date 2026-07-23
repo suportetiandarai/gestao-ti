@@ -53,34 +53,11 @@ function rotaPainelPublico() {
     return Boolean(obterTokenPainelPublico());
 }
 
-function painelPublicoAutorizado() {
-    const token = obterTokenPainelPublico();
-    const config = JSON.parse(localStorage.getItem('glpiPublicDashboardConfig') || '{}');
-    return Boolean(config.enabled && config.token && token && config.token === token);
-}
-
 function entrarModoPainelPublico() {
-    window.GESTAO_TI_PUBLIC_DASHBOARD = true;
-    window.usuarioAtual = null;
-    window.perfilAtual = { role: 'publico', nome: 'Painel público' };
-    aplicarLayout('autenticado');
-    document.body.classList.add('public-dashboard', 'glpi-panel-mode');
-
-    const userName = document.getElementById('user-name');
-    const userRole = document.getElementById('user-role');
-    const logout = document.querySelector('header .btn-danger');
-    if (userName) userName.textContent = 'Dashboard Diário GLPI';
-    if (userRole) userRole.textContent = 'PAINEL PÚBLICO';
-    if (logout) logout.classList.add('hidden');
-
-    if (!painelPublicoAutorizado()) {
-        mostrarAviso('Painel público indisponível, revogado ou token inválido.', 'erro');
-        document.querySelectorAll('.tab-content').forEach(aba => aba.classList.add('hidden'));
-        return;
-    }
-
-    if (typeof abrirAba === 'function') abrirAba('aba-glpi', false);
-    if (typeof glpiAbrirSubaba === 'function') glpiAbrirSubaba('diario');
+    window.GESTAO_TI_PUBLIC_DASHBOARD = false;
+    aplicarLayout('nao-autenticado');
+    document.body.classList.remove('public-dashboard', 'glpi-panel-mode');
+    mostrarAviso('O Dashboard Diário não está disponível em modo painel público. Entre no sistema para continuar.', 'aviso');
 }
 
 function normalizarRole(role) {

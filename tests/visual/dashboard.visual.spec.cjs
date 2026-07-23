@@ -12,17 +12,13 @@ async function preparePage(page, viewport) {
   await page.route('**/config.js', (route) => route.fulfill({ contentType: 'text/javascript', body: 'window.GESTAO_TI_CONFIG={SUPABASE_PUBLIC_KEY:""};' }));
   await page.route('https://cdn.jsdelivr.net/**', (route) => route.abort());
   await page.route('https://cdnjs.cloudflare.com/**', (route) => route.abort());
-  await page.addInitScript(() => {
-    localStorage.setItem('glpiPublicDashboardConfig', JSON.stringify({
-      enabled: true,
-      token: 'visual-test',
-      techMode: 'first',
-      showTitle: false,
-      showCategory: true,
-      showUnit: true,
-    }));
+  await page.goto('/');
+  await page.evaluate(() => {
+    window.aplicarLayout('autenticado');
+    window.perfilAtual = { role: 'admin', nome: 'Teste' };
+    window.abrirAba('aba-glpi', false);
+    window.glpiAbrirSubaba('diario');
   });
-  await page.goto('/?painel_publico=visual-test');
   await expect(page.locator('#glpi-view-diario')).toBeVisible();
 }
 
@@ -46,10 +42,12 @@ for (const viewport of viewports) {
     await preparePage(page, { width: viewport.width, height: viewport.height });
     await expect(page.locator('#glpi-daily-kpis .glpi-kpi')).toHaveCount(5);
     await expect(page.locator('#glpi-view-diario .glpi-chart')).toHaveCount(1);
-    await expect(page.locator('.glpi-subtabs')).toBeHidden();
-    await expect(page.locator('body')).toHaveClass(/glpi-panel-mode/);
-    await expect(page.locator('#sidebar')).toBeHidden();
+    await expect(page.locator('body')).not.toHaveClass(/glpi-panel-mode/);
+    await expect(page.getByRole('button', { name: 'Modo Painel' })).toBeHidden();
+    await expect(page.getByRole('button', { name: 'Tela cheia' })).toBeHidden();
+    if (viewport.name !== 'celular') await expect(page.locator('.sidebar')).toBeVisible();
     await expect(page.getByText('Últimos chamados registrados', { exact: true })).toBeVisible();
+    await expect(page.getByText(/Plantão atual: (Diurno|Noturno)/)).toBeVisible();
     await expect(page.getByText('Offline • GLPI', { exact: true })).toBeVisible();
     await expect(page.getByText('Modo demonstração ativo: dados fictícios não são gravados no banco.', { exact: true })).toHaveCount(0);
     await expect(page.getByText('Ranking diário dos técnicos', { exact: true })).toHaveCount(0);
@@ -101,6 +99,14 @@ test('Tela cheia pode ser acionada no desktop', async ({ page }) => {
     await expect.poll(() => page.evaluate(() => Boolean(document.fullscreenElement))).toBe(true);
     await page.evaluate(() => document.exitFullscreen());
   }
+});
+
+test('modo painel pode ser acionado somente no Dashboard Geral', async ({ page }) => {
+  await prepareAuthenticatedDashboard(page, { width: 1366, height: 768 });
+  await page.getByRole('button', { name: 'Modo Painel' }).click();
+  await expect(page.locator('body')).toHaveClass(/glpi-panel-mode/);
+  await page.evaluate(() => window.glpiAbrirSubaba('diario'));
+  await expect(page.locator('body')).not.toHaveClass(/glpi-panel-mode/);
 });
 
 test('Conectar serviços é responsivo e não exibe credenciais', async ({ page }) => {
