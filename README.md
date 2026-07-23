@@ -152,7 +152,7 @@ O rollback é manual e deve ocorrer somente após interromper a função e confi
 ## Solução de problemas
 
 - `UNABLE_TO_GET_ISSUER_CERT_LOCALLY`: configure a CA corporativa; em Node moderno, use temporariamente `NODE_OPTIONS=--use-system-ca`. Não desative `strict-ssl`.
-- Dashboard em demonstração: confira `config.js`, sessão Supabase, RLS, migrações e logs da função.
+- Dashboard offline: confira `config.js`, sessão Supabase, RLS, migrações e logs da função. Dados fictícios só são carregados quando o modo demonstração é ativado explicitamente na configuração local.
 - Sincronização 409: outra execução possui o lock; aguarde a expiração configurada.
 - GLPI 401/403: valide App-Token, User-Token, IP autorizado e perfil somente leitura.
 - Campos ausentes: confira a versão real do GLPI e o payload retornado por `test-connection`.

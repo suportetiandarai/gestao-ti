@@ -50,6 +50,8 @@ for (const viewport of viewports) {
     await expect(page.locator('body')).toHaveClass(/glpi-panel-mode/);
     await expect(page.locator('#sidebar')).toBeHidden();
     await expect(page.getByText('Últimos chamados registrados', { exact: true })).toBeVisible();
+    await expect(page.getByText('Offline • GLPI', { exact: true })).toBeVisible();
+    await expect(page.getByText('Modo demonstração ativo: dados fictícios não são gravados no banco.', { exact: true })).toHaveCount(0);
     await expect(page.getByText('Ranking diário dos técnicos', { exact: true })).toHaveCount(0);
     await expect(page.getByText('Chamados antigos ainda abertos', { exact: true })).toHaveCount(0);
 

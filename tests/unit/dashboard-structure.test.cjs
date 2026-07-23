@@ -28,9 +28,24 @@ test('atualização é manual/automática, exclusiva e preserva o último estado
   assert.match(source, /state\.subtab === 'diario'\s*\? 30000/);
   assert.match(source, /if \(state\.refreshing\) return false/);
   assert.match(source, /window\.glpiAtualizarAgora = async function/);
-  assert.match(source, /await refreshData\(!window\.GESTAO_TI_PUBLIC_DASHBOARD\)/);
+  assert.match(source, /await refreshData\(canTriggerSync\(\)\)/);
   assert.match(source, /if \(!state\.tickets\.length\)/);
   assert.match(source, /últimos dados válidos/i);
+});
+
+test('dados fictícios exigem ativação explícita e falha real permanece offline', () => {
+  assert.match(source, /if \(state\.localConfig\.demoEnabled\)/);
+  assert.match(source, /Modo demonstração ativado explicitamente/);
+  assert.match(source, /Nenhum dado fictício foi carregado/);
+  assert.match(source, /Offline • GLPI/);
+  assert.match(source, /integrationStatus === 'online' && lastSuccess && hasRealTickets/);
+  assert.doesNotMatch(source, /Nenhum chamado real sincronizado\. Modo demonstração ativado/);
+});
+
+test('sincronização inicial e automática não ficam bloqueadas pelo cache vazio', () => {
+  assert.match(source, /await refreshData\(canTriggerSync\(\)\)/);
+  assert.match(source, /setInterval\(\(\) => \{[\s\S]*refreshData\(canTriggerSync\(\)\)/);
+  assert.doesNotMatch(source, /refreshData\(!state\.demo/);
 });
 
 test('módulo de regras é carregado antes do dashboard', () => {
@@ -55,4 +70,20 @@ test('atribuição real usa relações e histórico quando date_assign não é e
   assert.match(edgeSource, /Number\(relation\.type\) === 2/);
   assert.match(assignmentsMigration, /primary key \(ticket_glpi_id, technician_id\)/i);
   assert.match(source, /glpi_ticket_assignments_dashboard/);
+});
+
+test('Edge Function aceita chamada operacional validada pelo gateway sem liberar acesso anônimo', () => {
+  assert.match(edgeSource, /trustedOperationalCall/);
+  assert.match(edgeSource, /\['service_role', 'postgres'\]\.includes\(operationalRole\)/);
+  assert.match(edgeSource, /if \(!supabaseUrl \|\| !serviceKey \|\| !auth\).*401/);
+  assert.match(edgeSource, /Acesso restrito a administradores e gestores/);
+});
+
+test('bootstrap limita a carga inicial e informa a etapa de falha sem expor credenciais', () => {
+  assert.match(edgeSource, /GLPI_SYNC_INITIAL_MAX_PAGES/);
+  assert.match(edgeSource, /stage = 'fetch-tickets'/);
+  assert.match(edgeSource, /trustedOperationalCall \? \{ diagnostic: message \}/);
+  assert.match(edgeSource, /safeError\(error\)/);
+  assert.match(edgeSource, /cache: \{/);
+  assert.match(edgeSource, /technicians: technicianIds\.size/);
 });
