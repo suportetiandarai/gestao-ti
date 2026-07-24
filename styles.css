@@ -1560,13 +1560,13 @@ input[type="file"]::file-selector-button:hover {
 }
 
 body.glpi-daily-active .glpi-header h3 {
-    font-size: clamp(1.8rem, 3vw, 3.4rem);
-    line-height: 1.05;
+    font-size: clamp(1.6rem, 2vw, 2rem);
+    line-height: 1.1;
     letter-spacing: .02em;
 }
 
 body.glpi-daily-active .glpi-header > div > p:not(.glpi-eyebrow) {
-    font-size: clamp(1rem, 1.35vw, 1.45rem);
+    font-size: clamp(.95rem, 1.1vw, 1.25rem);
 }
 
 .glpi-daily-kpi-primary {
@@ -1580,38 +1580,34 @@ body.glpi-daily-active .glpi-header > div > p:not(.glpi-eyebrow) {
 }
 
 .glpi-daily-kpi {
-    min-height: 174px;
-    padding: clamp(20px, 2vw, 30px) !important;
+    min-height: 128px;
+    padding: clamp(18px, 1.4vw, 21px) !important;
     display: grid;
-    grid-template-columns: auto 1fr;
     align-content: center;
-    column-gap: 14px;
-}
-
-.glpi-daily-kpi .glpi-kpi-icon {
-    grid-row: 1 / span 3;
-    font-size: clamp(1.75rem, 2.4vw, 2.8rem);
-    align-self: start;
 }
 
 .glpi-daily-kpi .glpi-kpi-title {
-    font-size: clamp(.9rem, 1.15vw, 1.2rem);
+    font-size: clamp(.85rem, 1vw, 1rem);
 }
 
 body.glpi-daily-active .glpi-daily-kpi strong {
-    font-size: clamp(2.8rem, 5vw, 5.4rem);
-    line-height: 1;
-    margin-block: 8px;
+    font-size: clamp(2rem, 2.5vw, 2.1rem);
+    line-height: 1.05;
+    margin-block: 6px;
 }
 
 .glpi-daily-kpi small {
-    font-size: clamp(.78rem, .95vw, 1rem);
+    font-size: clamp(.76rem, .85vw, .9rem);
 }
 
 .glpi-daily-content {
     display: grid;
-    gap: clamp(20px, 2.4vw, 34px);
+    gap: clamp(16px, 1.3vw, 18px);
     margin-top: 4px;
+}
+
+.glpi-daily-section-title {
+    text-align: center;
 }
 
 .glpi-daily-tickets {
@@ -1674,7 +1670,7 @@ body.glpi-daily-active #glpi-current-time {
     align-items: center;
     justify-content: space-between;
     gap: 12px;
-    padding: 14px 16px;
+    padding: 12px 14px;
     border: 1px solid #bfdbfe;
     border-radius: 8px;
     background: #eff6ff;
@@ -1682,28 +1678,28 @@ body.glpi-daily-active #glpi-current-time {
 }
 
 .glpi-shift-banner strong {
-    font-size: clamp(1rem, 1.35vw, 1.45rem);
+    font-size: clamp(.95rem, 1.05vw, 1.15rem);
 }
 
 .glpi-shift-banner span {
-    font-size: clamp(.85rem, 1vw, 1.05rem);
+    font-size: clamp(.8rem, .85vw, .92rem);
     font-weight: 700;
 }
 
 body.glpi-daily-active .glpi-panel h4 {
-    font-size: clamp(1.2rem, 1.65vw, 1.8rem);
+    font-size: clamp(1.05rem, 1.25vw, 1.3rem);
     margin-top: 0;
 }
 
 body.glpi-daily-active .glpi-bar-row {
-    font-size: clamp(.9rem, 1.05vw, 1.15rem);
-    min-height: 34px;
+    font-size: clamp(.82rem, .9vw, .98rem);
+    min-height: 30px;
 }
 
 body.glpi-daily-active .glpi-actions button,
 body.glpi-daily-active .glpi-status-badge,
 body.glpi-daily-active .glpi-last-update {
-    font-size: clamp(.78rem, .9vw, 1rem);
+    font-size: clamp(.75rem, .8vw, .9rem);
 }
 
 .glpi-kpi,
@@ -2005,11 +2001,11 @@ body.public-dashboard .glpi-filter-drawer {
 }
 
 body.glpi-panel-mode.glpi-daily-active .glpi-daily-kpi {
-    min-height: 190px;
+    min-height: 148px;
 }
 
 body.glpi-panel-mode.glpi-daily-active .glpi-daily-kpi strong {
-    font-size: clamp(3.4rem, 6vw, 6.8rem);
+    font-size: clamp(2.4rem, 3.5vw, 3.25rem);
 }
 
 body.glpi-panel-mode.glpi-daily-active .glpi-daily-tickets {
