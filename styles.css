@@ -1569,14 +1569,8 @@ body.glpi-daily-active .glpi-header > div > p:not(.glpi-eyebrow) {
     font-size: clamp(.95rem, 1.1vw, 1.25rem);
 }
 
-.glpi-daily-kpi-primary {
-    grid-template-columns: repeat(3, minmax(220px, 1fr));
-}
-
-.glpi-daily-kpi-secondary {
-    grid-template-columns: repeat(2, minmax(240px, 1fr));
-    width: min(72%, 980px);
-    margin-inline: auto;
+.glpi-daily-kpi-grid {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
 }
 
 .glpi-daily-kpi {
@@ -2045,11 +2039,6 @@ body.glpi-panel-mode.glpi-daily-active .glpi-daily-tickets {
         grid-template-columns: repeat(3, minmax(160px, 1fr));
     }
 
-    .glpi-daily-kpi-secondary {
-        grid-template-columns: repeat(2, minmax(200px, 1fr));
-        width: min(86%, 900px);
-    }
-
     body.glpi-panel-mode .glpi-daily-kpi-grid {
         grid-template-columns: repeat(3, minmax(160px, 1fr));
     }
@@ -2086,10 +2075,6 @@ body.glpi-panel-mode.glpi-daily-active .glpi-daily-tickets {
 
     body.glpi-panel-mode .glpi-daily-kpi-grid {
         grid-template-columns: 1fr;
-    }
-
-    .glpi-daily-kpi-secondary {
-        width: 100%;
     }
 
     .glpi-actions,

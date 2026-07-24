@@ -97,8 +97,8 @@ for (const viewport of viewports) {
   test(`Dashboard Diário responsivo em ${viewport.name}`, async ({ page }) => {
     await preparePage(page, { width: viewport.width, height: viewport.height });
     await expect(page.locator('#glpi-view-diario .glpi-daily-kpi')).toHaveCount(5);
-    await expect(page.locator('#glpi-daily-kpis-primary .glpi-kpi')).toHaveCount(3);
-    await expect(page.locator('#glpi-daily-kpis-secondary .glpi-kpi')).toHaveCount(2);
+    await expect(page.locator('#glpi-daily-kpis .glpi-kpi')).toHaveCount(5);
+    await expect(page.locator('#glpi-daily-kpis').getByText('Chamados abertos', { exact: true })).toBeVisible();
     await expect(page.locator('#glpi-view-diario .glpi-chart')).toHaveCount(1);
     await expect(page.locator('body')).not.toHaveClass(/glpi-panel-mode/);
     await expect(page.getByRole('button', { name: 'Modo Painel' })).toBeVisible();
@@ -118,18 +118,40 @@ for (const viewport of viewports) {
     const layout = await page.locator('#glpi-view-diario').evaluate((element) => {
       const cards = [...element.querySelectorAll('.glpi-kpi')].map((card) => {
         const rect = card.getBoundingClientRect();
-        return { left: rect.left, right: rect.right, width: rect.width, scrollWidth: card.scrollWidth };
+        return {
+          left: rect.left,
+          right: rect.right,
+          top: rect.top,
+          width: rect.width,
+          height: rect.height,
+          scrollWidth: card.scrollWidth,
+          title: card.querySelector('.glpi-kpi-title')?.textContent?.trim(),
+        };
       });
       const chart = element.querySelector('.glpi-chart');
+      const cardRows = [...new Set(cards.map((card) => Math.round(card.top || 0)))];
       return {
         bodyOverflow: document.documentElement.scrollWidth > document.documentElement.clientWidth,
         cards,
         chartOverflow: chart ? chart.scrollWidth > chart.clientWidth : true,
+        cardRows,
       };
     });
     expect(layout.bodyOverflow).toBe(false);
     expect(layout.chartOverflow).toBe(false);
     expect(layout.cards.every((card) => card.left >= 0 && card.right <= viewport.width + 1 && card.scrollWidth <= card.width + 1)).toBe(true);
+    expect(layout.cards.map((card) => card.title)).toEqual([
+      'Chamados abertos',
+      'Em atendimento',
+      'Aguardando atendimento',
+      'Chamados estourados',
+      'Pendentes',
+    ]);
+    if (viewport.width >= 1366) {
+      expect(layout.cardRows).toHaveLength(1);
+      expect(Math.max(...layout.cards.map((card) => card.width)) - Math.min(...layout.cards.map((card) => card.width))).toBeLessThanOrEqual(1);
+      expect(Math.max(...layout.cards.map((card) => card.height)) - Math.min(...layout.cards.map((card) => card.height))).toBeLessThanOrEqual(1);
+    }
     const titleAlignment = await page.locator('.glpi-daily-section-title').evaluateAll((titles) =>
       titles.map((title) => getComputedStyle(title).textAlign));
     expect(titleAlignment).toEqual(['center', 'center']);

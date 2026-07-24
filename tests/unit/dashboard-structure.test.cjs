@@ -17,7 +17,7 @@ const dailyView = html.match(/<div id="glpi-view-diario"[\s\S]*?<div id="glpi-vi
 const dailyRenderer = source.match(/function renderDailyDashboard\(\)[\s\S]*?function renderBarChart/)?.[0] || '';
 
 test('Dashboard Diário contém somente a estrutura autorizada', () => {
-  const labels = ['Chamados abertos no plantão', 'Em atendimento', 'Aguardando atendimento', 'Pendentes', 'Chamados estourados'];
+  const labels = ['Chamados abertos', 'Em atendimento', 'Aguardando atendimento', 'Chamados estourados', 'Pendentes'];
   assert.equal((dailyView.match(/class="glpi-chart"/g) || []).length, 1);
   assert.match(dailyView, /id="glpi-current-shift"/);
   assert.match(dailyView, /Chamados resolvidos por técnico no plantão/);
@@ -36,13 +36,15 @@ test('título do Diário e modo painel compartilhado estão disponíveis', () =>
   assert.match(source, /exitFullscreen/);
 });
 
-test('cards do Diário usam três itens na primeira linha e dois na segunda antes do gráfico', () => {
-  const primary = dailyView.indexOf('glpi-daily-kpis-primary');
-  const secondary = dailyView.indexOf('glpi-daily-kpis-secondary');
+test('cards do Diário usam cinco colunas na ordem operacional antes do gráfico', () => {
+  const cards = dailyView.indexOf('glpi-daily-kpis');
   const graph = dailyView.indexOf('Chamados resolvidos por técnico no plantão');
-  assert.ok(primary >= 0 && secondary > primary && graph > secondary);
-  assert.match(styles, /\.glpi-daily-kpi-primary\s*\{[\s\S]*repeat\(3/);
-  assert.match(styles, /\.glpi-daily-kpi-secondary\s*\{[\s\S]*repeat\(2/);
+  assert.ok(cards >= 0 && graph > cards);
+  assert.match(styles, /\.glpi-daily-kpi-grid\s*\{[\s\S]*repeat\(5,\s*minmax\(0,\s*1fr\)\)/);
+  assert.ok(
+    ['Chamados abertos', 'Em atendimento', 'Aguardando atendimento', 'Chamados estourados', 'Pendentes']
+      .every((label, index, labels) => index === 0 || dailyRenderer.indexOf(`['${labels[index - 1]}'`) < dailyRenderer.indexOf(`['${label}'`))
+  );
   assert.match(styles, /\.glpi-daily-kpi\s*\{[\s\S]*min-height:\s*108px/);
   assert.match(styles, /body\.glpi-daily-active \.glpi-header h3[\s\S]*clamp/);
 });
