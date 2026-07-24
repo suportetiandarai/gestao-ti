@@ -14,6 +14,14 @@
         SOLVED: 'Solucionado',
         CLOSED: 'Fechado'
     });
+    const STATUS_CODE = Object.freeze({
+        NEW: 1,
+        ASSIGNED: 2,
+        PLANNED: 3,
+        PENDING: 4,
+        SOLVED: 5,
+        CLOSED: 6
+    });
     const OPEN = new Set([STATUS.NEW, STATUS.ASSIGNED, STATUS.PLANNED, STATUS.PENDING]);
     const FINAL = new Set([STATUS.SOLVED, STATUS.CLOSED]);
 
@@ -124,9 +132,46 @@
         return Boolean(ticket.technicianId && ticket.technician !== 'Não disponível');
     }
 
+    function ticketStatusCode(ticket) {
+        const code = Number(ticket.statusId);
+        if (Number.isFinite(code) && code > 0) return code;
+        const entry = Object.entries(STATUS).find(([, name]) => name === ticket.status);
+        return entry ? STATUS_CODE[entry[0]] : null;
+    }
+
+    function hasExpiredSlaOrOla(ticket, now = new Date()) {
+        return isDeadlineBreached(ticket, 'attentionDueAt', 'firstResponseAt', now)
+            || isDeadlineBreached(ticket, 'internalAttentionDueAt', 'firstResponseAt', now)
+            || isDeadlineBreached(ticket, 'slaDueAt', 'solvedAt', now)
+            || isDeadlineBreached(ticket, 'internalSlaDueAt', 'solvedAt', now);
+    }
+
+    function calculateTicketFlags(ticket, now = new Date()) {
+        const statusCode = ticketStatusCode(ticket);
+        const isResolved = statusCode === STATUS_CODE.SOLVED
+            || statusCode === STATUS_CODE.CLOSED
+            || FINAL.has(ticket.status);
+        const isPending = statusCode === STATUS_CODE.PENDING;
+        const hasTechnician = hasAssignedTechnician(ticket);
+        const isInProgress = !isResolved && !isPending && hasTechnician;
+        const isWaiting = !isResolved && !isPending && !hasTechnician;
+        const isOverdue = !isResolved && !isPending && hasExpiredSlaOrOla(ticket, now);
+        return {
+            statusCode,
+            isResolved,
+            isPending,
+            hasTechnician,
+            isInProgress,
+            isWaiting,
+            isOverdue
+        };
+    }
+
     function classifyTicket(ticket) {
-        if (FINAL.has(ticket.status)) return 'resolved';
-        return hasAssignedTechnician(ticket) ? 'in_service' : 'waiting';
+        const flags = calculateTicketFlags(ticket);
+        if (flags.isResolved) return 'resolved';
+        if (flags.isPending) return 'pending';
+        return flags.isInProgress ? 'in_service' : 'waiting';
     }
 
     function isDeadlineBreached(ticket, dueField, completedField, now = new Date()) {
@@ -137,22 +182,23 @@
     }
 
     function isTicketBreached(ticket, now = new Date()) {
-        if (!OPEN.has(ticket.status)) return false;
-        return isDeadlineBreached(ticket, 'attentionDueAt', 'firstResponseAt', now)
-            || isDeadlineBreached(ticket, 'internalAttentionDueAt', 'firstResponseAt', now)
-            || isDeadlineBreached(ticket, 'slaDueAt', 'solvedAt', now)
-            || isDeadlineBreached(ticket, 'internalSlaDueAt', 'solvedAt', now);
+        if (!OPEN.has(ticket.status) && ![1, 2, 3, 4].includes(ticketStatusCode(ticket))) return false;
+        return calculateTicketFlags(ticket, now).isOverdue;
     }
 
     function shiftMetrics(tickets, reference = new Date(), groupId = 1) {
         const shift = currentShift(reference);
         const groupTickets = tickets.filter((ticket) => belongsToTechnicalGroup(ticket, groupId));
+        const classified = groupTickets.map((ticket) => ({
+            ticket,
+            flags: calculateTicketFlags(ticket, reference)
+        }));
         const createdInShift = groupTickets.filter((ticket) => isWithinShift(ticket.openedAt, shift.start, shift.end));
-        const inServiceNow = groupTickets.filter((ticket) => classifyTicket(ticket) === 'in_service');
-        const waitingNow = groupTickets.filter((ticket) => classifyTicket(ticket) === 'waiting');
-        const resolvedNow = groupTickets.filter((ticket) => classifyTicket(ticket) === 'resolved');
-        const pendingNow = groupTickets.filter((ticket) => ticket.status === STATUS.PENDING);
-        const breachedNow = groupTickets.filter((ticket) => isTicketBreached(ticket, reference));
+        const inServiceNow = classified.filter(({ flags }) => flags.isInProgress).map(({ ticket }) => ticket);
+        const waitingNow = classified.filter(({ flags }) => flags.isWaiting).map(({ ticket }) => ticket);
+        const resolvedNow = classified.filter(({ flags }) => flags.isResolved).map(({ ticket }) => ticket);
+        const pendingNow = classified.filter(({ flags }) => flags.isPending).map(({ ticket }) => ticket);
+        const breachedNow = classified.filter(({ flags }) => flags.isOverdue).map(({ ticket }) => ticket);
         return { ...shift, groupTickets, createdInShift, inServiceNow, waitingNow, resolvedNow, pendingNow, breachedNow };
     }
 
@@ -220,6 +266,7 @@
     return Object.freeze({
         TIME_ZONE,
         STATUS,
+        STATUS_CODE,
         dateOnlyInTimeZone,
         todayRange,
         currentShift,
@@ -227,6 +274,9 @@
         isWithinShift,
         belongsToTechnicalGroup,
         hasAssignedTechnician,
+        ticketStatusCode,
+        hasExpiredSlaOrOla,
+        calculateTicketFlags,
         classifyTicket,
         isDeadlineBreached,
         isTicketBreached,

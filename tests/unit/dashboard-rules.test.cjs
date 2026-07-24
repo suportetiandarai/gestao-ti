@@ -5,9 +5,10 @@ const core = require('../../glpi-dashboard-core.js');
 const NOW = new Date('2026-07-23T12:00:00-03:00');
 
 function ticket(overrides = {}) {
-  return {
+  const row = {
     id: 1,
     status: 'Novo',
+    statusId: 1,
     technician: 'Não disponível',
     technicianId: null,
     currentTechnicians: [],
@@ -25,6 +26,17 @@ function ticket(overrides = {}) {
     internalSlaDueAt: null,
     ...overrides,
   };
+  if (Object.hasOwn(overrides, 'status') && !Object.hasOwn(overrides, 'statusId')) {
+    row.statusId = {
+      Novo: 1,
+      Atribuído: 2,
+      Planejado: 3,
+      Pendente: 4,
+      Solucionado: 5,
+      Fechado: 6,
+    }[overrides.status];
+  }
+  return row;
 }
 
 function at(localDateTime) {
@@ -77,22 +89,83 @@ test('troca automaticamente nos limites reais 06:59→07:00 e 18:59→19:00', ()
   assert.equal(core.currentShift(at('2026-07-23T19:00:00')).type, 'Noturno');
 });
 
-test('filtra grupo técnico 1 e classifica finalizado, atendimento e espera sem sobreposição', () => {
+test('filtra grupo técnico 1 e classifica finalizado, pendente, atendimento e espera sem sobreposição', () => {
   const rows = [
     ticket({ id: 1 }),
     ticket({ id: 2, technician: 'Ana Souza', technicianId: 10, currentTechnicians: [{ id: 10 }], currentTechnicianCount: 1 }),
     ticket({ id: 3, status: 'Solucionado', technician: 'Ana Souza', technicianId: 10, solvedAt: '2026-07-23T10:00:00-03:00' }),
     ticket({ id: 4, status: 'Fechado', technician: 'Bruno Lima', technicianId: 11, closedAt: '2026-07-23T11:00:00-03:00' }),
-    ticket({ id: 5, status: 'Pendente', technician: 'Ana Souza', technicianId: 10, currentTechnicians: [{ id: 10 }], currentTechnicianCount: 1 }),
+    ticket({ id: 5, status: 'Pendente', technician: 'Ana Souza', technicianId: 10, currentTechnicians: [{ id: 10 }], currentTechnicianCount: 1, slaDueAt: '2026-07-23T11:00:00-03:00' }),
     ticket({ id: 6, groupId: 3, technicalGroupIds: [3] }),
   ];
   const metrics = core.shiftMetrics(rows, NOW, 1);
   assert.deepEqual(metrics.groupTickets.map(({ id }) => id), [1, 2, 3, 4, 5]);
   assert.deepEqual(metrics.waitingNow.map(({ id }) => id), [1]);
-  assert.deepEqual(metrics.inServiceNow.map(({ id }) => id), [2, 5]);
+  assert.deepEqual(metrics.inServiceNow.map(({ id }) => id), [2]);
   assert.deepEqual(metrics.resolvedNow.map(({ id }) => id), [3, 4]);
   assert.deepEqual(metrics.pendingNow.map(({ id }) => id), [5]);
+  assert.deepEqual(metrics.breachedNow.map(({ id }) => id), []);
 });
+
+test('status real 4 tem prioridade sobre texto e identifica pendência', () => {
+  const flags = core.calculateTicketFlags(ticket({
+    status: 'Texto traduzido divergente',
+    statusId: 4,
+    technician: 'Ana Souza',
+    technicianId: 10,
+    currentTechnicians: [{ id: 10 }],
+    slaDueAt: '2026-07-23T11:00:00-03:00',
+  }), NOW);
+  assert.equal(core.STATUS_CODE.PENDING, 4);
+  assert.equal(flags.statusCode, 4);
+  assert.equal(flags.isPending, true);
+  assert.equal(flags.isInProgress, false);
+  assert.equal(flags.isWaiting, false);
+  assert.equal(flags.isOverdue, false);
+});
+
+for (const scenario of [
+  {
+    name: 'pendente com técnico e SLA vencido aparece somente em Pendentes',
+    row: { status: 'Pendente', statusId: 4, technician: 'Ana Souza', technicianId: 10, currentTechnicians: [{ id: 10 }], slaDueAt: '2026-07-23T11:00:00-03:00' },
+    expected: { isPending: true, isInProgress: false, isWaiting: false, isOverdue: false },
+  },
+  {
+    name: 'pendente sem técnico e SLA vencido aparece somente em Pendentes',
+    row: { status: 'Pendente', statusId: 4, slaDueAt: '2026-07-23T11:00:00-03:00' },
+    expected: { isPending: true, isInProgress: false, isWaiting: false, isOverdue: false },
+  },
+  {
+    name: 'em andamento com técnico e SLA válido aparece em atendimento',
+    row: { status: 'Atribuído', statusId: 2, technician: 'Ana Souza', technicianId: 10, currentTechnicians: [{ id: 10 }], slaDueAt: '2026-07-23T13:00:00-03:00' },
+    expected: { isPending: false, isInProgress: true, isWaiting: false, isOverdue: false },
+  },
+  {
+    name: 'em andamento com técnico e SLA vencido aparece em atendimento e estourado',
+    row: { status: 'Atribuído', statusId: 2, technician: 'Ana Souza', technicianId: 10, currentTechnicians: [{ id: 10 }], slaDueAt: '2026-07-23T11:00:00-03:00' },
+    expected: { isPending: false, isInProgress: true, isWaiting: false, isOverdue: true },
+  },
+  {
+    name: 'solucionado com técnico e SLA vencido não aparece nos três cards',
+    row: { status: 'Solucionado', statusId: 5, technician: 'Ana Souza', technicianId: 10, currentTechnicians: [{ id: 10 }], slaDueAt: '2026-07-23T11:00:00-03:00' },
+    expected: { isPending: false, isInProgress: false, isWaiting: false, isOverdue: false },
+  },
+  {
+    name: 'novo sem técnico e SLA válido fica aguardando atendimento',
+    row: { status: 'Novo', statusId: 1, slaDueAt: '2026-07-23T13:00:00-03:00' },
+    expected: { isPending: false, isInProgress: false, isWaiting: true, isOverdue: false },
+  },
+]) {
+  test(scenario.name, () => {
+    const flags = core.calculateTicketFlags(ticket(scenario.row), NOW);
+    assert.deepEqual({
+      isPending: flags.isPending,
+      isInProgress: flags.isInProgress,
+      isWaiting: flags.isWaiting,
+      isOverdue: flags.isOverdue,
+    }, scenario.expected);
+  });
+}
 
 test('abertos no plantão usam intervalo semiaberto e somente SUPORTE TI', () => {
   const rows = [
