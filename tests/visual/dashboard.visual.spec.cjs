@@ -38,58 +38,46 @@ async function prepareAuthenticatedDashboard(page, viewport) {
   await expect(page.locator('#glpi-view-geral')).toBeVisible();
 }
 
-async function preparePublicDashboard(page, viewport = { width: 1366, height: 768 }) {
+async function preparePublicDashboard(
+  page,
+  viewport = { width: 1366, height: 768 },
+  path = '/dashboard-diario',
+) {
   await page.setViewportSize(viewport);
   await page.route('**/config.js', (route) => route.fulfill({
     contentType: 'text/javascript',
     body: 'window.GESTAO_TI_CONFIG={SUPABASE_URL:"https://example.supabase.co",SUPABASE_PUBLIC_KEY:"sb_publishable_visual"};',
   }));
+  const now = Date.now();
+  const baseTicket = {
+    title: null, group_id: 1, group_name: 'SUPORTE TI',
+    opened_at: new Date(now - 65000).toISOString(),
+    sla_due_at: null, attention_due_at: null,
+    internal_sla_due_at: null, internal_attention_due_at: null,
+    source_environment: 'real',
+  };
+  const tickets = [
+    { ...baseTicket, glpi_id: 9001, status_id: 1, status: 'Novo', technician_id: null, technician_name: null, assigned_at: null, solved_at: null, closed_at: null },
+    { ...baseTicket, glpi_id: 9002, status_id: 2, status: 'Atribuído', technician_id: 20, technician_name: 'Técnico Teste', assigned_at: new Date(now - 50000).toISOString(), solved_at: null, closed_at: null },
+    { ...baseTicket, glpi_id: 9003, status_id: 4, status: 'Pendente', technician_id: 20, technician_name: 'Técnico Teste', assigned_at: new Date(now - 50000).toISOString(), solved_at: null, closed_at: null },
+    { ...baseTicket, glpi_id: 9004, status_id: 5, status: 'Solucionado', technician_id: 20, technician_name: 'Técnico Teste', assigned_at: new Date(now - 50000).toISOString(), solved_at: new Date(now - 30000).toISOString(), closed_at: null },
+    { ...baseTicket, glpi_id: 9005, status_id: 6, status: 'Fechado', technician_id: 20, technician_name: 'Técnico Teste', assigned_at: new Date(now - 50000).toISOString(), solved_at: new Date(now - 30000).toISOString(), closed_at: new Date(now - 10000).toISOString() },
+  ];
+  await page.route('https://example.supabase.co/functions/v1/glpi-dashboard', (route) => route.fulfill({
+    contentType: 'application/json',
+    body: JSON.stringify({
+      ok: true,
+      tickets,
+      integrationState: { status: 'online', last_success_at: new Date(now).toISOString() },
+      checkedAt: new Date(now).toISOString(),
+    }),
+  }));
   await page.route('https://cdn.jsdelivr.net/**', (route) => route.fulfill({
     contentType: 'text/javascript',
-    body: `
-      window.supabase={createClient:()=>({
-        functions:{invoke:async()=>({data:{
-          ok:true,
-          tickets:[
-            {
-              glpi_id:9001,title:null,status_id:1,status:"Novo",technician_id:null,technician_name:null,
-              group_id:1,group_name:"SUPORTE TI",opened_at:new Date(Date.now()-65000).toISOString(),
-              assigned_at:null,solved_at:null,closed_at:null,sla_due_at:null,attention_due_at:null,
-              internal_sla_due_at:null,internal_attention_due_at:null,source_environment:"real"
-            },
-            {
-              glpi_id:9002,title:null,status_id:2,status:"Atribuído",technician_id:20,technician_name:"Técnico Teste",
-              group_id:1,group_name:"SUPORTE TI",opened_at:new Date(Date.now()-65000).toISOString(),
-              assigned_at:new Date(Date.now()-50000).toISOString(),solved_at:null,closed_at:null,
-              sla_due_at:null,attention_due_at:null,internal_sla_due_at:null,internal_attention_due_at:null,source_environment:"real"
-            },
-            {
-              glpi_id:9003,title:null,status_id:4,status:"Pendente",technician_id:20,technician_name:"Técnico Teste",
-              group_id:1,group_name:"SUPORTE TI",opened_at:new Date(Date.now()-65000).toISOString(),
-              assigned_at:new Date(Date.now()-50000).toISOString(),solved_at:null,closed_at:null,
-              sla_due_at:null,attention_due_at:null,internal_sla_due_at:null,internal_attention_due_at:null,source_environment:"real"
-            },
-            {
-              glpi_id:9004,title:null,status_id:5,status:"Solucionado",technician_id:20,technician_name:"Técnico Teste",
-              group_id:1,group_name:"SUPORTE TI",opened_at:new Date(Date.now()-65000).toISOString(),
-              assigned_at:new Date(Date.now()-50000).toISOString(),solved_at:new Date(Date.now()-30000).toISOString(),closed_at:null,
-              sla_due_at:null,attention_due_at:null,internal_sla_due_at:null,internal_attention_due_at:null,source_environment:"real"
-            },
-            {
-              glpi_id:9005,title:null,status_id:6,status:"Fechado",technician_id:20,technician_name:"Técnico Teste",
-              group_id:1,group_name:"SUPORTE TI",opened_at:new Date(Date.now()-65000).toISOString(),
-              assigned_at:new Date(Date.now()-50000).toISOString(),solved_at:new Date(Date.now()-30000).toISOString(),
-              closed_at:new Date(Date.now()-10000).toISOString(),sla_due_at:null,attention_due_at:null,
-              internal_sla_due_at:null,internal_attention_due_at:null,source_environment:"real"
-            }
-          ],
-          integrationState:{status:"online",last_success_at:new Date().toISOString()}
-        },error:null})}
-      })};
-    `,
+    body: 'window.supabase={createClient:()=>{throw new Error("Auth client must not be created on the public route.");}};',
   }));
   await page.route('https://cdnjs.cloudflare.com/**', (route) => route.abort());
-  await page.goto('/dashboard-diario');
+  await page.goto(path);
   await expect(page.locator('#glpi-view-diario')).toBeVisible();
 }
 
@@ -206,6 +194,7 @@ test('modo painel funciona no Diário sem redirecionar e continua no Geral', asy
 test('rota pública abre sem login, fica travada no Diário e atualiza contadores localmente', async ({ page }) => {
   await preparePublicDashboard(page);
   await expect(page.locator('#login-container')).toBeHidden();
+  await expect(page.getByText('Online • GLPI', { exact: true })).toBeVisible();
   await expect(page.locator('.sidebar')).toBeHidden();
   await expect(page.locator('.glpi-subtabs')).toBeHidden();
   await expect(page.locator('#glpi-view-configuracoes')).toBeHidden();
@@ -238,17 +227,35 @@ test('rota pública abre sem login, fica travada no Diário e atualiza contadore
   await expect(page.locator('#glpi-view-diario')).toBeVisible();
   await expect(page.locator('#aba-admin')).toBeHidden();
   await expect(page.locator('meta[name="robots"]')).toHaveAttribute('content', /noindex/);
+  const browserState = await page.evaluate(() => ({
+    cookie: document.cookie,
+    supabaseStorageKeys: Object.keys(localStorage).filter((key) => key.startsWith('sb-')),
+    publicMode: window.GESTAO_TI_PUBLIC_DASHBOARD,
+  }));
+  expect(browserState.cookie).toBe('');
+  expect(browserState.supabaseStorageKeys).toEqual([]);
+  expect(browserState.publicMode).toBe(true);
+  await page.evaluate(() => {
+    window.dispatchEvent(new StorageEvent('storage', {
+      key: 'sb-expired-auth-token',
+      oldValue: '{"access_token":"expired"}',
+      newValue: null,
+    }));
+    window.fazerLogout();
+  });
+  await expect(page.locator('#login-container')).toBeHidden();
+  await expect(page.locator('#glpi-view-diario')).toBeVisible();
+  await page.reload();
+  await expect(page.locator('#login-container')).toBeHidden();
+  await expect(page.getByText('Online • GLPI', { exact: true })).toBeVisible();
 });
 
 test('entrada estática do GitHub Pages carrega a rota pública sem autenticação', async ({ page }) => {
-  await page.setViewportSize({ width: 1366, height: 768 });
-  await page.route('**/config.js', (route) => route.fulfill({
-    contentType: 'text/javascript',
-    body: 'window.GESTAO_TI_CONFIG={SUPABASE_PUBLIC_KEY:""};',
-  }));
-  await page.route('https://cdn.jsdelivr.net/**', (route) => route.abort());
-  await page.route('https://cdnjs.cloudflare.com/**', (route) => route.abort());
-  await page.goto('/dashboard-diario/index.html');
+  await preparePublicDashboard(
+    page,
+    { width: 1366, height: 768 },
+    '/dashboard-diario/index.html',
+  );
   await expect(page).toHaveURL(/\/dashboard-diario\/$/);
   await expect(page.locator('#login-container')).toBeHidden();
   await expect(page.locator('#glpi-view-diario')).toBeVisible();

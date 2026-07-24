@@ -61,7 +61,8 @@ test('HTML não contém IDs duplicados', () => {
 });
 
 test('atualização é manual/automática, exclusiva e preserva o último estado', () => {
-  assert.match(source, /state\.subtab === 'diario'\s*\? 30000/);
+  assert.match(source, /const DAILY_REFRESH_SECONDS = 30/);
+  assert.match(source, /state\.subtab === 'diario'\s*\? DAILY_REFRESH_SECONDS \* 1000/);
   assert.match(source, /if \(state\.refreshing\) return false/);
   assert.match(source, /window\.glpiAtualizarAgora = async function/);
   assert.match(source, /await refreshData\(canTriggerSync\(\)\)/);
@@ -76,7 +77,9 @@ test('dados fictícios exigem ativação explícita e falha real permanece offli
   assert.match(source, /Modo demonstração ativado explicitamente/);
   assert.match(source, /Nenhum dado fictício foi carregado/);
   assert.match(source, /Offline • GLPI/);
-  assert.match(source, /integrationStatus === 'online' && lastSuccess && hasRealTickets/);
+  assert.match(source, /label: 'Demonstração'/);
+  assert.match(source, /CORE\.calculateSyncHealth/);
+  assert.doesNotMatch(source, /Offline • Demonstração/);
   assert.doesNotMatch(source, /Nenhum chamado real sincronizado\. Modo demonstração ativado/);
 });
 
@@ -122,6 +125,10 @@ test('rota pública é exclusiva, não exige usuário e recebe somente payload s
   assert.match(edgeSource, /action === 'public-dashboard'/);
   assert.match(edgeSource, /PUBLIC_DASHBOARD_ENABLED/);
   assert.match(edgeSource, /publicDashboardTicket/);
+  assert.match(source, /async function fetchPublicDashboard/);
+  assert.match(source, /Authorization: `Bearer \$\{publicKey\}`/);
+  assert.doesNotMatch(source.match(/if \(state\.publicMode\)[\s\S]*?\n {8}\}/)?.[0] || '', /supabase\.functions\.invoke/);
+  assert.match(authSource, /SUPABASE_CONFIGURADO && !ROTA_DASHBOARD_PUBLICO/);
   assert.doesNotMatch(edgeSource.match(/function publicDashboardTicket[\s\S]*?\n\}/)?.[0] || '', /requester|description|content|session/i);
   assert.match(html, /meta name="robots" content="noindex,nofollow"/);
 });

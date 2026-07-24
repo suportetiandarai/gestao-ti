@@ -272,6 +272,18 @@
         return days ? `${days}d ${clock}` : clock;
     }
 
+    function calculateSyncHealth(integrationState, reference = new Date(), toleranceSeconds = 90) {
+        const status = String(integrationState?.status || '').toLowerCase();
+        const lastSuccess = parseDate(integrationState?.last_success_at);
+        if (status === 'syncing') return 'syncing';
+        if (status === 'offline' || !lastSuccess) return 'offline';
+
+        const checkedAt = parseDate(reference) || new Date();
+        const ageSeconds = Math.max(0, (checkedAt.getTime() - lastSuccess.getTime()) / 1000);
+        if (status === 'delayed' || ageSeconds > toleranceSeconds) return 'delayed';
+        return 'online';
+    }
+
     function publicTicket(ticket, config = {}) {
         const result = {
             id: ticket.id,
@@ -327,6 +339,7 @@
         elapsedSeconds,
         calculateTicketDurations,
         formatElapsedTime,
+        calculateSyncHealth,
         publicTicket,
         createRefreshCoordinator
     });

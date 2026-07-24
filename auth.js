@@ -1,6 +1,7 @@
 const SUPABASE_URL = window.GESTAO_TI_CONFIG?.SUPABASE_URL || 'https://ditygnxttjvlfrdpvaxe.supabase.co';
 const SUPABASE_PUBLIC_KEY = window.GESTAO_TI_CONFIG?.SUPABASE_PUBLIC_KEY || '';
 const PERFIS_VALIDOS = Object.freeze(['admin', 'gestor', 'supervisor', 'tecnico', 'operacional']);
+const ROTA_DASHBOARD_PUBLICO = /\/dashboard-diario\/?$/.test(window.location.pathname);
 
 function chavePublicaValida(chave) {
     if (!chave) return false;
@@ -15,7 +16,7 @@ function chavePublicaValida(chave) {
 }
 
 const SUPABASE_CONFIGURADO = chavePublicaValida(SUPABASE_PUBLIC_KEY);
-window.supabaseClient = SUPABASE_CONFIGURADO
+window.supabaseClient = SUPABASE_CONFIGURADO && !ROTA_DASHBOARD_PUBLICO
     ? window.supabase.createClient(SUPABASE_URL, SUPABASE_PUBLIC_KEY)
     : null;
 var supabase = window.supabaseClient;
@@ -37,7 +38,7 @@ function aplicarLayout(estado) {
 }
 
 function rotaPainelPublico() {
-    return /\/dashboard-diario\/?$/.test(window.location.pathname);
+    return ROTA_DASHBOARD_PUBLICO;
 }
 
 function entrarModoPainelPublico() {
@@ -262,6 +263,7 @@ function verificarEnter(event) {
 }
 
 async function fazerLogout() {
+    if (ROTA_DASHBOARD_PUBLICO) return;
     if (!SUPABASE_CONFIGURADO) return aplicarLayout('anonimo');
     await supabase.auth.signOut();
     window.location.hash = '';

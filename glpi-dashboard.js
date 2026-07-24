@@ -4,6 +4,8 @@
     if (!CORE) throw new Error('Módulo de regras do Dashboard GLPI não carregado.');
     const TZ = CORE.TIME_ZONE;
     const GLPI_VERSION = '10.0.18';
+    const DAILY_REFRESH_SECONDS = 30;
+    const SYNC_STALE_TOLERANCE_SECONDS = DAILY_REFRESH_SECONDS * 3;
     const GLPI_STATUS = Object.freeze({
         1: 'Novo',
         2: 'Atribuído',
@@ -29,13 +31,15 @@
         sortDir: 'desc',
         refreshTimer: null,
         countdownTimer: null,
-        secondsToRefresh: 30,
+        secondsToRefresh: DAILY_REFRESH_SECONDS,
         refreshing: false,
         lastUpdatedAt: null,
         subtab: 'diario',
         panelMode: false,
         menuCollapsedBeforePanel: null,
         publicMode: false,
+        serverTimeOffsetMs: 0,
+        serverTimeVerified: false,
         publicConfig: {},
         localConfig: {},
         serviceChecking: false,
@@ -69,6 +73,24 @@
         const url = String(config.SUPABASE_URL || '').replace(/\/+$/, '');
         const projectRef = url.match(/^https:\/\/([a-z0-9]+)\.supabase\.co$/i)?.[1] || '';
         return { url, projectRef, publicKey: String(config.SUPABASE_PUBLIC_KEY || '') };
+    }
+
+    async function fetchPublicDashboard() {
+        const { url, publicKey } = publicSupabaseConfig();
+        if (!url || !publicKey) throw new Error('Back-end público não configurado.');
+        const response = await fetch(`${url}/functions/v1/glpi-dashboard`, {
+            method: 'POST',
+            headers: {
+                apikey: publicKey,
+                Authorization: `Bearer ${publicKey}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ action: 'public-dashboard' }),
+            cache: 'no-store'
+        });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok || !data?.ok) throw new Error('Dashboard público indisponível.');
+        return data;
     }
 
     function safeExternalUrl(value) {
@@ -357,15 +379,12 @@
 
         if (state.publicMode) {
             state.demo = false;
-            if (!window.supabase?.functions) {
-                state.integrationState = { status: 'offline' };
-                state.syncLogs = [{ level: 'erro', message: 'Back-end público indisponível.', created_at: new Date().toISOString() }];
-                return;
+            const data = await fetchPublicDashboard();
+            const checkedAt = parseDate(data.checkedAt);
+            if (checkedAt) {
+                state.serverTimeOffsetMs = checkedAt.getTime() - Date.now();
+                state.serverTimeVerified = true;
             }
-            const { data, error } = await supabase.functions.invoke('glpi-dashboard', {
-                body: { action: 'public-dashboard' }
-            });
-            if (error || !data?.ok) throw error || new Error('Dashboard público indisponível.');
             state.tickets = (data.tickets || []).map(normalizeTicket);
             state.dailyAssignments = [];
             state.integrationState = data.integrationState || { status: 'offline' };
@@ -946,17 +965,21 @@
 
     function renderStatus() {
         const status = getField('glpi-connection-status');
-        const lastSuccess = parseDate(state.integrationState?.last_success_at);
-        const stale = lastSuccess && (Date.now() - lastSuccess.getTime()) / 1000 > 90;
-        const integrationStatus = state.integrationState?.status;
-        const hasRealTickets = state.tickets.some(ticket => ticket.sourceEnvironment !== 'demo');
+        const reference = state.serverTimeVerified
+            ? new Date(Date.now() + state.serverTimeOffsetMs)
+            : new Date();
+        const health = CORE.calculateSyncHealth(
+            state.integrationState,
+            reference,
+            SYNC_STALE_TOLERANCE_SECONDS
+        );
         const connection = state.demo
-            ? { label: 'Offline • Demonstração', className: 'error' }
-            : integrationStatus === 'syncing'
+            ? { label: 'Demonstração', className: 'warning' }
+            : health === 'syncing'
                     ? { label: 'Sincronizando GLPI', className: 'warning' }
-                : stale || integrationStatus === 'delayed'
+                : health === 'delayed'
                         ? { label: 'Sincronização atrasada', className: 'warning' }
-                    : integrationStatus === 'online' && lastSuccess && hasRealTickets
+                    : health === 'online'
                         ? { label: 'Online • GLPI', className: 'ok' }
                         : { label: 'Offline • GLPI', className: 'error' };
         status.textContent = connection.label;
@@ -1029,7 +1052,7 @@
         } finally {
             state.refreshing = false;
             state.secondsToRefresh = state.subtab === 'diario'
-                ? 30
+                ? DAILY_REFRESH_SECONDS
                 : Number(getField('glpi-sync-interval')?.value || 30000) / 1000;
             const main = document.querySelector('.main-content');
             if (main) main.scrollTop = scrollTop;
@@ -1336,7 +1359,7 @@
         clearInterval(state.refreshTimer);
         clearInterval(state.countdownTimer);
         const interval = state.subtab === 'diario'
-            ? 30000
+            ? DAILY_REFRESH_SECONDS * 1000
             : Number(getField('glpi-sync-interval')?.value || 30000);
         state.secondsToRefresh = Math.round(interval / 1000);
         state.refreshTimer = setInterval(() => {

@@ -277,6 +277,38 @@ test('tempo total equivale à atribuição mais solução', () => {
   assert.equal(core.formatElapsedTime(null), 'Não disponível');
 });
 
+test('saúde da sincronização respeita três ciclos de tolerância e recupera após sucesso', () => {
+  const reference = new Date('2026-07-23T15:00:00Z');
+  assert.equal(core.calculateSyncHealth({
+    status: 'online',
+    last_success_at: '2026-07-23T14:59:40Z',
+  }, reference, 90), 'online');
+  assert.equal(core.calculateSyncHealth({
+    status: 'online',
+    last_success_at: '2026-07-23T14:59:25Z',
+  }, reference, 90), 'online');
+  assert.equal(core.calculateSyncHealth({
+    status: 'online',
+    last_success_at: '2026-07-23T14:58:29Z',
+  }, reference, 90), 'delayed');
+  assert.equal(core.calculateSyncHealth({
+    status: 'offline',
+    last_success_at: '2026-07-23T14:59:55Z',
+  }, reference, 90), 'offline');
+  assert.equal(core.calculateSyncHealth({
+    status: 'online',
+    last_success_at: '2026-07-23T14:59:59Z',
+  }, reference, 90), 'online');
+});
+
+test('saúde da sincronização compara instantes sem aplicar fuso duas vezes', () => {
+  assert.equal(core.calculateSyncHealth({
+    status: 'online',
+    last_success_at: '2026-07-23T11:59:30-03:00',
+  }, new Date('2026-07-23T15:00:00Z'), 90), 'online');
+  assert.equal(core.calculateSyncHealth({ status: 'online', last_success_at: null }, NOW, 90), 'offline');
+});
+
 test('coordenador bloqueia concorrência e preserva dados após falha', async () => {
   const coordinator = core.createRefreshCoordinator();
   let release;
