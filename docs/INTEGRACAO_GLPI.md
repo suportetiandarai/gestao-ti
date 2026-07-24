@@ -220,6 +220,38 @@ status
 7. Atualiza cursor, saúde e log.
 8. Encerra a sessão GLPI em `finally`.
 
+### Agendamento independente do navegador
+
+A migração `20260724180000_glpi_backend_scheduler.sql` cria um único job
+`gestao-ti-glpi-sync`. O Supabase Cron atual suporta intervalos em segundos em
+versões compatíveis e o job tenta executar a cada 30 segundos. Se a infraestrutura
+rejeitar essa expressão, a própria migração configura o fallback de um minuto.
+
+Antes de aplicar a migração, armazene no Vault, diretamente pelo SQL Editor, sem
+registrar os valores no repositório:
+
+```sql
+select vault.create_secret('https://PROJECT_REF.supabase.co', 'gestao_ti_project_url');
+select vault.create_secret('SERVICE_ROLE_KEY', 'gestao_ti_service_role_key');
+```
+
+O job chama `sync-incremental` com autenticação de serviço. O lock atômico
+`acquire_glpi_sync_lock` rejeita sobreposição com HTTP 409; erros liberam
+`locked_until`, e uma interrupção abrupta é recuperada pela expiração do lock.
+O cursor `last_cursor`, baseado em `date_mod`, limita cada execução aos registros
+novos ou modificados.
+
+O estado armazena tentativa, sucesso, duração, registros processados/alterados,
+origem, erro sanitizado, intervalo e próxima execução. A ação
+`public-dashboard` permanece somente leitura. Na rota pública, “Atualizar agora”
+apenas consulta novamente esse cache.
+
+Para desativar o agendamento sem remover dados:
+
+```sql
+select cron.unschedule('gestao-ti-glpi-sync');
+```
+
 Erros 429/5xx, falhas de rede e timeout recebem até três tentativas por padrão. Erros definitivos preservam o cache anterior e marcam a integração como `offline`. O front-end considera a sincronização atrasada após 90 segundos sem sucesso (três ciclos de 30 segundos). Na rota pública, a comparação usa o horário `checkedAt` retornado pela Edge Function para neutralizar relógio local incorreto ou conversão duplicada de fuso.
 
 No primeiro bootstrap, quando ainda não existe cursor, a função limita a carga a
@@ -249,6 +281,13 @@ O título operacional e o nome completo do técnico são autorizados na listagem
 pública. Solicitante, descrição, acompanhamentos, contatos e dados administrativos
 continuam ausentes do payload. O papel público não pode executar sincronização,
 testes de conexão ou ações administrativas.
+
+Alterações nesse payload exigem republicar a Edge Function; o merge do front-end
+no GitHub Pages não atualiza automaticamente o runtime do Supabase:
+
+```bash
+npx supabase functions deploy glpi-dashboard
+```
 
 ## Plantões e grupo operacional
 

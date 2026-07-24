@@ -82,6 +82,14 @@ Valores indisponíveis são exibidos como “Não disponível” e não entram e
 - A primeira atribuição usa o evento mais antigo do histórico `Log.id_search_option=5`; `date_assign` é alternativa quando o histórico não estiver disponível.
 - O navegador recalcula somente os textos dos contadores a cada segundo. Não há consulta adicional ao GLPI; a sincronização permanece a cada 30 segundos.
 
+### Responsável pela solução
+
+- O gráfico utiliza exclusivamente `ITILSolution.users_id`, autor da solução registrada no GLPI.
+- `users_id_lastupdater` nunca é usado para atribuir produtividade.
+- O técnico atualmente relacionado por `Ticket_User.type=2` não substitui um autor de solução ausente, pois essa relação não comprova quem solucionou nem quem estava atribuído naquele instante.
+- Chamados fechados sem solução registrada e chamados sem autor identificável não são atribuídos silenciosamente a nenhum técnico.
+- A chave de deduplicação permanece `chamado + autor da solução`.
+
 ## Nomes dos técnicos
 
 O nome é formatado centralmente. A integração prioriza `display_name` ou `completename` quando preenchido; caso contrário usa `firstname + realname`, remove espaços duplicados e recorre a `name` somente como último recurso. A instalação real retornou, por exemplo, `firstname=Vinícius` e `realname=Manoel Pascoal Silva`; a concatenação anterior estava invertida como `realname + firstname`.
