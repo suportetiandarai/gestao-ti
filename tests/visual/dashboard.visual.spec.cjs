@@ -80,6 +80,8 @@ for (const viewport of viewports) {
     await expect(page.getByText('Indicadores de chamados', { exact: true })).toBeVisible();
     if (viewport.name !== 'celular') await expect(page.locator('.sidebar')).toBeVisible();
     await expect(page.getByText('Últimos chamados registrados', { exact: true })).toBeVisible();
+    await expect(page.locator('#glpi-view-diario .glpi-kpi-icon')).toHaveCount(0);
+    await expect(page.getByText('Chamados colocados como pendentes', { exact: true })).toBeVisible();
     await expect(page.getByText(/Plantão atual: (Diurno|Noturno)/)).toBeVisible();
     await expect(page.getByText('Offline • GLPI', { exact: true })).toBeVisible();
     await expect(page.getByText('Modo demonstração ativo: dados fictícios não são gravados no banco.', { exact: true })).toHaveCount(0);
@@ -101,6 +103,9 @@ for (const viewport of viewports) {
     expect(layout.bodyOverflow).toBe(false);
     expect(layout.chartOverflow).toBe(false);
     expect(layout.cards.every((card) => card.left >= 0 && card.right <= viewport.width + 1 && card.scrollWidth <= card.width + 1)).toBe(true);
+    const titleAlignment = await page.locator('.glpi-daily-section-title').evaluateAll((titles) =>
+      titles.map((title) => getComputedStyle(title).textAlign));
+    expect(titleAlignment).toEqual(['center', 'center']);
   });
 }
 
@@ -173,7 +178,7 @@ test('rota pública abre sem login, fica travada no Diário e atualiza contadore
   await expect(page.locator('meta[name="robots"]')).toHaveAttribute('content', /noindex/);
 });
 
-test('cards e fontes do Diário possuem dimensões ampliadas', async ({ page }) => {
+test('cards e fontes do Diário possuem aumento moderado', async ({ page }) => {
   await preparePage(page, { width: 1920, height: 1080 });
   const dimensions = await page.locator('#glpi-view-diario').evaluate((view) => {
     const card = view.querySelector('.glpi-daily-kpi');
@@ -185,9 +190,12 @@ test('cards e fontes do Diário possuem dimensões ampliadas', async ({ page }) 
       titleFont: Number.parseFloat(getComputedStyle(title).fontSize),
     };
   });
-  expect(dimensions.cardHeight).toBeGreaterThanOrEqual(170);
-  expect(dimensions.valueFont).toBeGreaterThanOrEqual(44);
-  expect(dimensions.titleFont).toBeGreaterThanOrEqual(28);
+  expect(dimensions.cardHeight).toBeGreaterThanOrEqual(125);
+  expect(dimensions.cardHeight).toBeLessThanOrEqual(150);
+  expect(dimensions.valueFont).toBeGreaterThanOrEqual(32);
+  expect(dimensions.valueFont).toBeLessThanOrEqual(35);
+  expect(dimensions.titleFont).toBeGreaterThanOrEqual(30);
+  expect(dimensions.titleFont).toBeLessThanOrEqual(34);
 });
 
 test('Conectar serviços é responsivo e não exibe credenciais', async ({ page }) => {

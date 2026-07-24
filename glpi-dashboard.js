@@ -604,10 +604,9 @@
         });
     }
 
-    function dailyCard([labelText, value, hint, icon], emphasis) {
+    function dailyCard([labelText, value, hint], emphasis) {
         return `
             <article class="glpi-kpi glpi-daily-kpi ${emphasis}">
-                <span class="glpi-kpi-icon" aria-hidden="true">${icon}</span>
                 <span class="glpi-kpi-title">${esc(labelText)}</span>
                 <strong>${esc(value)}</strong>
                 <small>${esc(hint)}</small>
@@ -628,11 +627,11 @@
         }
 
         const cards = [
-            ['Chamados abertos no plantão', createdInShift.length, `${metrics.label} • SUPORTE TI`, '📥'],
-            ['Em atendimento', inServiceNow.length, 'Não finalizados com técnico atribuído', '🛠️'],
-            ['Aguardando atendimento', waitingNow.length, 'Não finalizados sem técnico atribuído', '⏳'],
-            ['Pendentes', pendingNow.length, 'Status real 4 • classificação exclusiva', '⏸️'],
-            ['Chamados estourados', breachedNow.length, 'Prazo real SLA/OLA ultrapassado', '⚠️']
+            ['Chamados abertos no plantão', createdInShift.length, `${metrics.label} • SUPORTE TI`],
+            ['Em atendimento', inServiceNow.length, 'Não finalizados com técnico atribuído'],
+            ['Aguardando atendimento', waitingNow.length, 'Não finalizados sem técnico atribuído'],
+            ['Pendentes', pendingNow.length, 'Chamados colocados como pendentes'],
+            ['Chamados estourados', breachedNow.length, 'Prazo real SLA/OLA ultrapassado']
         ];
 
         getField('glpi-daily-kpis-primary').innerHTML = cards.slice(0, 3)
