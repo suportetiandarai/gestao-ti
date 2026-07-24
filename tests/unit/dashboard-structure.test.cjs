@@ -43,7 +43,7 @@ test('cards do Diário usam três itens na primeira linha e dois na segunda ante
   assert.ok(primary >= 0 && secondary > primary && graph > secondary);
   assert.match(styles, /\.glpi-daily-kpi-primary\s*\{[\s\S]*repeat\(3/);
   assert.match(styles, /\.glpi-daily-kpi-secondary\s*\{[\s\S]*repeat\(2/);
-  assert.match(styles, /\.glpi-daily-kpi\s*\{[\s\S]*min-height:\s*128px/);
+  assert.match(styles, /\.glpi-daily-kpi\s*\{[\s\S]*min-height:\s*108px/);
   assert.match(styles, /body\.glpi-daily-active \.glpi-header h3[\s\S]*clamp/);
 });
 
@@ -138,6 +138,18 @@ test('cards diários não exibem emojis, ocultam diagnóstico de pendência e ce
   assert.match(source, /Chamados colocados como pendentes/);
   assert.equal((dailyView.match(/class="glpi-daily-section-title"/g) || []).length, 2);
   assert.match(styles, /\.glpi-daily-section-title\s*\{\s*text-align:\s*center/);
+});
+
+test('cards centralizam conteúdo e Tempo total sinaliza somente solução registrada', () => {
+  assert.match(styles, /\.glpi-daily-kpi\s*\{[\s\S]*display:\s*flex/);
+  assert.match(styles, /\.glpi-daily-kpi\s*\{[\s\S]*align-items:\s*center/);
+  assert.match(styles, /\.glpi-daily-kpi\s*\{[\s\S]*justify-content:\s*center/);
+  assert.match(styles, /\.glpi-daily-kpi\s*\{[\s\S]*text-align:\s*center/);
+  assert.match(source, /statusId === CORE\.STATUS_CODE\.SOLVED/);
+  assert.match(source, /statusId === CORE\.STATUS_CODE\.CLOSED/);
+  assert.match(source, /resolvedStatus && Boolean\(parseDate\(ticket\?\.solvedAt\)\)/);
+  assert.match(source, /className = 'ticket-solved-label'/);
+  assert.match(styles, /\.ticket-solved-label\s*\{[\s\S]*color:\s*var\(--glpi-success\)/);
 });
 
 test('grupo técnico e responsável pela solução usam as relações reais do GLPI', () => {

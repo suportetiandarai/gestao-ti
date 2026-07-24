@@ -50,12 +50,39 @@ async function preparePublicDashboard(page, viewport = { width: 1366, height: 76
       window.supabase={createClient:()=>({
         functions:{invoke:async()=>({data:{
           ok:true,
-          tickets:[{
-            glpi_id:9001,title:null,status_id:1,status:"Novo",technician_id:null,technician_name:null,
-            group_id:1,group_name:"SUPORTE TI",opened_at:new Date(Date.now()-65000).toISOString(),
-            assigned_at:null,solved_at:null,closed_at:null,sla_due_at:null,attention_due_at:null,
-            internal_sla_due_at:null,internal_attention_due_at:null,source_environment:"real"
-          }],
+          tickets:[
+            {
+              glpi_id:9001,title:null,status_id:1,status:"Novo",technician_id:null,technician_name:null,
+              group_id:1,group_name:"SUPORTE TI",opened_at:new Date(Date.now()-65000).toISOString(),
+              assigned_at:null,solved_at:null,closed_at:null,sla_due_at:null,attention_due_at:null,
+              internal_sla_due_at:null,internal_attention_due_at:null,source_environment:"real"
+            },
+            {
+              glpi_id:9002,title:null,status_id:2,status:"Atribuído",technician_id:20,technician_name:"Técnico Teste",
+              group_id:1,group_name:"SUPORTE TI",opened_at:new Date(Date.now()-65000).toISOString(),
+              assigned_at:new Date(Date.now()-50000).toISOString(),solved_at:null,closed_at:null,
+              sla_due_at:null,attention_due_at:null,internal_sla_due_at:null,internal_attention_due_at:null,source_environment:"real"
+            },
+            {
+              glpi_id:9003,title:null,status_id:4,status:"Pendente",technician_id:20,technician_name:"Técnico Teste",
+              group_id:1,group_name:"SUPORTE TI",opened_at:new Date(Date.now()-65000).toISOString(),
+              assigned_at:new Date(Date.now()-50000).toISOString(),solved_at:null,closed_at:null,
+              sla_due_at:null,attention_due_at:null,internal_sla_due_at:null,internal_attention_due_at:null,source_environment:"real"
+            },
+            {
+              glpi_id:9004,title:null,status_id:5,status:"Solucionado",technician_id:20,technician_name:"Técnico Teste",
+              group_id:1,group_name:"SUPORTE TI",opened_at:new Date(Date.now()-65000).toISOString(),
+              assigned_at:new Date(Date.now()-50000).toISOString(),solved_at:new Date(Date.now()-30000).toISOString(),closed_at:null,
+              sla_due_at:null,attention_due_at:null,internal_sla_due_at:null,internal_attention_due_at:null,source_environment:"real"
+            },
+            {
+              glpi_id:9005,title:null,status_id:6,status:"Fechado",technician_id:20,technician_name:"Técnico Teste",
+              group_id:1,group_name:"SUPORTE TI",opened_at:new Date(Date.now()-65000).toISOString(),
+              assigned_at:new Date(Date.now()-50000).toISOString(),solved_at:new Date(Date.now()-30000).toISOString(),
+              closed_at:new Date(Date.now()-10000).toISOString(),sla_due_at:null,attention_due_at:null,
+              internal_sla_due_at:null,internal_attention_due_at:null,source_environment:"real"
+            }
+          ],
           integrationState:{status:"online",last_success_at:new Date().toISOString()}
         },error:null})}
       })};
@@ -165,10 +192,23 @@ test('rota pública abre sem login, fica travada no Diário e atualiza contadore
   await expect(page.getByText('Tempo de atribuição', { exact: true })).toBeVisible();
   await expect(page.getByText('Tempo de solução', { exact: true })).toBeVisible();
   await expect(page.getByText('Tempo total', { exact: true })).toBeVisible();
-  const initial = await page.locator('[data-time-kind="assignment"]').textContent();
+  const runningAssignment = page.locator('[data-ticket-id="9001"][data-time-kind="assignment"]');
+  const initial = await runningAssignment.textContent();
   await page.waitForTimeout(1100);
-  const updated = await page.locator('[data-time-kind="assignment"]').textContent();
+  const updated = await runningAssignment.textContent();
   expect(updated).not.toBe(initial);
+  await expect(page.locator('.ticket-solved-label')).toHaveCount(2);
+  await expect(page.locator('[data-ticket-id="9002"] .ticket-solved-label')).toHaveCount(0);
+  await expect(page.locator('[data-ticket-id="9003"] .ticket-solved-label')).toHaveCount(0);
+  await expect(page.locator('[data-ticket-id="9004"] .ticket-solved-label')).toHaveText('SOLUCIONADO');
+  await expect(page.locator('[data-ticket-id="9005"] .ticket-solved-label')).toHaveText('SOLUCIONADO');
+  const solvedColor = await page.locator('[data-ticket-id="9004"] .ticket-solved-label').evaluate((element) =>
+    getComputedStyle(element).color);
+  expect(solvedColor).toBe('rgb(22, 163, 74)');
+  const solvedTotal = page.locator('[data-ticket-id="9004"][data-time-kind="total"] .glpi-ticket-time-value');
+  const solvedInitial = await solvedTotal.textContent();
+  await page.waitForTimeout(1100);
+  await expect(solvedTotal).toHaveText(solvedInitial);
   await page.evaluate(() => {
     window.abrirAba('aba-admin');
     window.glpiAbrirSubaba('configuracoes');
@@ -190,8 +230,8 @@ test('cards e fontes do Diário possuem aumento moderado', async ({ page }) => {
       titleFont: Number.parseFloat(getComputedStyle(title).fontSize),
     };
   });
-  expect(dimensions.cardHeight).toBeGreaterThanOrEqual(125);
-  expect(dimensions.cardHeight).toBeLessThanOrEqual(150);
+  expect(dimensions.cardHeight).toBeGreaterThanOrEqual(105);
+  expect(dimensions.cardHeight).toBeLessThanOrEqual(124);
   expect(dimensions.valueFont).toBeGreaterThanOrEqual(32);
   expect(dimensions.valueFont).toBeLessThanOrEqual(35);
   expect(dimensions.titleFont).toBeGreaterThanOrEqual(30);

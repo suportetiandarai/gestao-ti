@@ -587,11 +587,21 @@
         `).join('');
     }
 
+    function hasRecordedSolution(ticket) {
+        const statusId = Number(ticket?.statusId);
+        const resolvedStatus =
+            statusId === CORE.STATUS_CODE.SOLVED
+            || statusId === CORE.STATUS_CODE.CLOSED;
+        return resolvedStatus && Boolean(parseDate(ticket?.solvedAt));
+    }
+
     function renderDailyTimers(reference = new Date()) {
         document.querySelectorAll('.glpi-ticket-time[data-ticket-id][data-time-kind]').forEach((element) => {
             const ticket = state.tickets.find((item) => String(item.id) === element.dataset.ticketId);
+            const valueElement = element.querySelector('.glpi-ticket-time-value') || element;
             if (!ticket) {
-                element.textContent = 'Não disponível';
+                valueElement.textContent = 'Não disponível';
+                element.querySelector('.ticket-solved-label')?.remove();
                 return;
             }
             const durations = CORE.calculateTicketDurations(ticket, reference);
@@ -600,7 +610,19 @@
                 solution: 'solutionSeconds',
                 total: 'totalSeconds'
             }[element.dataset.timeKind];
-            element.textContent = CORE.formatElapsedTime(durations[field]);
+            valueElement.textContent = CORE.formatElapsedTime(durations[field]);
+
+            if (element.dataset.timeKind !== 'total') return;
+            const solvedLabel = element.querySelector('.ticket-solved-label');
+            if (!hasRecordedSolution(ticket)) {
+                solvedLabel?.remove();
+                return;
+            }
+            if (solvedLabel) return;
+            const label = document.createElement('span');
+            label.className = 'ticket-solved-label';
+            label.textContent = 'SOLUCIONADO';
+            element.append(label);
         });
     }
 
@@ -667,7 +689,7 @@
                     <time data-label="Abertura">${new Intl.DateTimeFormat('pt-BR', { timeStyle: 'short', timeZone: TZ }).format(parseDate(visible.openedAt))}</time>
                     <span class="glpi-ticket-time" data-label="Tempo de atribuição" data-ticket-id="${esc(ticket.id)}" data-time-kind="assignment">Não disponível</span>
                     <span class="glpi-ticket-time" data-label="Tempo de solução" data-ticket-id="${esc(ticket.id)}" data-time-kind="solution">Não disponível</span>
-                    <span class="glpi-ticket-time" data-label="Tempo total" data-ticket-id="${esc(ticket.id)}" data-time-kind="total">Não disponível</span>
+                    <span class="glpi-ticket-time glpi-ticket-total" data-label="Tempo total" data-ticket-id="${esc(ticket.id)}" data-time-kind="total"><span class="glpi-ticket-time-value">Não disponível</span></span>
                 </article>
             `; }).join('')}` : '<p class="glpi-empty">Nenhum chamado aberto neste plantão.</p>';
         renderDailyTimers();
