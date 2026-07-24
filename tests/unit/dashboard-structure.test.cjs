@@ -7,6 +7,11 @@ const root = join(__dirname, '..', '..');
 const html = readFileSync(join(root, 'index.html'), 'utf8');
 const source = readFileSync(join(root, 'glpi-dashboard.js'), 'utf8');
 const edgeSource = readFileSync(join(root, 'supabase', 'functions', 'glpi-dashboard', 'index.ts'), 'utf8');
+const authSource = readFileSync(join(root, 'auth.js'), 'utf8');
+const appSource = readFileSync(join(root, 'app.js'), 'utf8');
+const serveSource = readFileSync(join(root, 'scripts', 'serve.mjs'), 'utf8');
+const buildSource = readFileSync(join(root, 'scripts', 'build.mjs'), 'utf8');
+const styles = readFileSync(join(root, 'styles.css'), 'utf8');
 const assignmentsMigration = readFileSync(join(root, 'supabase', 'migrations', '20260722110000_glpi_ticket_assignments.sql'), 'utf8');
 const dailyView = html.match(/<div id="glpi-view-diario"[\s\S]*?<div id="glpi-view-geral"/)?.[0] || '';
 const dailyRenderer = source.match(/function renderDailyDashboard\(\)[\s\S]*?function renderBarChart/)?.[0] || '';
@@ -21,12 +26,25 @@ test('Dashboard Diário contém somente a estrutura autorizada', () => {
   assert.equal(labels.filter((label) => dailyRenderer.includes(`['${label}'`)).length, 5);
 });
 
-test('modo painel não existe no Diário e permanece disponível no Geral', () => {
-  assert.match(html, /class="[^"]*glpi-general-panel-action[^"]*"[^>]*>Modo Painel/);
-  assert.match(source, /if \(state\.subtab === 'diario'\)/);
-  assert.match(source, /O modo painel está disponível somente no Dashboard Geral/);
-  assert.doesNotMatch(dailyView, />Modo Painel</);
-  assert.doesNotMatch(dailyView, />Tela cheia</);
+test('título do Diário e modo painel compartilhado estão disponíveis', () => {
+  assert.match(html, /id="glpi-dashboard-title">DASHBOARD CHAMADOS DIÁRIO/);
+  assert.match(html, /id="glpi-dashboard-subtitle">Indicadores de chamados/);
+  assert.match(html, /id="glpi-panel-button"[^>]*>Modo Painel/);
+  assert.match(html, /id="glpi-fullscreen-button"[^>]*>Entrar em tela cheia/);
+  assert.doesNotMatch(source, /O modo painel está disponível somente no Dashboard Geral/);
+  assert.match(source, /requestFullscreen/);
+  assert.match(source, /exitFullscreen/);
+});
+
+test('cards do Diário usam três itens na primeira linha e dois na segunda antes do gráfico', () => {
+  const primary = dailyView.indexOf('glpi-daily-kpis-primary');
+  const secondary = dailyView.indexOf('glpi-daily-kpis-secondary');
+  const graph = dailyView.indexOf('Chamados resolvidos por técnico no plantão');
+  assert.ok(primary >= 0 && secondary > primary && graph > secondary);
+  assert.match(styles, /\.glpi-daily-kpi-primary\s*\{[\s\S]*repeat\(3/);
+  assert.match(styles, /\.glpi-daily-kpi-secondary\s*\{[\s\S]*repeat\(2/);
+  assert.match(styles, /\.glpi-daily-kpi\s*\{[\s\S]*min-height:\s*174px/);
+  assert.match(styles, /body\.glpi-daily-active \.glpi-header h3[\s\S]*clamp/);
 });
 
 test('texto detalhado de diagnóstico não aparece na interface', () => {
@@ -46,6 +64,8 @@ test('atualização é manual/automática, exclusiva e preserva o último estado
   assert.match(source, /await refreshData\(canTriggerSync\(\)\)/);
   assert.match(source, /if \(!state\.tickets\.length\)/);
   assert.match(source, /últimos dados válidos/i);
+  assert.equal((source.match(/state\.countdownTimer = setInterval/g) || []).length, 1);
+  assert.match(source, /renderDailyTimers\(\)/);
 });
 
 test('dados fictícios exigem ativação explícita e falha real permanece offline', () => {
@@ -82,9 +102,34 @@ test('atribuição real usa relações e histórico quando date_assign não é e
   assert.match(edgeSource, /Ticket\/\$\{ticketId\}\/Ticket_User/);
   assert.match(edgeSource, /Ticket\/\$\{ticketId\}\/Log\?range=0-99/);
   assert.match(edgeSource, /Number\(entry\.id_search_option\) === 5/);
+  assert.match(edgeSource, /String\(left\.date_mod\)\.localeCompare\(String\(right\.date_mod\)\)/);
+  assert.match(edgeSource, /_dashboard_first_assigned_at/);
   assert.match(edgeSource, /Number\(relation\.type\) === 2/);
   assert.match(assignmentsMigration, /primary key \(ticket_glpi_id, technician_id\)/i);
   assert.match(source, /glpi_ticket_assignments_dashboard/);
+});
+
+test('rota pública é exclusiva, não exige usuário e recebe somente payload sanitizado', () => {
+  assert.match(authSource, /\/dashboard-diario/);
+  assert.match(authSource, /GESTAO_TI_PUBLIC_DASHBOARD = true/);
+  assert.match(appSource, /if \(window\.GESTAO_TI_PUBLIC_DASHBOARD\)[\s\S]*idAba = 'aba-glpi'/);
+  assert.match(source, /name !== 'diario'/);
+  assert.match(serveSource, /dashboard-diario/);
+  assert.match(buildSource, /dashboard-diario/);
+  assert.match(edgeSource, /action === 'public-dashboard'/);
+  assert.match(edgeSource, /PUBLIC_DASHBOARD_ENABLED/);
+  assert.match(edgeSource, /publicDashboardTicket/);
+  assert.doesNotMatch(edgeSource.match(/function publicDashboardTicket[\s\S]*?\n\}/)?.[0] || '', /requester|description|content|session/i);
+  assert.match(html, /meta name="robots" content="noindex,nofollow"/);
+});
+
+test('listagem diária contém tempos e remove entidade maior literal', () => {
+  assert.match(dailyRenderer, /Tempo de atribuição/);
+  assert.match(dailyRenderer, /Tempo de solução/);
+  assert.match(dailyRenderer, /Tempo total/);
+  assert.match(source, /calculateTicketDurations/);
+  assert.doesNotMatch(html, /&#62;?|&gt;/i);
+  assert.match(source, /replace\(\/\(\?:&#0\*62;\?\|&gt;\)\/gi, ''\)/);
 });
 
 test('grupo técnico e responsável pela solução usam as relações reais do GLPI', () => {

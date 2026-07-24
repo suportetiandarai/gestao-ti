@@ -1559,13 +1559,59 @@ input[type="file"]::file-selector-button:hover {
     gap: 14px;
 }
 
-.glpi-daily-kpi-grid {
-    grid-template-columns: repeat(5, minmax(150px, 1fr));
+body.glpi-daily-active .glpi-header h3 {
+    font-size: clamp(1.8rem, 3vw, 3.4rem);
+    line-height: 1.05;
+    letter-spacing: .02em;
+}
+
+body.glpi-daily-active .glpi-header > div > p:not(.glpi-eyebrow) {
+    font-size: clamp(1rem, 1.35vw, 1.45rem);
+}
+
+.glpi-daily-kpi-primary {
+    grid-template-columns: repeat(3, minmax(220px, 1fr));
+}
+
+.glpi-daily-kpi-secondary {
+    grid-template-columns: repeat(2, minmax(240px, 1fr));
+    width: min(72%, 980px);
+    margin-inline: auto;
+}
+
+.glpi-daily-kpi {
+    min-height: 174px;
+    padding: clamp(20px, 2vw, 30px) !important;
+    display: grid;
+    grid-template-columns: auto 1fr;
+    align-content: center;
+    column-gap: 14px;
+}
+
+.glpi-daily-kpi .glpi-kpi-icon {
+    grid-row: 1 / span 3;
+    font-size: clamp(1.75rem, 2.4vw, 2.8rem);
+    align-self: start;
+}
+
+.glpi-daily-kpi .glpi-kpi-title {
+    font-size: clamp(.9rem, 1.15vw, 1.2rem);
+}
+
+body.glpi-daily-active .glpi-daily-kpi strong {
+    font-size: clamp(2.8rem, 5vw, 5.4rem);
+    line-height: 1;
+    margin-block: 8px;
+}
+
+.glpi-daily-kpi small {
+    font-size: clamp(.78rem, .95vw, 1rem);
 }
 
 .glpi-daily-content {
     display: grid;
-    gap: 14px;
+    gap: clamp(20px, 2.4vw, 34px);
+    margin-top: 4px;
 }
 
 .glpi-daily-tickets {
@@ -1576,13 +1622,14 @@ input[type="file"]::file-selector-button:hover {
 
 .glpi-daily-ticket {
     display: grid;
-    grid-template-columns: minmax(210px, 2fr) minmax(100px, .8fr) minmax(120px, 1fr) 85px minmax(180px, 1.5fr);
+    grid-template-columns: 90px minmax(210px, 1.7fr) 120px minmax(170px, 1.15fr) 90px repeat(3, minmax(150px, 1fr));
     gap: 12px;
     align-items: center;
-    padding: 10px 8px;
+    min-width: 1320px;
+    padding: 14px 12px;
     border-bottom: 1px solid #e2e8f0;
     color: #334155;
-    font-size: 12px;
+    font-size: clamp(.85rem, .9vw, 1rem);
 }
 
 .glpi-daily-ticket > strong,
@@ -1607,10 +1654,17 @@ input[type="file"]::file-selector-button:hover {
     color: var(--glpi-muted);
     font-weight: 800;
     text-transform: uppercase;
+    font-size: clamp(.78rem, .82vw, .92rem);
+}
+
+.glpi-ticket-time {
+    font-variant-numeric: tabular-nums;
+    font-weight: 800;
+    color: var(--glpi-primary);
+    white-space: nowrap;
 }
 
 body.glpi-daily-active .glpi-filter-button,
-body.glpi-daily-active .glpi-general-panel-action,
 body.glpi-daily-active #glpi-current-time {
     display: none !important;
 }
@@ -1628,12 +1682,28 @@ body.glpi-daily-active #glpi-current-time {
 }
 
 .glpi-shift-banner strong {
-    font-size: 16px;
+    font-size: clamp(1rem, 1.35vw, 1.45rem);
 }
 
 .glpi-shift-banner span {
-    font-size: 13px;
+    font-size: clamp(.85rem, 1vw, 1.05rem);
     font-weight: 700;
+}
+
+body.glpi-daily-active .glpi-panel h4 {
+    font-size: clamp(1.2rem, 1.65vw, 1.8rem);
+    margin-top: 0;
+}
+
+body.glpi-daily-active .glpi-bar-row {
+    font-size: clamp(.9rem, 1.05vw, 1.15rem);
+    min-height: 34px;
+}
+
+body.glpi-daily-active .glpi-actions button,
+body.glpi-daily-active .glpi-status-badge,
+body.glpi-daily-active .glpi-last-update {
+    font-size: clamp(.78rem, .9vw, 1rem);
 }
 
 .glpi-kpi,
@@ -1877,37 +1947,38 @@ body.glpi-daily-active #glpi-current-time {
     padding: 18px;
 }
 
-body.glpi-panel-mode:not(.glpi-daily-active) #app-wrapper {
+body.glpi-panel-mode #app-wrapper {
     height: 100vh;
 }
 
-body.glpi-panel-mode:not(.glpi-daily-active) .sidebar,
-body.glpi-panel-mode:not(.glpi-daily-active) .main-content > header,
-body.glpi-panel-mode:not(.glpi-daily-active) .glpi-subtabs,
+body.glpi-panel-mode .sidebar,
+body.glpi-panel-mode .main-content > header,
+body.glpi-panel-mode .glpi-subtabs,
 body.public-dashboard .sidebar,
 body.public-dashboard .main-content > header,
-body.public-dashboard .glpi-subtabs button:not(:first-child),
+body.public-dashboard .glpi-subtabs,
 body.public-dashboard #glpi-view-configuracoes,
 body.public-dashboard #glpi-view-monitoramento,
 body.public-dashboard #glpi-view-relatorios,
 body.public-dashboard #glpi-view-chamados,
 body.public-dashboard #glpi-view-tecnicos,
+body.public-dashboard #glpi-view-geral,
 body.public-dashboard .glpi-filter-button {
     display: none !important;
 }
 
-body.glpi-panel-mode:not(.glpi-daily-active) .main-content,
+body.glpi-panel-mode .main-content,
 body.public-dashboard .main-content {
     padding: 18px;
     width: 100vw;
 }
 
-body.glpi-panel-mode:not(.glpi-daily-active) .glpi-header {
+body.glpi-panel-mode .glpi-header {
     align-items: center;
     padding: 18px 22px;
 }
 
-body.glpi-panel-mode:not(.glpi-daily-active) .glpi-header h3 {
+body.glpi-panel-mode .glpi-header h3 {
     font-size: clamp(24px, 2.2vw, 42px);
 }
 
@@ -1927,8 +1998,22 @@ body.public-dashboard #aba-glpi {
     display: block;
 }
 
-body.public-dashboard .glpi-subtabs {
+body.public-dashboard .glpi-eyebrow,
+body.public-dashboard .glpi-filter-backdrop,
+body.public-dashboard .glpi-filter-drawer {
     display: none;
+}
+
+body.glpi-panel-mode.glpi-daily-active .glpi-daily-kpi {
+    min-height: 190px;
+}
+
+body.glpi-panel-mode.glpi-daily-active .glpi-daily-kpi strong {
+    font-size: clamp(3.4rem, 6vw, 6.8rem);
+}
+
+body.glpi-panel-mode.glpi-daily-active .glpi-daily-tickets {
+    max-height: min(42vh, 520px);
 }
 
 @media (max-width: 1200px) {
@@ -1943,6 +2028,11 @@ body.public-dashboard .glpi-subtabs {
 
     .glpi-daily-kpi-grid {
         grid-template-columns: repeat(3, minmax(160px, 1fr));
+    }
+
+    .glpi-daily-kpi-secondary {
+        grid-template-columns: repeat(2, minmax(200px, 1fr));
+        width: min(86%, 900px);
     }
 
     body.glpi-panel-mode .glpi-daily-kpi-grid {
@@ -1966,6 +2056,7 @@ body.public-dashboard .glpi-subtabs {
     .glpi-daily-ticket,
     .glpi-daily-ticket-head {
         grid-template-columns: 1fr;
+        min-width: 0;
     }
 
     .glpi-daily-ticket-head {
@@ -1980,6 +2071,10 @@ body.public-dashboard .glpi-subtabs {
 
     body.glpi-panel-mode .glpi-daily-kpi-grid {
         grid-template-columns: 1fr;
+    }
+
+    .glpi-daily-kpi-secondary {
+        width: 100%;
     }
 
     .glpi-actions,

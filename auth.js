@@ -36,28 +36,19 @@ function aplicarLayout(estado) {
     appWrapper?.classList.toggle('hidden', !autenticado);
 }
 
-function obterTokenPainelPublico() {
-    const params = new URLSearchParams(window.location.search);
-    if (params.has('painel_publico')) return params.get('painel_publico');
-
-    const pathMatch = window.location.pathname.match(/\/dashboard\/publico\/([^/]+)/);
-    if (pathMatch) return decodeURIComponent(pathMatch[1]);
-
-    const hashMatch = window.location.hash.match(/dashboard\/publico\/([^/?#]+)/);
-    if (hashMatch) return decodeURIComponent(hashMatch[1]);
-
-    return null;
-}
-
 function rotaPainelPublico() {
-    return Boolean(obterTokenPainelPublico());
+    return /\/dashboard-diario\/?$/.test(window.location.pathname);
 }
 
 function entrarModoPainelPublico() {
-    window.GESTAO_TI_PUBLIC_DASHBOARD = false;
-    aplicarLayout('nao-autenticado');
-    document.body.classList.remove('public-dashboard', 'glpi-panel-mode');
-    mostrarAviso('O Dashboard Diário não está disponível em modo painel público. Entre no sistema para continuar.', 'aviso');
+    window.GESTAO_TI_PUBLIC_DASHBOARD = true;
+    window.usuarioAtual = null;
+    window.perfilAtual = { role: 'publico', nome: 'Dashboard Diário' };
+    aplicarLayout('autenticado');
+    document.body.classList.add('public-dashboard');
+    document.body.classList.remove('glpi-panel-mode', 'mobile-menu-open');
+    if (typeof abrirAba === 'function') abrirAba('aba-glpi', false);
+    if (typeof glpiAbrirSubaba === 'function') glpiAbrirSubaba('diario');
 }
 
 function normalizarRole(role) {
@@ -308,6 +299,12 @@ document.addEventListener('DOMContentLoaded', async () => {
 });
 
 window.addEventListener('hashchange', () => {
+    if (window.GESTAO_TI_PUBLIC_DASHBOARD) {
+        window.history.replaceState({}, document.title, window.location.pathname);
+        if (typeof abrirAba === 'function') abrirAba('aba-glpi', false);
+        if (typeof glpiAbrirSubaba === 'function') glpiAbrirSubaba('diario');
+        return;
+    }
     if (!window.perfilAtual || typeof abrirAba !== 'function') return;
     abrirAba(window.location.hash.slice(1) || 'aba-inicio', false);
 });

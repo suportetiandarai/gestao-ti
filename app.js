@@ -139,6 +139,10 @@ window.fecharMenuMobile = function() {
 aplicarPreferenciaMenu();
 
 function abrirAba(idAba, atualizarHash = true) {
+    if (window.GESTAO_TI_PUBLIC_DASHBOARD) {
+        idAba = 'aba-glpi';
+        atualizarHash = false;
+    }
     if (!ABAS_VALIDAS.has(idAba)) idAba = 'aba-inicio';
     if (ABAS_SOMENTE_ADMIN.has(idAba) && !window.temPermissao('admin')) {
         mostrarAviso('Acesso restrito a administradores.', 'erro');

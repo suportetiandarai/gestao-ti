@@ -225,6 +225,58 @@ test('formata nome pelos campos oficiais sem inverter palavras', () => {
   assert.equal(core.formatTechnicianName({ firstname: null, realname: undefined, name: 'usuario' }), 'usuario');
 });
 
+test('tempo de atribuição continua contando enquanto não há técnico', () => {
+  const durations = core.calculateTicketDurations(ticket({
+    openedAt: '2026-07-23T08:10:00-03:00',
+    assignedAt: null,
+  }), new Date('2026-07-23T08:32:00-03:00'));
+  assert.equal(durations.assignmentSeconds, 22 * 60);
+  assert.equal(durations.solutionSeconds, 0);
+  assert.equal(durations.totalSeconds, 22 * 60);
+});
+
+test('tempo de atribuição congela na primeira atribuição', () => {
+  const durations = core.calculateTicketDurations(ticket({
+    openedAt: '2026-07-23T08:10:00-03:00',
+    firstAssignedAt: '2026-07-23T08:40:00-03:00',
+  }), new Date('2026-07-23T12:00:00-03:00'));
+  assert.equal(durations.assignmentSeconds, 30 * 60);
+});
+
+test('tempo de solução conta após atribuição e congela na solução', () => {
+  const inProgress = ticket({
+    openedAt: '2026-07-23T08:40:00-03:00',
+    firstAssignedAt: '2026-07-23T09:00:00-03:00',
+  });
+  assert.equal(
+    core.calculateTicketDurations(inProgress, new Date('2026-07-23T10:15:00-03:00')).solutionSeconds,
+    75 * 60,
+  );
+  const solved = ticket({
+    status: 'Solucionado',
+    openedAt: '2026-07-23T08:40:00-03:00',
+    firstAssignedAt: '2026-07-23T09:00:00-03:00',
+    solvedAt: '2026-07-23T11:00:00-03:00',
+  });
+  assert.equal(
+    core.calculateTicketDurations(solved, new Date('2026-07-23T15:00:00-03:00')).solutionSeconds,
+    2 * 3600,
+  );
+});
+
+test('tempo total equivale à atribuição mais solução', () => {
+  const durations = core.calculateTicketDurations(ticket({
+    status: 'Solucionado',
+    openedAt: '2026-07-23T08:40:00-03:00',
+    firstAssignedAt: '2026-07-23T09:00:00-03:00',
+    solvedAt: '2026-07-23T11:00:00-03:00',
+  }), new Date('2026-07-23T15:00:00-03:00'));
+  assert.equal(durations.totalSeconds, durations.assignmentSeconds + durations.solutionSeconds);
+  assert.equal(core.formatElapsedTime(durations.totalSeconds), '02:20:00');
+  assert.equal(core.formatElapsedTime(2 * 86400 + 4 * 3600 + 15 * 60 + 20), '2d 04:15:20');
+  assert.equal(core.formatElapsedTime(null), 'Não disponível');
+});
+
 test('coordenador bloqueia concorrência e preserva dados após falha', async () => {
   const coordinator = core.createRefreshCoordinator();
   let release;

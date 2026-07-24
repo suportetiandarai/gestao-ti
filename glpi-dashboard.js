@@ -34,6 +34,7 @@
         lastUpdatedAt: null,
         subtab: 'diario',
         panelMode: false,
+        menuCollapsedBeforePanel: null,
         publicMode: false,
         publicConfig: {},
         localConfig: {},
@@ -58,7 +59,9 @@
     function esc(value) {
         return (value === null || value === undefined || value === '')
             ? 'Não disponível'
-            : String(value).replace(/[&<>'"]/g, tag => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[tag]));
+            : String(value)
+                .replace(/(?:&#0*62;?|&gt;)/gi, '')
+                .replace(/[&<>'"]/g, tag => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[tag]));
     }
 
     function publicSupabaseConfig() {
@@ -220,7 +223,10 @@
         const technicalGroups = Array.isArray(raw._dashboard_technical_groups)
             ? raw._dashboard_technical_groups
             : [];
-        const solutionTechnician = raw._dashboard_solution_technician || {};
+        const solutionTechnician = raw._dashboard_solution_technician || {
+            id: row.solution_technician_id,
+            name: row.solution_technician_name
+        };
         const status = GLPI_STATUS[row.status_id] || row.status || 'Não disponível';
         const openedAt = row.opened_at || row.date || row.created_at;
         const solvedAt = row.solved_at || row.solvedate;
@@ -229,7 +235,7 @@
         const firstResponseAt = row.first_response_at;
         return {
             id: row.glpi_id || row.id,
-            title: row.title || row.name || `Chamado ${row.glpi_id || row.id}`,
+            title: row.title || (state.publicMode ? 'Título restrito' : row.name || `Chamado ${row.glpi_id || row.id}`),
             status,
             statusId: row.status_id,
             technician: row.technician_name || row.technician || 'Não disponível',
@@ -252,6 +258,7 @@
             type: row.type_name || row.type || 'Não disponível',
             openedAt,
             assignedAt,
+            firstAssignedAt: assignedAt,
             firstResponseAt,
             solvedAt,
             closedAt,
@@ -347,6 +354,24 @@
             permissions: 'Usuário de API somente leitura com acesso aos chamados, usuários, grupos, entidades, categorias, SLAs e acompanhamentos necessários',
             base_url: ''
         };
+
+        if (state.publicMode) {
+            state.demo = false;
+            if (!window.supabase?.functions) {
+                state.integrationState = { status: 'offline' };
+                state.syncLogs = [{ level: 'erro', message: 'Back-end público indisponível.', created_at: new Date().toISOString() }];
+                return;
+            }
+            const { data, error } = await supabase.functions.invoke('glpi-dashboard', {
+                body: { action: 'public-dashboard' }
+            });
+            if (error || !data?.ok) throw error || new Error('Dashboard público indisponível.');
+            state.tickets = (data.tickets || []).map(normalizeTicket);
+            state.dailyAssignments = [];
+            state.integrationState = data.integrationState || { status: 'offline' };
+            state.syncLogs = [];
+            return;
+        }
 
         if (state.localConfig.demoEnabled) {
             state.demo = true;
@@ -562,6 +587,34 @@
         `).join('');
     }
 
+    function renderDailyTimers(reference = new Date()) {
+        document.querySelectorAll('.glpi-ticket-time[data-ticket-id][data-time-kind]').forEach((element) => {
+            const ticket = state.tickets.find((item) => String(item.id) === element.dataset.ticketId);
+            if (!ticket) {
+                element.textContent = 'Não disponível';
+                return;
+            }
+            const durations = CORE.calculateTicketDurations(ticket, reference);
+            const field = {
+                assignment: 'assignmentSeconds',
+                solution: 'solutionSeconds',
+                total: 'totalSeconds'
+            }[element.dataset.timeKind];
+            element.textContent = CORE.formatElapsedTime(durations[field]);
+        });
+    }
+
+    function dailyCard([labelText, value, hint, icon], emphasis) {
+        return `
+            <article class="glpi-kpi glpi-daily-kpi ${emphasis}">
+                <span class="glpi-kpi-icon" aria-hidden="true">${icon}</span>
+                <span class="glpi-kpi-title">${esc(labelText)}</span>
+                <strong>${esc(value)}</strong>
+                <small>${esc(hint)}</small>
+            </article>
+        `;
+    }
+
     function renderDailyDashboard() {
         const groupId = 1;
         const metrics = CORE.shiftMetrics(state.tickets, new Date(), groupId);
@@ -575,20 +628,19 @@
         }
 
         const cards = [
-            ['Chamados abertos no plantão', createdInShift.length, `${metrics.label} • SUPORTE TI`],
-            ['Em atendimento', inServiceNow.length, 'Não finalizados com técnico atribuído'],
-            ['Aguardando atendimento', waitingNow.length, 'Não finalizados sem técnico atribuído'],
-            ['Pendentes', pendingNow.length, 'Status 4 • pode ter técnico atribuído'],
-            ['Chamados estourados', breachedNow.length, 'Prazo real SLA/OLA ultrapassado']
+            ['Chamados abertos no plantão', createdInShift.length, `${metrics.label} • SUPORTE TI`, '📥'],
+            ['Em atendimento', inServiceNow.length, 'Não finalizados com técnico atribuído', '🛠️'],
+            ['Aguardando atendimento', waitingNow.length, 'Não finalizados sem técnico atribuído', '⏳'],
+            ['Pendentes', pendingNow.length, 'Status real 4 • classificação exclusiva', '⏸️'],
+            ['Chamados estourados', breachedNow.length, 'Prazo real SLA/OLA ultrapassado', '⚠️']
         ];
 
-        getField('glpi-daily-kpis').innerHTML = cards.map(([labelText, value, hint]) => `
-            <article class="glpi-kpi">
-                <span>${esc(labelText)}</span>
-                <strong>${esc(value)}</strong>
-                <small>${esc(hint)}</small>
-            </article>
-        `).join('');
+        getField('glpi-daily-kpis-primary').innerHTML = cards.slice(0, 3)
+            .map((card) => dailyCard(card, 'primary'))
+            .join('');
+        getField('glpi-daily-kpis-secondary').innerHTML = cards.slice(3)
+            .map((card) => dailyCard(card, 'secondary'))
+            .join('');
 
         const techRows = CORE.technicianResolutionsInShift(state.tickets, new Date(), groupId);
 
@@ -602,19 +654,24 @@
             .slice(0, Number(state.localConfig.dailyRecentLimit) || 10);
         getField('glpi-daily-recent').innerHTML = recent.length ? `
             <div class="glpi-daily-ticket glpi-daily-ticket-head" aria-hidden="true">
-                <strong>Chamado</strong><span>Status</span><span>Técnico</span><span>Abertura</span><span>Categoria / unidade</span>
+                <strong>Chamado</strong><span>Título</span><span>Status</span><span>Técnico</span><span>Abertura</span>
+                <span>Tempo de atribuição</span><span>Tempo de solução</span><span>Tempo total</span>
             </div>
             ${recent.map(ticket => {
                 const visible = state.publicMode ? CORE.publicTicket(ticket, state.publicConfig) : ticket;
                 return `
                 <article class="glpi-daily-ticket">
-                    <strong>#${esc(visible.id)}${visible.title ? `<small>${esc(visible.title)}</small>` : ''}</strong>
+                    <strong>#${esc(visible.id)}</strong>
+                    <span data-label="Título">${esc(visible.title || 'Título restrito')}</span>
                     <span data-label="Status">${esc(visible.status)}</span>
                     <span data-label="Técnico">${esc(CORE.hasAssignedTechnician(ticket) ? technicianDisplayName(visible.technician) : 'Aguardando atendimento')}</span>
                     <time data-label="Abertura">${new Intl.DateTimeFormat('pt-BR', { timeStyle: 'short', timeZone: TZ }).format(parseDate(visible.openedAt))}</time>
-                    <span data-label="Categoria / unidade">${visible.category ? esc(visible.category) : ''}${visible.category && visible.unit ? ' • ' : ''}${visible.unit ? esc(visible.unit) : ''}</span>
+                    <span class="glpi-ticket-time" data-label="Tempo de atribuição" data-ticket-id="${esc(ticket.id)}" data-time-kind="assignment">Não disponível</span>
+                    <span class="glpi-ticket-time" data-label="Tempo de solução" data-ticket-id="${esc(ticket.id)}" data-time-kind="solution">Não disponível</span>
+                    <span class="glpi-ticket-time" data-label="Tempo total" data-ticket-id="${esc(ticket.id)}" data-time-kind="total">Não disponível</span>
                 </article>
             `; }).join('')}` : '<p class="glpi-empty">Nenhum chamado aberto neste plantão.</p>';
+        renderDailyTimers();
     }
 
     function renderBarChart(id, data, maxItems = 8) {
@@ -894,9 +951,27 @@
         if (nextRefresh) nextRefresh.textContent = `Próxima atualização em ${state.secondsToRefresh} segundos`;
     }
 
+    function renderDashboardHeader() {
+        const daily = state.subtab === 'diario';
+        const title = getField('glpi-dashboard-title');
+        const subtitle = getField('glpi-dashboard-subtitle');
+        if (title) title.textContent = daily ? 'DASHBOARD CHAMADOS DIÁRIO' : 'Dashboard gerencial de chamados';
+        if (subtitle) subtitle.textContent = daily
+            ? 'Indicadores de chamados'
+            : 'Indicadores de operação, produtividade, SLA e evolução dos atendimentos.';
+        const panelButton = getField('glpi-panel-button');
+        const fullscreenButton = getField('glpi-fullscreen-button');
+        if (panelButton) panelButton.textContent = state.panelMode ? 'Sair do modo painel' : 'Modo Painel';
+        if (fullscreenButton) fullscreenButton.textContent = document.fullscreenElement
+            ? 'Sair da tela cheia'
+            : 'Entrar em tela cheia';
+    }
+
     function renderAll() {
+        renderDashboardHeader();
         renderStatus();
         renderDailyDashboard();
+        if (state.publicMode) return;
         renderKpis();
         renderRankings();
         renderTechnicians();
@@ -964,20 +1039,16 @@
     };
 
     window.glpiAbrirSubaba = function (name) {
-        if (window.GESTAO_TI_PUBLIC_DASHBOARD) return;
+        if (window.GESTAO_TI_PUBLIC_DASHBOARD && name !== 'diario') return;
         state.subtab = name;
         document.body.classList.toggle('glpi-daily-active', name === 'diario');
-        if (name === 'diario') {
-            state.panelMode = false;
-            document.body.classList.remove('glpi-panel-mode');
-            document.body.classList.remove('menu-collapsed');
-        }
         document.querySelectorAll('.glpi-subtab').forEach(btn => btn.classList.toggle('active', btn.getAttribute('onclick')?.includes(`'${name}'`)));
         document.querySelectorAll('.glpi-view').forEach(view => view.classList.add('hidden'));
         getField(`glpi-view-${name}`)?.classList.remove('hidden');
         if (name === 'configuracoes' && state.initialized && !state.serviceChecks.glpi) {
             void window.glpiTestarConfiguracaoServicos(true);
         }
+        renderDashboardHeader();
         if (state.initialized) window.glpiAtualizarIntervaloSincronizacao();
     };
 
@@ -1165,25 +1236,21 @@
     };
 
     window.glpiAlternarPainel = function () {
-        if (state.subtab === 'diario') {
-            mostrarAviso('O modo painel está disponível somente no Dashboard Geral.', 'aviso');
-            return;
-        }
         state.panelMode = !document.body.classList.contains('glpi-panel-mode');
+        if (state.panelMode) state.menuCollapsedBeforePanel = document.body.classList.contains('menu-collapsed');
         document.body.classList.toggle('glpi-panel-mode', state.panelMode);
         localStorage.setItem('glpiPanelMode', String(state.panelMode));
         if (state.panelMode) document.body.classList.add('menu-collapsed');
+        else document.body.classList.toggle('menu-collapsed', Boolean(state.menuCollapsedBeforePanel));
+        renderDashboardHeader();
         mostrarAviso(state.panelMode ? 'Modo painel ativado.' : 'Modo painel desativado.', 'sucesso');
     };
 
     window.glpiTelaCheia = async function () {
-        if (state.subtab === 'diario') {
-            mostrarAviso('A tela cheia do modo painel está disponível somente no Dashboard Geral.', 'aviso');
-            return;
-        }
         try {
             if (!document.fullscreenElement) await document.documentElement.requestFullscreen();
             else await document.exitFullscreen();
+            renderDashboardHeader();
         } catch (error) {
             mostrarAviso('Tela cheia indisponível neste navegador.', 'aviso');
         }
@@ -1261,9 +1328,12 @@
         state.countdownTimer = setInterval(() => {
             state.secondsToRefresh = state.secondsToRefresh <= 1 ? Math.round(interval / 1000) : state.secondsToRefresh - 1;
             renderStatus();
+            if (state.subtab === 'diario') renderDailyTimers();
         }, 1000);
         renderStatus();
     };
+
+    document.addEventListener('fullscreenchange', renderDashboardHeader);
 
     window.glpiOrdenarTabela = function (key) {
         if (state.sortKey === key) state.sortDir = state.sortDir === 'asc' ? 'desc' : 'asc';
