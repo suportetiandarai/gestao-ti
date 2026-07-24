@@ -43,15 +43,15 @@
 - Chamados atendidos por técnico no Dashboard Geral: regra configurável. O padrão inicial é chamado solucionado pelo técnico no dia atual.
 - Plantão atual: em `America/Sao_Paulo`, o diurno é `[07:00, 19:00)` e o noturno é `[19:00, 07:00)` do dia seguinte. Entre 00:00 e 06:59:59, usa-se o plantão iniciado às 19:00 do dia anterior. O limite final é exclusivo para não duplicar chamados na virada.
 - Chamados abertos no plantão: `opened_at` dentro do plantão atual e vínculo técnico com o grupo ID `1`.
-- Em atendimento: chamado do grupo ID `1`, não solucionado/fechado, com pelo menos uma relação `Ticket_User.type=2`.
-- Aguardando atendimento: chamado do grupo ID `1`, não solucionado/fechado, sem qualquer relação `Ticket_User.type=2`.
-- Resolvido pelo técnico: status `5 Solucionado` ou `6 Fechado`. A classificação centralizada é mutuamente exclusiva, na ordem: resolvido, em atendimento, aguardando.
-- Pendentes: status `4 Pendente` no grupo ID `1`. É um indicador de status separado; por isso, um pendente com técnico também pertence operacionalmente a “Em atendimento”, e essa sobreposição é intencional.
+- Em atendimento: chamado do grupo ID `1`, não solucionado/fechado, não pendente e com pelo menos uma relação `Ticket_User.type=2`.
+- Aguardando atendimento: chamado do grupo ID `1`, não solucionado/fechado, não pendente e sem qualquer relação `Ticket_User.type=2`.
+- Resolvido pelo técnico: status `5 Solucionado` ou `6 Fechado`. A classificação centralizada é mutuamente exclusiva, na ordem: resolvido/fechado, pendente, em atendimento, aguardando.
+- Pendentes: código real `4 Pendente` no grupo ID `1`, independentemente de técnico ou prazo vencido. Um pendente aparece somente nesse card.
 - Gráfico do Dashboard Diário: tickets solucionados ou fechados durante o plantão, somente do grupo ID `1`. O responsável preferencial é `ITILSolution.users_id`; na ausência de solução identificável, usa-se o técnico atual `Ticket_User.type=2`. Cada par técnico/chamado é contado uma única vez. Acompanhamentos, atribuições e fechamentos sem status final não aumentam o gráfico.
 - Tempo médio de primeira resposta: soma de `first_response_at - opened_at` dividida pela quantidade de chamados com as duas datas válidas.
 - Tempo médio de solução: soma de `solved_at - opened_at` dividida pela quantidade de chamados solucionados com datas válidas.
 - Tempo médio de fechamento: soma de `closed_at - opened_at` dividida pela quantidade de chamados fechados com datas válidas.
-- Chamados estourados: chamado não finalizado que ultrapassou ao menos um prazo real configurado no GLPI: atendimento externo (SLA TTO), solução externa (SLA TTR), atendimento interno (OLA TTO) ou solução interna (OLA TTR). Quando a etapa já ocorreu, compara-se sua data com o prazo; caso contrário, compara-se o horário atual. A idade isolada do chamado nunca é usada.
+- Chamados estourados: chamado não finalizado e não pendente que ultrapassou ao menos um prazo real configurado no GLPI: atendimento externo (SLA TTO), solução externa (SLA TTR), atendimento interno (OLA TTO) ou solução interna (OLA TTR). Quando a etapa já ocorreu, compara-se sua data com o prazo; caso contrário, compara-se o horário atual. A idade isolada do chamado nunca é usada.
 - SLA próximo do vencimento: chamado não finalizado cujo prazo esteja dentro da janela configurada por `GLPI_SLA_WARNING_MINUTES`.
 
 ## Privacidade do Dashboard Diário
