@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="robots" content="noindex, nofollow">
+    <title>Dashboard Diário — GESTÃO TI</title>
+</head>
+<body>
+    <p id="route-status">Carregando Dashboard Diário...</p>
+    <script>
+        (() => {
+            const directoryUrl = new URL('./', window.location.href);
+            if (window.location.pathname.endsWith('/index.html')) {
+                window.history.replaceState({}, document.title, directoryUrl.pathname);
+            }
+
+            fetch('../index.html', { cache: 'no-cache' })
+                .then((response) => {
+                    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                    return response.text();
+                })
+                .then((html) => {
+                    const routedHtml = html.replace('<head>', '<head><base href="../">');
+                    document.open();
+                    document.write(routedHtml);
+                    document.close();
+                })
+                .catch(() => {
+                    const status = document.getElementById('route-status');
+                    if (status) {
+                        status.textContent = 'Não foi possível carregar o Dashboard Diário.';
+                    }
+                });
+        })();
+    </script>
+</body>
+</html>

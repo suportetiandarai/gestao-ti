@@ -11,6 +11,7 @@ const authSource = readFileSync(join(root, 'auth.js'), 'utf8');
 const appSource = readFileSync(join(root, 'app.js'), 'utf8');
 const serveSource = readFileSync(join(root, 'scripts', 'serve.mjs'), 'utf8');
 const buildSource = readFileSync(join(root, 'scripts', 'build.mjs'), 'utf8');
+const publicRouteSource = readFileSync(join(root, 'dashboard-diario', 'index.html'), 'utf8');
 const styles = readFileSync(join(root, 'styles.css'), 'utf8');
 const assignmentsMigration = readFileSync(join(root, 'supabase', 'migrations', '20260722110000_glpi_ticket_assignments.sql'), 'utf8');
 const dailyView = html.match(/<div id="glpi-view-diario"[\s\S]*?<div id="glpi-view-geral"/)?.[0] || '';
@@ -123,6 +124,14 @@ test('rota pública é exclusiva, não exige usuário e recebe somente payload s
   assert.match(edgeSource, /publicDashboardTicket/);
   assert.doesNotMatch(edgeSource.match(/function publicDashboardTicket[\s\S]*?\n\}/)?.[0] || '', /requester|description|content|session/i);
   assert.match(html, /meta name="robots" content="noindex,nofollow"/);
+});
+
+test('GitHub Pages possui entrada estática para /dashboard-diario/', () => {
+  assert.match(publicRouteSource, /meta name="robots" content="noindex, nofollow"/);
+  assert.match(publicRouteSource, /fetch\('\.\.\/index\.html'/);
+  assert.match(publicRouteSource, /<base href="\.\.\/">/);
+  assert.match(publicRouteSource, /history\.replaceState/);
+  assert.doesNotMatch(publicRouteSource, /TOKEN|SERVICE_ROLE|APP_TOKEN|USER_TOKEN/i);
 });
 
 test('listagem diária contém tempos e remove entidade maior literal', () => {
