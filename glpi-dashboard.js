@@ -225,13 +225,7 @@
     }
 
     function technicianDisplayName(name) {
-        if (!state.publicMode) return name || 'Não disponível';
-        const clean = name || 'Não disponível';
-        if (state.publicConfig.techMode === 'hidden') return 'Técnico';
-        const parts = clean.split(/\s+/).filter(Boolean);
-        if (state.publicConfig.techMode === 'short') return parts.length > 1 ? `${parts[0]} ${parts.at(-1).slice(0, 1)}.` : parts[0] || 'Técnico';
-        if (state.publicConfig.techMode === 'full') return clean;
-        return parts[0] || 'Técnico';
+        return name || 'Não disponível';
     }
 
     function normalizeTicket(row) {
@@ -621,6 +615,7 @@
             if (!ticket) {
                 valueElement.textContent = 'Não disponível';
                 element.querySelector('.ticket-solved-label')?.remove();
+                element.querySelector('.ticket-overdue-label')?.remove();
                 return;
             }
             const durations = CORE.calculateTicketDurations(ticket, reference);
@@ -633,6 +628,18 @@
 
             if (element.dataset.timeKind !== 'total') return;
             const solvedLabel = element.querySelector('.ticket-solved-label');
+            const overdueLabel = element.querySelector('.ticket-overdue-label');
+            const flags = CORE.calculateTicketFlags(ticket, reference);
+            if (flags.isOverdue) {
+                solvedLabel?.remove();
+                if (overdueLabel) return;
+                const label = document.createElement('span');
+                label.className = 'ticket-overdue-label';
+                label.textContent = 'CHAMADO ATRASADO';
+                element.append(label);
+                return;
+            }
+            overdueLabel?.remove();
             if (!hasRecordedSolution(ticket)) {
                 solvedLabel?.remove();
                 return;
@@ -686,8 +693,8 @@
             value: tech.value
         })), 20);
 
-        const recent = [...createdInShift]
-            .sort((a, b) => parseDate(b.openedAt) - parseDate(a.openedAt))
+        const reference = new Date();
+        const recent = CORE.sortDailyDashboardTickets(createdInShift, reference)
             .slice(0, Number(state.localConfig.dailyRecentLimit) || 10);
         getField('glpi-daily-recent').innerHTML = recent.length ? `
             <div class="glpi-daily-ticket glpi-daily-ticket-head" aria-hidden="true">
@@ -697,7 +704,7 @@
             ${recent.map(ticket => {
                 const visible = state.publicMode ? CORE.publicTicket(ticket, state.publicConfig) : ticket;
                 return `
-                <article class="glpi-daily-ticket">
+                <article class="glpi-daily-ticket" data-ticket-id="${esc(ticket.id)}" data-operational-priority="${CORE.dailyDashboardTicketPriority(ticket, reference)}">
                     <strong>#${esc(visible.id)}</strong>
                     <span data-label="Título">${esc(visible.title || 'Título restrito')}</span>
                     <span data-label="Status">${esc(visible.status)}</span>

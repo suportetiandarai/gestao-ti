@@ -19,7 +19,8 @@ test('registro público contém somente campos operacionais autorizados', () => 
     token: 'segredo',
   };
   const result = core.publicTicket(source, { techMode: 'hidden', showTitle: false, showCategory: true, showUnit: false });
-  assert.deepEqual(Object.keys(result).sort(), ['category', 'id', 'openedAt', 'status', 'technician']);
-  assert.equal(result.technician, 'Técnico');
+  assert.deepEqual(Object.keys(result).sort(), ['category', 'id', 'openedAt', 'status', 'technician', 'title']);
+  assert.equal(result.title, 'Conteúdo confidencial');
+  assert.equal(result.technician, 'Nome Completo');
   assert.doesNotMatch(JSON.stringify(result), /Paciente|example\.test|219999|clínica|interno|segredo/);
 });

@@ -243,11 +243,12 @@ configurações. Configure:
 
 ```env
 PUBLIC_DASHBOARD_ENABLED=true
-PUBLIC_DASHBOARD_SHOW_TITLE=false
 ```
 
-O título permanece oculto por padrão. O papel público não pode executar
-sincronização, testes de conexão ou ações administrativas.
+O título operacional e o nome completo do técnico são autorizados na listagem
+pública. Solicitante, descrição, acompanhamentos, contatos e dados administrativos
+continuam ausentes do payload. O papel público não pode executar sincronização,
+testes de conexão ou ações administrativas.
 
 ## Plantões e grupo operacional
 

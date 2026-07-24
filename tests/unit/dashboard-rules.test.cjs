@@ -195,6 +195,28 @@ test('idade sem prazo e chamados finalizados não geram estouro', () => {
   assert.equal(core.isTicketBreached(ticket({ status: 'Fechado', slaDueAt: '2026-07-01T00:00:00-03:00' }), NOW), false);
 });
 
+test('listagem diária prioriza estourados, não solucionados e solucionados com ordem interna estável', () => {
+  const rows = [
+    ticket({ id: 1, status: 'Solucionado', openedAt: '2026-07-23T07:10:00-03:00', solvedAt: '2026-07-23T10:00:00-03:00' }),
+    ticket({ id: 2, status: 'Atribuído', openedAt: '2026-07-23T09:00:00-03:00', slaDueAt: '2026-07-23T11:30:00-03:00' }),
+    ticket({ id: 3, status: 'Novo', openedAt: '2026-07-23T07:30:00-03:00' }),
+    ticket({ id: 4, status: 'Atribuído', openedAt: '2026-07-23T08:00:00-03:00', slaDueAt: '2026-07-23T10:00:00-03:00' }),
+    ticket({ id: 5, status: 'Solucionado', openedAt: '2026-07-23T07:20:00-03:00', solvedAt: '2026-07-23T11:00:00-03:00' }),
+    ticket({ id: 6, status: 'Pendente', openedAt: '2026-07-23T08:30:00-03:00', slaDueAt: '2026-07-23T09:00:00-03:00' }),
+    ticket({ id: 7, status: 'Atribuído', openedAt: '2026-07-23T08:30:00-03:00' }),
+  ];
+
+  assert.deepEqual(core.sortDailyDashboardTickets(rows, NOW).map(({ id }) => id), [
+    4, 2,
+    3, 6, 7,
+    5, 1,
+  ]);
+  assert.equal(core.dailyDashboardTicketPriority(rows[3], NOW), 1);
+  assert.equal(core.dailyDashboardTicketPriority(rows[5], NOW), 2);
+  assert.equal(core.dailyDashboardTicketPriority(rows[0], NOW), 3);
+  assert.equal(core.expiredDeadlineAt(rows[3], NOW).toISOString(), '2026-07-23T13:00:00.000Z');
+});
+
 test('gráfico usa solução/fechamento no plantão, autor da solução e deduplica técnico/chamado', () => {
   const duplicate = ticket({
     id: 10,

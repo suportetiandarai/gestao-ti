@@ -50,7 +50,7 @@ async function preparePublicDashboard(
   }));
   const now = Date.now();
   const baseTicket = {
-    title: null, group_id: 1, group_name: 'SUPORTE TI',
+    title: 'Título operacional completo do chamado', group_id: 1, group_name: 'SUPORTE TI',
     opened_at: new Date(now - 65000).toISOString(),
     sla_due_at: null, attention_due_at: null,
     internal_sla_due_at: null, internal_attention_due_at: null,
@@ -58,10 +58,11 @@ async function preparePublicDashboard(
   };
   const tickets = [
     { ...baseTicket, glpi_id: 9001, status_id: 1, status: 'Novo', technician_id: null, technician_name: null, assigned_at: null, solved_at: null, closed_at: null },
-    { ...baseTicket, glpi_id: 9002, status_id: 2, status: 'Atribuído', technician_id: 20, technician_name: 'Técnico Teste', assigned_at: new Date(now - 50000).toISOString(), solved_at: null, closed_at: null },
-    { ...baseTicket, glpi_id: 9003, status_id: 4, status: 'Pendente', technician_id: 20, technician_name: 'Técnico Teste', assigned_at: new Date(now - 50000).toISOString(), solved_at: null, closed_at: null },
+    { ...baseTicket, glpi_id: 9002, status_id: 2, status: 'Atribuído', technician_id: 20, technician_name: 'VINICIUS SILVA PASCOAL MANOEL', assigned_at: new Date(now - 50000).toISOString(), solved_at: null, closed_at: null },
+    { ...baseTicket, glpi_id: 9003, status_id: 4, status: 'Pendente', technician_id: 20, technician_name: 'Técnico Teste', assigned_at: new Date(now - 50000).toISOString(), solved_at: null, closed_at: null, sla_due_at: new Date(now - 300000).toISOString() },
     { ...baseTicket, glpi_id: 9004, status_id: 5, status: 'Solucionado', technician_id: 20, technician_name: 'Técnico Teste', assigned_at: new Date(now - 50000).toISOString(), solved_at: new Date(now - 30000).toISOString(), closed_at: null },
     { ...baseTicket, glpi_id: 9005, status_id: 6, status: 'Fechado', technician_id: 20, technician_name: 'Técnico Teste', assigned_at: new Date(now - 50000).toISOString(), solved_at: new Date(now - 30000).toISOString(), closed_at: new Date(now - 10000).toISOString() },
+    { ...baseTicket, glpi_id: 9006, status_id: 2, status: 'Atribuído', technician_id: 21, technician_name: 'Técnico Atrasado', assigned_at: new Date(now - 60000).toISOString(), solved_at: null, closed_at: null, sla_due_at: new Date(now - 300000).toISOString() },
   ];
   await page.route('https://example.supabase.co/functions/v1/glpi-dashboard', (route) => route.fulfill({
     contentType: 'application/json',
@@ -213,9 +214,22 @@ test('rota pública abre sem login, fica travada no Diário e atualiza contadore
   await expect(page.locator('[data-ticket-id="9003"] .ticket-solved-label')).toHaveCount(0);
   await expect(page.locator('[data-ticket-id="9004"] .ticket-solved-label')).toHaveText('SOLUCIONADO');
   await expect(page.locator('[data-ticket-id="9005"] .ticket-solved-label')).toHaveText('SOLUCIONADO');
+  await expect(page.locator('.ticket-overdue-label')).toHaveCount(1);
+  await expect(page.locator('[data-ticket-id="9006"] .ticket-overdue-label')).toHaveText('CHAMADO ATRASADO');
+  await expect(page.locator('[data-ticket-id="9006"] .ticket-solved-label')).toHaveCount(0);
+  await expect(page.locator('[data-ticket-id="9003"] .ticket-overdue-label')).toHaveCount(0);
+  const ticketOrder = await page.locator('.glpi-daily-ticket:not(.glpi-daily-ticket-head)').evaluateAll((rows) =>
+    rows.map((row) => Number(row.dataset.ticketId)));
+  expect(ticketOrder[0]).toBe(9006);
+  expect(ticketOrder.slice(-2).sort()).toEqual([9004, 9005]);
   const solvedColor = await page.locator('[data-ticket-id="9004"] .ticket-solved-label').evaluate((element) =>
     getComputedStyle(element).color);
   expect(solvedColor).toBe('rgb(22, 163, 74)');
+  const overdueColor = await page.locator('[data-ticket-id="9006"] .ticket-overdue-label').evaluate((element) =>
+    getComputedStyle(element).color);
+  expect(overdueColor).toBe('rgb(220, 38, 38)');
+  await expect(page.getByText('Título operacional completo do chamado', { exact: true }).first()).toBeVisible();
+  await expect(page.getByText('VINICIUS SILVA PASCOAL MANOEL', { exact: true })).toBeVisible();
   const solvedTotal = page.locator('[data-ticket-id="9004"][data-time-kind="total"] .glpi-ticket-time-value');
   const solvedInitial = await solvedTotal.textContent();
   await page.waitForTimeout(1100);
