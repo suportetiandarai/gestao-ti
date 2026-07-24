@@ -220,7 +220,7 @@ status
 7. Atualiza cursor, saúde e log.
 8. Encerra a sessão GLPI em `finally`.
 
-Erros 429/5xx, falhas de rede e timeout recebem até três tentativas por padrão. Erros definitivos preservam o cache anterior e marcam a integração como `offline`. O front-end considera a sincronização atrasada após 90 segundos sem sucesso.
+Erros 429/5xx, falhas de rede e timeout recebem até três tentativas por padrão. Erros definitivos preservam o cache anterior e marcam a integração como `offline`. O front-end considera a sincronização atrasada após 90 segundos sem sucesso (três ciclos de 30 segundos). Na rota pública, a comparação usa o horário `checkedAt` retornado pela Edge Function para neutralizar relógio local incorreto ou conversão duplicada de fuso.
 
 No primeiro bootstrap, quando ainda não existe cursor, a função limita a carga a
 `GLPI_SYNC_INITIAL_MAX_PAGES` (padrão `1`, com 100 chamados por página). Isso
@@ -235,18 +235,20 @@ dependem da existência prévia de registros no cache.
 ## Dashboard Diário público
 
 `/dashboard-diario` não cria uma sessão de usuário e não recebe acesso `anon`
-às tabelas. O navegador invoca `{ "action": "public-dashboard" }`; a Edge
+às tabelas. O navegador invoca `{ "action": "public-dashboard" }` diretamente
+com a chave pública limitada, sem criar ou reutilizar sessão do Supabase Auth; a Edge
 Function lê o cache com a chave de serviço somente no back-end e devolve uma
 lista permitida sem `raw_payload`, solicitante, descrição, tokens, logs ou
 configurações. Configure:
 
 ```env
 PUBLIC_DASHBOARD_ENABLED=true
-PUBLIC_DASHBOARD_SHOW_TITLE=false
 ```
 
-O título permanece oculto por padrão. O papel público não pode executar
-sincronização, testes de conexão ou ações administrativas.
+O título operacional e o nome completo do técnico são autorizados na listagem
+pública. Solicitante, descrição, acompanhamentos, contatos e dados administrativos
+continuam ausentes do payload. O papel público não pode executar sincronização,
+testes de conexão ou ações administrativas.
 
 ## Plantões e grupo operacional
 

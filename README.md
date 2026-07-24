@@ -63,8 +63,9 @@ painel e tela cheia sem recarregar a página.
 
 A rota `/dashboard-diario` abre somente o Diário sem login. Ela não concede
 acesso direto ao banco: usa a ação sanitizada `public-dashboard` da Edge
-Function, habilitada por `PUBLIC_DASHBOARD_ENABLED=true`. Títulos ficam ocultos
-por padrão com `PUBLIC_DASHBOARD_SHOW_TITLE=false`.
+Function, habilitada por `PUBLIC_DASHBOARD_ENABLED=true`. O payload público inclui
+o título operacional e o nome completo do técnico, sem solicitante, descrições,
+acompanhamentos, contatos ou dados administrativos.
 
 Critérios completos: [docs/GLPI_DASHBOARD_CRITERIOS.md](docs/GLPI_DASHBOARD_CRITERIOS.md).
 

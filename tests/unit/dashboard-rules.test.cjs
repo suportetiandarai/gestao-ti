@@ -195,6 +195,28 @@ test('idade sem prazo e chamados finalizados não geram estouro', () => {
   assert.equal(core.isTicketBreached(ticket({ status: 'Fechado', slaDueAt: '2026-07-01T00:00:00-03:00' }), NOW), false);
 });
 
+test('listagem diária prioriza estourados, não solucionados e solucionados com ordem interna estável', () => {
+  const rows = [
+    ticket({ id: 1, status: 'Solucionado', openedAt: '2026-07-23T07:10:00-03:00', solvedAt: '2026-07-23T10:00:00-03:00' }),
+    ticket({ id: 2, status: 'Atribuído', openedAt: '2026-07-23T09:00:00-03:00', slaDueAt: '2026-07-23T11:30:00-03:00' }),
+    ticket({ id: 3, status: 'Novo', openedAt: '2026-07-23T07:30:00-03:00' }),
+    ticket({ id: 4, status: 'Atribuído', openedAt: '2026-07-23T08:00:00-03:00', slaDueAt: '2026-07-23T10:00:00-03:00' }),
+    ticket({ id: 5, status: 'Solucionado', openedAt: '2026-07-23T07:20:00-03:00', solvedAt: '2026-07-23T11:00:00-03:00' }),
+    ticket({ id: 6, status: 'Pendente', openedAt: '2026-07-23T08:30:00-03:00', slaDueAt: '2026-07-23T09:00:00-03:00' }),
+    ticket({ id: 7, status: 'Atribuído', openedAt: '2026-07-23T08:30:00-03:00' }),
+  ];
+
+  assert.deepEqual(core.sortDailyDashboardTickets(rows, NOW).map(({ id }) => id), [
+    4, 2,
+    3, 6, 7,
+    5, 1,
+  ]);
+  assert.equal(core.dailyDashboardTicketPriority(rows[3], NOW), 1);
+  assert.equal(core.dailyDashboardTicketPriority(rows[5], NOW), 2);
+  assert.equal(core.dailyDashboardTicketPriority(rows[0], NOW), 3);
+  assert.equal(core.expiredDeadlineAt(rows[3], NOW).toISOString(), '2026-07-23T13:00:00.000Z');
+});
+
 test('gráfico usa solução/fechamento no plantão, autor da solução e deduplica técnico/chamado', () => {
   const duplicate = ticket({
     id: 10,
@@ -275,6 +297,38 @@ test('tempo total equivale à atribuição mais solução', () => {
   assert.equal(core.formatElapsedTime(durations.totalSeconds), '02:20:00');
   assert.equal(core.formatElapsedTime(2 * 86400 + 4 * 3600 + 15 * 60 + 20), '2d 04:15:20');
   assert.equal(core.formatElapsedTime(null), 'Não disponível');
+});
+
+test('saúde da sincronização respeita três ciclos de tolerância e recupera após sucesso', () => {
+  const reference = new Date('2026-07-23T15:00:00Z');
+  assert.equal(core.calculateSyncHealth({
+    status: 'online',
+    last_success_at: '2026-07-23T14:59:40Z',
+  }, reference, 90), 'online');
+  assert.equal(core.calculateSyncHealth({
+    status: 'online',
+    last_success_at: '2026-07-23T14:59:25Z',
+  }, reference, 90), 'online');
+  assert.equal(core.calculateSyncHealth({
+    status: 'online',
+    last_success_at: '2026-07-23T14:58:29Z',
+  }, reference, 90), 'delayed');
+  assert.equal(core.calculateSyncHealth({
+    status: 'offline',
+    last_success_at: '2026-07-23T14:59:55Z',
+  }, reference, 90), 'offline');
+  assert.equal(core.calculateSyncHealth({
+    status: 'online',
+    last_success_at: '2026-07-23T14:59:59Z',
+  }, reference, 90), 'online');
+});
+
+test('saúde da sincronização compara instantes sem aplicar fuso duas vezes', () => {
+  assert.equal(core.calculateSyncHealth({
+    status: 'online',
+    last_success_at: '2026-07-23T11:59:30-03:00',
+  }, new Date('2026-07-23T15:00:00Z'), 90), 'online');
+  assert.equal(core.calculateSyncHealth({ status: 'online', last_success_at: null }, NOW, 90), 'offline');
 });
 
 test('coordenador bloqueia concorrência e preserva dados após falha', async () => {

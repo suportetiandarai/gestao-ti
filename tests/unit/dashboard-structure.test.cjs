@@ -6,6 +6,7 @@ const { join } = require('node:path');
 const root = join(__dirname, '..', '..');
 const html = readFileSync(join(root, 'index.html'), 'utf8');
 const source = readFileSync(join(root, 'glpi-dashboard.js'), 'utf8');
+const coreSource = readFileSync(join(root, 'glpi-dashboard-core.js'), 'utf8');
 const edgeSource = readFileSync(join(root, 'supabase', 'functions', 'glpi-dashboard', 'index.ts'), 'utf8');
 const authSource = readFileSync(join(root, 'auth.js'), 'utf8');
 const appSource = readFileSync(join(root, 'app.js'), 'utf8');
@@ -61,7 +62,8 @@ test('HTML não contém IDs duplicados', () => {
 });
 
 test('atualização é manual/automática, exclusiva e preserva o último estado', () => {
-  assert.match(source, /state\.subtab === 'diario'\s*\? 30000/);
+  assert.match(source, /const DAILY_REFRESH_SECONDS = 30/);
+  assert.match(source, /state\.subtab === 'diario'\s*\? DAILY_REFRESH_SECONDS \* 1000/);
   assert.match(source, /if \(state\.refreshing\) return false/);
   assert.match(source, /window\.glpiAtualizarAgora = async function/);
   assert.match(source, /await refreshData\(canTriggerSync\(\)\)/);
@@ -76,7 +78,9 @@ test('dados fictícios exigem ativação explícita e falha real permanece offli
   assert.match(source, /Modo demonstração ativado explicitamente/);
   assert.match(source, /Nenhum dado fictício foi carregado/);
   assert.match(source, /Offline • GLPI/);
-  assert.match(source, /integrationStatus === 'online' && lastSuccess && hasRealTickets/);
+  assert.match(source, /label: 'Demonstração'/);
+  assert.match(source, /CORE\.calculateSyncHealth/);
+  assert.doesNotMatch(source, /Offline • Demonstração/);
   assert.doesNotMatch(source, /Nenhum chamado real sincronizado\. Modo demonstração ativado/);
 });
 
@@ -122,6 +126,10 @@ test('rota pública é exclusiva, não exige usuário e recebe somente payload s
   assert.match(edgeSource, /action === 'public-dashboard'/);
   assert.match(edgeSource, /PUBLIC_DASHBOARD_ENABLED/);
   assert.match(edgeSource, /publicDashboardTicket/);
+  assert.match(source, /async function fetchPublicDashboard/);
+  assert.match(source, /Authorization: `Bearer \$\{publicKey\}`/);
+  assert.doesNotMatch(source.match(/if \(state\.publicMode\)[\s\S]*?\n {8}\}/)?.[0] || '', /supabase\.functions\.invoke/);
+  assert.match(authSource, /SUPABASE_CONFIGURADO && !ROTA_DASHBOARD_PUBLICO/);
   assert.doesNotMatch(edgeSource.match(/function publicDashboardTicket[\s\S]*?\n\}/)?.[0] || '', /requester|description|content|session/i);
   assert.match(html, /meta name="robots" content="noindex,nofollow"/);
 });
@@ -161,6 +169,26 @@ test('cards centralizam conteúdo e Tempo total sinaliza somente solução regis
   assert.match(source, /resolvedStatus && Boolean\(parseDate\(ticket\?\.solvedAt\)\)/);
   assert.match(source, /className = 'ticket-solved-label'/);
   assert.match(styles, /\.ticket-solved-label\s*\{[\s\S]*color:\s*var\(--glpi-success\)/);
+});
+
+test('listagem diária prioriza atraso e usa indicadores exclusivos no Tempo total', () => {
+  assert.match(source, /CORE\.sortDailyDashboardTickets\(createdInShift, reference\)/);
+  assert.match(source, /className = 'ticket-overdue-label'/);
+  assert.match(source, /label\.textContent = 'CHAMADO ATRASADO'/);
+  assert.match(styles, /\.ticket-overdue-label\s*\{[\s\S]*color:\s*var\(--glpi-danger\)/);
+  assert.match(coreSource, /function sortDailyDashboardTickets/);
+  assert.match(coreSource, /if \(flags\.isOverdue\) return 1/);
+  assert.match(coreSource, /if \(flags\.isResolved\) return 3/);
+});
+
+test('dashboard público libera somente título e técnico completos', () => {
+  const publicSerializer = edgeSource.match(/function publicDashboardTicket[\s\S]*?\n\}/)?.[0] || '';
+  assert.match(publicSerializer, /title: sanitizePublicText\(ticket\.title\)/);
+  assert.match(publicSerializer, /technician_name: label\(ticket\.technician_name\)/);
+  assert.doesNotMatch(publicSerializer, /requester|email|phone|description|followup|token/);
+  assert.doesNotMatch(publicSerializer, /raw_payload\s*:/);
+  assert.match(coreSource, /title: ticket\.title/);
+  assert.match(coreSource, /technician: ticket\.technician/);
 });
 
 test('grupo técnico e responsável pela solução usam as relações reais do GLPI', () => {

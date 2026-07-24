@@ -1673,6 +1673,13 @@ body.glpi-daily-active .glpi-daily-kpi strong {
     white-space: nowrap;
 }
 
+.ticket-overdue-label {
+    color: var(--glpi-danger);
+    font-size: .85em;
+    font-weight: 700;
+    white-space: nowrap;
+}
+
 body.glpi-daily-active .glpi-filter-button,
 body.glpi-daily-active #glpi-current-time {
     display: none !important;

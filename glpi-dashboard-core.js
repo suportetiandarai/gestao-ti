@@ -272,14 +272,77 @@
         return days ? `${days}d ${clock}` : clock;
     }
 
+    function calculateSyncHealth(integrationState, reference = new Date(), toleranceSeconds = 90) {
+        const status = String(integrationState?.status || '').toLowerCase();
+        const lastSuccess = parseDate(integrationState?.last_success_at);
+        if (status === 'syncing') return 'syncing';
+        if (status === 'offline' || !lastSuccess) return 'offline';
+
+        const checkedAt = parseDate(reference) || new Date();
+        const ageSeconds = Math.max(0, (checkedAt.getTime() - lastSuccess.getTime()) / 1000);
+        if (status === 'delayed' || ageSeconds > toleranceSeconds) return 'delayed';
+        return 'online';
+    }
+
+    function expiredDeadlineAt(ticket, reference = new Date()) {
+        const deadlines = [
+            ['attentionDueAt', 'firstResponseAt'],
+            ['internalAttentionDueAt', 'firstResponseAt'],
+            ['slaDueAt', 'solvedAt'],
+            ['internalSlaDueAt', 'solvedAt']
+        ];
+        const expired = deadlines
+            .filter(([dueField, completedField]) => isDeadlineBreached(ticket, dueField, completedField, reference))
+            .map(([dueField]) => parseDate(ticket[dueField]))
+            .filter(Boolean)
+            .sort((a, b) => a - b);
+        return expired[0] || null;
+    }
+
+    function dailyDashboardTicketPriority(ticket, reference = new Date()) {
+        const flags = calculateTicketFlags(ticket, reference);
+        if (flags.isOverdue) return 1;
+        if (flags.isResolved) return 3;
+        return 2;
+    }
+
+    function sortDailyDashboardTickets(tickets, reference = new Date()) {
+        return [...tickets]
+            .map((ticket, index) => ({
+                ticket,
+                index,
+                priority: dailyDashboardTicketPriority(ticket, reference)
+            }))
+            .sort((left, right) => {
+                if (left.priority !== right.priority) return left.priority - right.priority;
+
+                if (left.priority === 1) {
+                    const leftDeadline = expiredDeadlineAt(left.ticket, reference)?.getTime() ?? Infinity;
+                    const rightDeadline = expiredDeadlineAt(right.ticket, reference)?.getTime() ?? Infinity;
+                    if (leftDeadline !== rightDeadline) return leftDeadline - rightDeadline;
+                } else if (left.priority === 2) {
+                    const leftOpened = parseDate(left.ticket.openedAt)?.getTime() ?? Infinity;
+                    const rightOpened = parseDate(right.ticket.openedAt)?.getTime() ?? Infinity;
+                    if (leftOpened !== rightOpened) return leftOpened - rightOpened;
+                } else {
+                    const leftSolved = parseDate(left.ticket.solvedAt || left.ticket.closedAt)?.getTime() ?? 0;
+                    const rightSolved = parseDate(right.ticket.solvedAt || right.ticket.closedAt)?.getTime() ?? 0;
+                    if (leftSolved !== rightSolved) return rightSolved - leftSolved;
+                }
+
+                return left.index - right.index;
+            })
+            .map(({ ticket }) => ticket);
+    }
+
     function publicTicket(ticket, config = {}) {
         const result = {
             id: ticket.id,
+            title: ticket.title,
             status: ticket.status,
-            technician: config.techMode === 'hidden' ? 'Técnico' : ticket.technician,
+            technician: ticket.technician,
             openedAt: ticket.openedAt
         };
-        if (config.showTitle) result.title = ticket.title;
         if (config.showCategory) result.category = ticket.category;
         if (config.showUnit) result.unit = ticket.unit;
         return result;
@@ -327,6 +390,10 @@
         elapsedSeconds,
         calculateTicketDurations,
         formatElapsedTime,
+        calculateSyncHealth,
+        expiredDeadlineAt,
+        dailyDashboardTicketPriority,
+        sortDailyDashboardTickets,
         publicTicket,
         createRefreshCoordinator
     });
