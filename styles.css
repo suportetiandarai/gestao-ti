@@ -1580,10 +1580,13 @@ body.glpi-daily-active .glpi-header > div > p:not(.glpi-eyebrow) {
 }
 
 .glpi-daily-kpi {
-    min-height: 128px;
-    padding: clamp(18px, 1.4vw, 21px) !important;
-    display: grid;
-    align-content: center;
+    min-height: 108px;
+    padding: clamp(14px, 1.1vw, 16px) !important;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
 }
 
 .glpi-daily-kpi .glpi-kpi-title {
@@ -1593,11 +1596,12 @@ body.glpi-daily-active .glpi-header > div > p:not(.glpi-eyebrow) {
 body.glpi-daily-active .glpi-daily-kpi strong {
     font-size: clamp(2rem, 2.5vw, 2.1rem);
     line-height: 1.05;
-    margin-block: 6px;
+    margin-block: 3px;
 }
 
 .glpi-daily-kpi small {
     font-size: clamp(.76rem, .85vw, .9rem);
+    margin-top: 2px;
 }
 
 .glpi-daily-content {
@@ -1657,6 +1661,21 @@ body.glpi-daily-active .glpi-daily-kpi strong {
     font-variant-numeric: tabular-nums;
     font-weight: 800;
     color: var(--glpi-primary);
+    white-space: nowrap;
+}
+
+.glpi-ticket-total {
+    display: inline-flex;
+    align-items: baseline;
+    flex-wrap: wrap;
+    gap: .5rem;
+    white-space: normal;
+}
+
+.ticket-solved-label {
+    color: var(--glpi-success);
+    font-size: .85em;
+    font-weight: 600;
     white-space: nowrap;
 }
 
@@ -2001,7 +2020,7 @@ body.public-dashboard .glpi-filter-drawer {
 }
 
 body.glpi-panel-mode.glpi-daily-active .glpi-daily-kpi {
-    min-height: 148px;
+    min-height: 124px;
 }
 
 body.glpi-panel-mode.glpi-daily-active .glpi-daily-kpi strong {
