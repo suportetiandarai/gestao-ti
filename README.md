@@ -87,12 +87,6 @@ Navegador (30 s)
 
 O estado é apresentado como `online`, `atrasado`, `sincronizando` ou `offline`. Falhas preservam os últimos chamados válidos.
 
-A sincronização de produção é iniciada no back-end pelo job único
-`gestao-ti-glpi-sync`, sem navegador ou usuário autenticado. Em projetos Supabase
-com suporte a intervalos em segundos, ele executa a cada 30 segundos; a migração
-usa automaticamente um minuto como fallback. A chamada utiliza `pg_cron` e
-`pg_net`, com URL e Service Role armazenadas exclusivamente no Vault.
-
 ## Supabase
 
 O projeto usa o CLI local instalado pelo npm:

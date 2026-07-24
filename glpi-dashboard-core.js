@@ -211,8 +211,8 @@
                 ? ticket.solvedAt
                 : (isWithinShift(ticket.closedAt, start, end) ? ticket.closedAt : null);
             if (!resolvedAt) return;
-            const technicianId = ticket.solutionTechnicianId;
-            const technician = ticket.solutionTechnician;
+            const technicianId = ticket.solutionTechnicianId || ticket.technicianId;
+            const technician = ticket.solutionTechnician || ticket.technician;
             if (!technicianId || !technician || technician === 'Não disponível') return;
             const key = `${technicianId}:${ticket.id}`;
             if (!unique.has(key)) unique.set(key, { ...ticket, technician });

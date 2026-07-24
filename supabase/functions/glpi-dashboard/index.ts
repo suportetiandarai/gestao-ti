@@ -459,28 +459,6 @@ class GlpiClient {
           id: solutionTechnicianId,
           name: await this.technicianName(solutionTechnicianId),
           resolved_at: normalizeDate(latestSolution?.date_creation || latestSolution?.date_mod || ticket.solvedate || ticket.closedate),
-          source: 'itil_solution_author',
-        }
-      : null;
-    const resolutionDiagnostic = isFinal
-      ? {
-          ticket_id: ticketId,
-          opened_at: normalizeDate(ticket.date),
-          solved_at: normalizeDate(ticket.solvedate),
-          closed_at: normalizeDate(ticket.closedate),
-          current_technicians: technicians.map((technician) => ({
-            id: technician.id,
-            name: technician.name,
-            assigned_at: technician.assigned_at,
-          })),
-          solution_author_id: solutionTechnicianId,
-          last_updater_id: numberOrNull(ticket.users_id_lastupdater),
-          assignment_history: assignmentEvents.map((event) => ({
-            date: normalizeDate(event.date_mod),
-            old_value: label(event.old_value),
-            new_value: label(event.new_value),
-          })),
-          resolution_source: solutionTechnician ? 'itil_solution_author' : 'unavailable',
         }
       : null;
 
@@ -502,7 +480,6 @@ class GlpiClient {
       _dashboard_technical_groups: technicalGroups,
       _dashboard_in_tech_group: belongsToTargetGroup,
       _dashboard_solution_technician: solutionTechnician,
-      _dashboard_resolution_diagnostic: resolutionDiagnostic,
     };
   }
 
@@ -628,7 +605,7 @@ Deno.serve(async (request) => {
           .limit(2000),
         admin
           .from('glpi_sync_state')
-          .select('status,last_started_at,last_success_at,last_error_at,last_duration_ms,last_records_processed,last_records_changed,sync_origin,next_run_at,scheduler_interval_seconds,updated_at')
+          .select('status,last_success_at,updated_at')
           .eq('id', 1)
           .maybeSingle(),
       ]);
@@ -706,19 +683,6 @@ Deno.serve(async (request) => {
       if (lockError) throw lockError;
       lockAcquired = Boolean(acquired);
       if (!lockAcquired) return json({ error: 'Sincronização GLPI já está em andamento.' }, 409);
-      const requestedOrigin = String(body.origin || '');
-      const syncOrigin = trustedOperationalCall && requestedOrigin === 'supabase_cron'
-        ? 'supabase_cron'
-        : 'manual_admin';
-      const requestedInterval = Number(body.expectedIntervalSeconds || 30);
-      const expectedIntervalSeconds = Number.isFinite(requestedInterval)
-        ? Math.max(30, Math.min(requestedInterval, 60))
-        : 30;
-      await updateSyncState(admin, {
-        sync_origin: syncOrigin,
-        scheduler_interval_seconds: expectedIntervalSeconds,
-        next_run_at: new Date(Date.now() + expectedIntervalSeconds * 1000).toISOString(),
-      });
     }
 
     stage = 'init-session';
@@ -765,8 +729,6 @@ Deno.serve(async (request) => {
         locked_until: null,
         last_success_at: new Date().toISOString(),
         last_records_processed: matchingIds.length,
-        last_records_changed: matchingIds.length,
-        last_duration_ms: Date.now() - startedAt,
         last_error: null,
       });
       await logSync(admin, 'info', 'Cache do grupo técnico e nomes normalizado.', matchingIds.length);
@@ -861,8 +823,6 @@ Deno.serve(async (request) => {
       last_success_at: new Date().toISOString(),
       last_cursor: cursor,
       last_records_processed: mapped.length,
-      last_records_changed: mapped.length,
-      last_duration_ms: Date.now() - startedAt,
       last_error: null,
     });
     stage = 'write-sync-log';
@@ -878,7 +838,6 @@ Deno.serve(async (request) => {
         locked_until: null,
         last_error_at: new Date().toISOString(),
         last_error: message,
-        last_duration_ms: Date.now() - startedAt,
       });
     }
     await logSync(admin, 'erro', 'Falha na sincronização com o GLPI.', 0, message);

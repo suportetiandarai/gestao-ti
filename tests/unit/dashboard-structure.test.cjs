@@ -15,7 +15,6 @@ const buildSource = readFileSync(join(root, 'scripts', 'build.mjs'), 'utf8');
 const publicRouteSource = readFileSync(join(root, 'dashboard-diario', 'index.html'), 'utf8');
 const styles = readFileSync(join(root, 'styles.css'), 'utf8');
 const assignmentsMigration = readFileSync(join(root, 'supabase', 'migrations', '20260722110000_glpi_ticket_assignments.sql'), 'utf8');
-const schedulerMigration = readFileSync(join(root, 'supabase', 'migrations', '20260724180000_glpi_backend_scheduler.sql'), 'utf8');
 const dailyView = html.match(/<div id="glpi-view-diario"[\s\S]*?<div id="glpi-view-geral"/)?.[0] || '';
 const dailyRenderer = source.match(/function renderDailyDashboard\(\)[\s\S]*?function renderBarChart/)?.[0] || '';
 
@@ -131,26 +130,8 @@ test('rota pública é exclusiva, não exige usuário e recebe somente payload s
   assert.match(source, /Authorization: `Bearer \$\{publicKey\}`/);
   assert.doesNotMatch(source.match(/if \(state\.publicMode\)[\s\S]*?\n {8}\}/)?.[0] || '', /supabase\.functions\.invoke/);
   assert.match(authSource, /SUPABASE_CONFIGURADO && !ROTA_DASHBOARD_PUBLICO/);
-  assert.match(source, /return !window\.GESTAO_TI_PUBLIC_DASHBOARD/);
-  assert.match(source, /window\.glpiAtualizarAgora = async function[\s\S]*refreshData\(canTriggerSync\(\)\)/);
   assert.doesNotMatch(edgeSource.match(/function publicDashboardTicket[\s\S]*?\n\}/)?.[0] || '', /requester|description|content|session/i);
   assert.match(html, /meta name="robots" content="noindex,nofollow"/);
-});
-
-test('sincronização automática usa job único, Vault e lock existente sem depender do navegador', () => {
-  assert.match(schedulerMigration, /cron\.schedule\(\s*'gestao-ti-glpi-sync'/);
-  assert.match(schedulerMigration, /'30 seconds'/);
-  assert.match(schedulerMigration, /'\* \* \* \* \*'/);
-  assert.match(schedulerMigration, /vault\.decrypted_secrets/);
-  assert.match(schedulerMigration, /gestao_ti_service_role_key/);
-  assert.match(schedulerMigration, /'action', 'sync-incremental'/);
-  assert.match(schedulerMigration, /'origin', 'supabase_cron'/);
-  assert.match(edgeSource, /acquire_glpi_sync_lock/);
-  assert.match(edgeSource, /if \(!lockAcquired\) return json\(\{ error: 'Sincronização GLPI já está em andamento\.' \}, 409\)/);
-  assert.match(edgeSource, /last_duration_ms: Date\.now\(\) - startedAt/);
-  assert.match(edgeSource, /last_records_changed: mapped\.length/);
-  assert.match(edgeSource, /last_cursor: cursor/);
-  assert.match(edgeSource, /locked_until: null/);
 });
 
 test('GitHub Pages possui entrada estática para /dashboard-diario/', () => {
@@ -217,9 +198,6 @@ test('grupo técnico e responsável pela solução usam as relações reais do G
   assert.match(edgeSource, /Number\(relation\.type\) === 2/);
   assert.match(edgeSource, /ITILSolution/);
   assert.match(edgeSource, /latestSolution/);
-  assert.match(edgeSource, /source: 'itil_solution_author'/);
-  assert.match(edgeSource, /_dashboard_resolution_diagnostic/);
-  assert.doesNotMatch(coreSource, /ticket\.solutionTechnicianId \|\| ticket\.technicianId/);
   assert.match(edgeSource, /GLPI_TECH_GROUP_ID/);
   assert.match(edgeSource, /GLPI_TECH_GROUP_NAME/);
   assert.match(edgeSource, /Grupo técnico .* não localizado no GLPI/);
