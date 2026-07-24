@@ -626,9 +626,9 @@
         });
     }
 
-    function dailyCard([labelText, value, hint], emphasis) {
+    function dailyCard([labelText, value, hint]) {
         return `
-            <article class="glpi-kpi glpi-daily-kpi ${emphasis}">
+            <article class="glpi-kpi glpi-daily-kpi">
                 <span class="glpi-kpi-title">${esc(labelText)}</span>
                 <strong>${esc(value)}</strong>
                 <small>${esc(hint)}</small>
@@ -649,18 +649,15 @@
         }
 
         const cards = [
-            ['Chamados abertos no plantão', createdInShift.length, `${metrics.label} • SUPORTE TI`],
+            ['Chamados abertos', createdInShift.length, `${metrics.label} • SUPORTE TI`],
             ['Em atendimento', inServiceNow.length, 'Não finalizados com técnico atribuído'],
             ['Aguardando atendimento', waitingNow.length, 'Não finalizados sem técnico atribuído'],
-            ['Pendentes', pendingNow.length, 'Chamados colocados como pendentes'],
-            ['Chamados estourados', breachedNow.length, 'Prazo real SLA/OLA ultrapassado']
+            ['Chamados estourados', breachedNow.length, 'Prazo real SLA/OLA ultrapassado'],
+            ['Pendentes', pendingNow.length, 'Chamados colocados como pendentes']
         ];
 
-        getField('glpi-daily-kpis-primary').innerHTML = cards.slice(0, 3)
-            .map((card) => dailyCard(card, 'primary'))
-            .join('');
-        getField('glpi-daily-kpis-secondary').innerHTML = cards.slice(3)
-            .map((card) => dailyCard(card, 'secondary'))
+        getField('glpi-daily-kpis').innerHTML = cards
+            .map((card) => dailyCard(card))
             .join('');
 
         const techRows = CORE.technicianResolutionsInShift(state.tickets, new Date(), groupId);
