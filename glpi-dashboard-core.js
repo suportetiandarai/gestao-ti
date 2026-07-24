@@ -129,7 +129,7 @@
     function hasAssignedTechnician(ticket) {
         if (Number(ticket.currentTechnicianCount) > 0) return true;
         if (Array.isArray(ticket.currentTechnicians) && ticket.currentTechnicians.length > 0) return true;
-        return Boolean(ticket.technicianId && ticket.technician !== 'Não disponível');
+        return Boolean(ticket.technicianId);
     }
 
     function ticketStatusCode(ticket) {
@@ -231,6 +231,47 @@
         return official || clean(user.name);
     }
 
+    function elapsedSeconds(startValue, endValue) {
+        const start = parseDate(startValue);
+        const end = parseDate(endValue);
+        if (!start || !end) return null;
+        return Math.max(0, Math.floor((end.getTime() - start.getTime()) / 1000));
+    }
+
+    function calculateTicketDurations(ticket, reference = new Date()) {
+        const now = parseDate(reference) || new Date();
+        const openedAt = parseDate(ticket.openedAt);
+        const assignedAt = parseDate(ticket.firstAssignedAt || ticket.assignedAt);
+        const isClosed =
+            ticket.status === STATUS.CLOSED
+            || Number(ticket.statusId) === STATUS_CODE.CLOSED;
+        const solvedAt = parseDate(ticket.solvedAt)
+            || (isClosed ? parseDate(ticket.closedAt) : null);
+        if (!openedAt) {
+            return { assignmentSeconds: null, solutionSeconds: null, totalSeconds: null };
+        }
+        const assignmentEnd = assignedAt || now;
+        const totalEnd = solvedAt || now;
+        return {
+            assignmentSeconds: elapsedSeconds(openedAt, assignmentEnd),
+            solutionSeconds: assignedAt ? elapsedSeconds(assignedAt, totalEnd) : 0,
+            totalSeconds: elapsedSeconds(openedAt, totalEnd)
+        };
+    }
+
+    function formatElapsedTime(seconds) {
+        if (!Number.isFinite(seconds) || seconds < 0) return 'Não disponível';
+        const whole = Math.floor(seconds);
+        const days = Math.floor(whole / 86400);
+        const hours = Math.floor((whole % 86400) / 3600);
+        const minutes = Math.floor((whole % 3600) / 60);
+        const remainingSeconds = whole % 60;
+        const clock = [hours, minutes, remainingSeconds]
+            .map((value) => String(value).padStart(2, '0'))
+            .join(':');
+        return days ? `${days}d ${clock}` : clock;
+    }
+
     function publicTicket(ticket, config = {}) {
         const result = {
             id: ticket.id,
@@ -283,6 +324,9 @@
         shiftMetrics,
         technicianResolutionsInShift,
         formatTechnicianName,
+        elapsedSeconds,
+        calculateTicketDurations,
+        formatElapsedTime,
         publicTicket,
         createRefreshCoordinator
     });

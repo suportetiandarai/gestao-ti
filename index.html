@@ -149,8 +149,8 @@
                     <div class="glpi-header">
                         <div>
                             <p class="glpi-eyebrow">GLPI 10.0.18 • RioSaúde</p>
-                            <h3>Dashboard gerencial de chamados</h3>
-                            <p>Indicadores de operação, produtividade, SLA e evolução dos atendimentos.</p>
+                            <h3 id="glpi-dashboard-title">DASHBOARD CHAMADOS DIÁRIO</h3>
+                            <p id="glpi-dashboard-subtitle">Indicadores de chamados</p>
                         </div>
                         <div class="glpi-actions">
                             <span id="glpi-connection-status" class="glpi-status-badge">Verificando conexão</span>
@@ -158,8 +158,8 @@
                             <span id="glpi-current-time" class="glpi-last-update">Hora atual: Não disponível</span>
                             <span id="glpi-next-refresh" class="glpi-last-update">Próxima atualização: Não disponível</span>
                             <button type="button" class="btn-primary btn-sm" onclick="glpiAtualizarAgora()">Atualizar agora</button>
-                            <button type="button" class="btn-secondary btn-sm glpi-general-panel-action" onclick="glpiAlternarPainel()">Modo Painel</button>
-                            <button type="button" class="btn-secondary btn-sm glpi-general-panel-action" onclick="glpiTelaCheia()">Tela cheia</button>
+                            <button id="glpi-panel-button" type="button" class="btn-secondary btn-sm glpi-panel-action" onclick="glpiAlternarPainel()">Modo Painel</button>
+                            <button id="glpi-fullscreen-button" type="button" class="btn-secondary btn-sm glpi-panel-action" onclick="glpiTelaCheia()">Entrar em tela cheia</button>
                             <button type="button" class="glpi-filter-button" onclick="glpiAbrirFiltros()">☷ Filtros <span id="glpi-active-filter-count">0</span></button>
                         </div>
                     </div>
@@ -231,7 +231,8 @@
 
                     <div id="glpi-view-diario" class="glpi-view">
                         <div id="glpi-current-shift" class="glpi-shift-banner"></div>
-                        <div id="glpi-daily-kpis" class="glpi-kpi-grid glpi-daily-kpi-grid"></div>
+                        <div id="glpi-daily-kpis-primary" class="glpi-kpi-grid glpi-daily-kpi-grid glpi-daily-kpi-primary"></div>
+                        <div id="glpi-daily-kpis-secondary" class="glpi-kpi-grid glpi-daily-kpi-grid glpi-daily-kpi-secondary"></div>
                         <div class="glpi-daily-content">
                             <section class="glpi-panel"><h4>Chamados resolvidos por técnico no plantão</h4><div id="glpi-daily-technicians" class="glpi-chart"></div></section>
                             <section class="glpi-panel"><h4>Últimos chamados registrados</h4><div id="glpi-daily-recent" class="glpi-daily-tickets"></div></section>

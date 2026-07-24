@@ -232,6 +232,22 @@ sessão ausente ou indisponibilidade do GLPI exibem `Offline • GLPI` e não cr
 chamados fictícios. A sincronização inicial e o temporizador de 30 segundos não
 dependem da existência prévia de registros no cache.
 
+## Dashboard Diário público
+
+`/dashboard-diario` não cria uma sessão de usuário e não recebe acesso `anon`
+às tabelas. O navegador invoca `{ "action": "public-dashboard" }`; a Edge
+Function lê o cache com a chave de serviço somente no back-end e devolve uma
+lista permitida sem `raw_payload`, solicitante, descrição, tokens, logs ou
+configurações. Configure:
+
+```env
+PUBLIC_DASHBOARD_ENABLED=true
+PUBLIC_DASHBOARD_SHOW_TITLE=false
+```
+
+O título permanece oculto por padrão. O papel público não pode executar
+sincronização, testes de conexão ou ações administrativas.
+
 ## Plantões e grupo operacional
 
 O Dashboard Diário calcula o período no fuso `America/Sao_Paulo`:

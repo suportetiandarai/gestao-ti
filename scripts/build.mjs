@@ -1,4 +1,4 @@
-import { cp, mkdir, readFile, rm, stat } from 'node:fs/promises';
+import { cp, mkdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -36,4 +36,12 @@ for (const asset of assets.filter((name) => /\.(?:js|css|png)$/.test(name) && na
   }
 }
 
-console.log(`Build estático criado em dist/ com ${assets.length} arquivos.`);
+const publicRoute = join(dist, 'dashboard-diario');
+await mkdir(publicRoute, { recursive: true });
+await writeFile(
+  join(publicRoute, 'index.html'),
+  html.replace('<head>', '<head>\n    <base href="../">'),
+  'utf8',
+);
+
+console.log(`Build estático criado em dist/ com ${assets.length + 1} arquivos, incluindo /dashboard-diario.`);

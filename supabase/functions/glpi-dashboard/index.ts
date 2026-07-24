@@ -126,6 +126,52 @@ function priorityName(value: unknown) {
   return map[Number(value)] || label(value);
 }
 
+function sanitizePublicText(value: unknown) {
+  return String(value || '')
+    .replace(/(?:&#0*62;?|&gt;)/gi, '')
+    .split('')
+    .map((character) => {
+      const code = character.charCodeAt(0);
+      return code < 32 || code === 127 ? ' ' : character;
+    })
+    .join('')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function publicDashboardTicket(ticket: JsonRecord) {
+  const raw = ticket.raw_payload && typeof ticket.raw_payload === 'object'
+    ? ticket.raw_payload as JsonRecord
+    : {};
+  const solution = raw._dashboard_solution_technician
+    && typeof raw._dashboard_solution_technician === 'object'
+    ? raw._dashboard_solution_technician as JsonRecord
+    : {};
+  return {
+    glpi_id: numberOrNull(ticket.glpi_id),
+    title: env('PUBLIC_DASHBOARD_SHOW_TITLE') === 'true'
+      ? sanitizePublicText(ticket.title)
+      : null,
+    status_id: numberOrNull(ticket.status_id),
+    status: statusName(ticket.status_id || ticket.status),
+    technician_id: numberOrNull(ticket.technician_id),
+    technician_name: label(ticket.technician_name),
+    group_id: numberOrNull(ticket.group_id),
+    group_name: label(ticket.group_name),
+    opened_at: normalizeDate(ticket.opened_at),
+    assigned_at: normalizeDate(ticket.assigned_at),
+    solved_at: normalizeDate(ticket.solved_at),
+    closed_at: normalizeDate(ticket.closed_at),
+    sla_due_at: normalizeDate(ticket.sla_due_at),
+    attention_due_at: normalizeDate(ticket.attention_due_at),
+    internal_sla_due_at: normalizeDate(ticket.internal_sla_due_at),
+    internal_attention_due_at: normalizeDate(ticket.internal_attention_due_at),
+    solution_technician_id: numberOrNull(solution.id),
+    solution_technician_name: label(solution.name),
+    source_environment: 'real',
+  };
+}
+
 function slaStatus(ticket: JsonRecord) {
   const due = normalizeDate(ticket.time_to_resolve || ticket.sla_due_at);
   if (!due) return 'unavailable';
@@ -378,8 +424,14 @@ class GlpiClient {
       .filter((relation) => Number(relation.type) === 2 && numberOrNull(relation.groups_id))
       .map((relation) => ({ id: Number(relation.groups_id) }));
     const assignmentEvents = logs
-      .filter((entry) => Number(entry.id_search_option) === 5 && normalizeDate(entry.date_mod))
-      .sort((left, right) => String(right.date_mod).localeCompare(String(left.date_mod)));
+      .filter((entry) => {
+        const assignedValue = comparable(entry.new_value);
+        return Number(entry.id_search_option) === 5
+          && normalizeDate(entry.date_mod)
+          && assignedValue !== ''
+          && assignedValue !== '0';
+      })
+      .sort((left, right) => String(left.date_mod).localeCompare(String(right.date_mod)));
 
     const technicians = await Promise.all(technicianRelations.map(async (relation) => {
       const id = Number(relation.users_id);
@@ -414,7 +466,14 @@ class GlpiClient {
 
     return {
       ...ticket,
-      date_assign: normalizeDate(ticket.date_assign) || technicians.find((technician) => technician.assigned_at)?.assigned_at || null,
+      date_assign: normalizeDate(ticket.date_assign)
+        || normalizeDate(assignmentEvents[0]?.date_mod)
+        || technicians.find((technician) => technician.assigned_at)?.assigned_at
+        || null,
+      _dashboard_first_assigned_at: normalizeDate(assignmentEvents[0]?.date_mod)
+        || normalizeDate(ticket.date_assign)
+        || technicians.find((technician) => technician.assigned_at)?.assigned_at
+        || null,
       technician_id: technicians[0]?.id || null,
       technician_name: technicians[0]?.name || null,
       group_id: belongsToTargetGroup ? targetGroup.id : technicalGroups[0]?.id || null,
@@ -472,7 +531,7 @@ function mapTicket(ticket: JsonRecord) {
     type_id: numberOrNull(ticket.type),
     type_name: Number(ticket.type) === 2 ? 'Requisição' : 'Incidente',
     opened_at: normalizeDate(ticket.date),
-    assigned_at: normalizeDate(ticket.date_assign),
+    assigned_at: normalizeDate(ticket._dashboard_first_assigned_at || ticket.date_assign),
     first_response_at: datePlusSeconds(ticket.date, ticket.takeintoaccount_delay_stat),
     solved_at: normalizeDate(ticket.solvedate),
     closed_at: normalizeDate(ticket.closedate),
@@ -532,6 +591,36 @@ Deno.serve(async (request) => {
     const token = auth.replace(/^Bearer\s+/i, '');
     const operationalRole = jwtRole(token);
     trustedOperationalCall = token === serviceKey || ['service_role', 'postgres'].includes(operationalRole);
+    const body = await request.json().catch(() => ({})) as JsonRecord;
+    action = String(body.action || '');
+
+    if (action === 'public-dashboard') {
+      if (env('PUBLIC_DASHBOARD_ENABLED') !== 'true') return json({ error: 'Dashboard público indisponível.' }, 404);
+      const groupId = numberOrNull(env('GLPI_TECH_GROUP_ID'));
+      if (!groupId) return json({ error: 'Grupo técnico público não configurado.' }, 503);
+      const [{ data: tickets, error: ticketsError }, { data: integrationState, error: stateError }] = await Promise.all([
+        admin
+          .from('glpi_tickets_dashboard')
+          .select('glpi_id,title,status_id,status,technician_id,technician_name,group_id,group_name,opened_at,assigned_at,solved_at,closed_at,sla_due_at,attention_due_at,internal_sla_due_at,internal_attention_due_at,raw_payload')
+          .eq('group_id', groupId)
+          .order('opened_at', { ascending: false })
+          .limit(2000),
+        admin
+          .from('glpi_sync_state')
+          .select('status,last_success_at,updated_at')
+          .eq('id', 1)
+          .maybeSingle(),
+      ]);
+      if (ticketsError) throw ticketsError;
+      if (stateError) throw stateError;
+      return json({
+        ok: true,
+        tickets: (tickets || []).map((ticket: JsonRecord) => publicDashboardTicket(ticket)),
+        integrationState: integrationState || { status: 'offline' },
+        checkedAt: new Date().toISOString(),
+      });
+    }
+
     if (!trustedOperationalCall) {
       const { data: { user }, error: userError } = await admin.auth.getUser(token);
       if (userError || !user) return json({ error: 'Sessão inválida.' }, 401);
@@ -540,8 +629,6 @@ Deno.serve(async (request) => {
       if (!['admin', 'gestor'].includes(role)) return json({ error: 'Acesso restrito a administradores e gestores.' }, 403);
     }
 
-    const body = await request.json().catch(() => ({})) as JsonRecord;
-    action = String(body.action || '');
     if (!['configuration-status', 'sync-incremental', 'sync-current-shift', 'backfill-group-cache', 'test-connection'].includes(action)) return json({ error: 'Ação inválida.' }, 400);
 
     if (action === 'configuration-status') {

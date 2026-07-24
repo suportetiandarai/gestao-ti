@@ -58,8 +58,13 @@ Ele atualiza os dados a cada 30 segundos sem recarregar a página. A execução 
 
 O plantão atual é calculado em `America/Sao_Paulo`: diurno das 07:00 às 19:00
 e noturno das 19:00 às 07:00. O Diário exibe exclusivamente chamados vinculados
-ao grupo técnico real `SUPORTE TI` (ID `1`). O modo painel e a tela cheia de
-painel permanecem disponíveis somente no Dashboard Geral.
+ao grupo técnico real `SUPORTE TI` (ID `1`). O Diário e o Geral oferecem modo
+painel e tela cheia sem recarregar a página.
+
+A rota `/dashboard-diario` abre somente o Diário sem login. Ela não concede
+acesso direto ao banco: usa a ação sanitizada `public-dashboard` da Edge
+Function, habilitada por `PUBLIC_DASHBOARD_ENABLED=true`. Títulos ficam ocultos
+por padrão com `PUBLIC_DASHBOARD_SHOW_TITLE=false`.
 
 Critérios completos: [docs/GLPI_DASHBOARD_CRITERIOS.md](docs/GLPI_DASHBOARD_CRITERIOS.md).
 

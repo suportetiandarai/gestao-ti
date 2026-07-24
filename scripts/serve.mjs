@@ -23,7 +23,9 @@ export async function startStaticServer({ host = '0.0.0.0', port = 8000, root = 
     try {
       const url = new URL(request.url || '/', `http://${request.headers.host || 'localhost'}`);
       const requested = decodeURIComponent(url.pathname);
-      const relative = requested === '/' || requested.startsWith('/dashboard/publico/') ? 'index.html' : requested.replace(/^\/+/, '');
+      const relative = requested === '/' || /^\/dashboard-diario\/?$/.test(requested)
+        ? 'index.html'
+        : requested.replace(/^\/+/, '');
       const file = resolve(resolvedRoot, relative);
       if (file !== resolvedRoot && !file.startsWith(`${resolvedRoot}${sep}`)) throw new Error('Caminho inválido.');
       const info = await stat(file);

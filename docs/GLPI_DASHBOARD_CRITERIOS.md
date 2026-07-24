@@ -58,7 +58,7 @@
 
 - A lista exibe somente número, título autorizado, status, técnico, hora, categoria e unidade autorizadas.
 - Solicitante, e-mail, telefone, descrição, acompanhamentos, dados clínicos e demais dados sensíveis não são renderizados.
-- O Dashboard Diário não oferece modo painel, tela cheia de painel nem link público. Essas funções permanecem disponíveis somente no Dashboard Geral autenticado.
+- O Dashboard Diário oferece modo painel e tela cheia sem alterar o plantão ou o intervalo de sincronização. A rota pública `/dashboard-diario` fica travada no Diário e recebe somente campos operacionais sanitizados pela Edge Function.
 - A quantidade de chamados recentes é configurada na área administrativa; o padrão é 10.
 
 Valores indisponíveis são exibidos como “Não disponível” e não entram em médias.
@@ -72,6 +72,15 @@ Valores indisponíveis são exibidos como “Não disponível” e não entram e
 - Os últimos dados válidos permanecem visíveis em falhas de rede ou GLPI.
 - A atualização visual do Dashboard Diário continua fixa em 30 segundos.
 - A cada atualização, o intervalo é recalculado; assim, a virada de plantão ocorre automaticamente sem recarregar a página.
+
+## Tempos operacionais
+
+- Tempo de atribuição: primeira atribuição técnica menos abertura. Enquanto não houver técnico, usa o horário atual.
+- Tempo de solução: solução menos primeira atribuição. Enquanto houver técnico e não houver solução, usa o horário atual. Sem técnico, exibe `00:00:00`.
+- Tempo total: solução menos abertura; enquanto não solucionado, horário atual menos abertura.
+- Para fechado sem `solvedate`, `closedate` é o fallback documentado.
+- A primeira atribuição usa o evento mais antigo do histórico `Log.id_search_option=5`; `date_assign` é alternativa quando o histórico não estiver disponível.
+- O navegador recalcula somente os textos dos contadores a cada segundo. Não há consulta adicional ao GLPI; a sincronização permanece a cada 30 segundos.
 
 ## Nomes dos técnicos
 
