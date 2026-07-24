@@ -240,6 +240,23 @@ test('rota pública abre sem login, fica travada no Diário e atualiza contadore
   await expect(page.locator('meta[name="robots"]')).toHaveAttribute('content', /noindex/);
 });
 
+test('entrada estática do GitHub Pages carrega a rota pública sem autenticação', async ({ page }) => {
+  await page.setViewportSize({ width: 1366, height: 768 });
+  await page.route('**/config.js', (route) => route.fulfill({
+    contentType: 'text/javascript',
+    body: 'window.GESTAO_TI_CONFIG={SUPABASE_PUBLIC_KEY:""};',
+  }));
+  await page.route('https://cdn.jsdelivr.net/**', (route) => route.abort());
+  await page.route('https://cdnjs.cloudflare.com/**', (route) => route.abort());
+  await page.goto('/dashboard-diario/index.html');
+  await expect(page).toHaveURL(/\/dashboard-diario\/$/);
+  await expect(page.locator('#login-container')).toBeHidden();
+  await expect(page.locator('#glpi-view-diario')).toBeVisible();
+  await expect(page.locator('.sidebar')).toBeHidden();
+  await expect(page.locator('#glpi-daily-kpis .glpi-kpi')).toHaveCount(5);
+  await expect(page.locator('meta[name="robots"]')).toHaveAttribute('content', /noindex/);
+});
+
 test('cards e fontes do Diário possuem aumento moderado', async ({ page }) => {
   await preparePage(page, { width: 1920, height: 1080 });
   const dimensions = await page.locator('#glpi-view-diario').evaluate((view) => {
