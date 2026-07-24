@@ -183,12 +183,14 @@ test('listagem diária prioriza atraso e usa indicadores exclusivos no Tempo tot
 
 test('dashboard público libera somente título e técnico completos', () => {
   const publicSerializer = edgeSource.match(/function publicDashboardTicket[\s\S]*?\n\}/)?.[0] || '';
-  assert.match(publicSerializer, /title: sanitizePublicText\(ticket\.title\)/);
+  assert.match(publicSerializer, /title: sanitizePublicText\(ticket\.title \|\| raw\.name \|\| raw\.title\)/);
   assert.match(publicSerializer, /technician_name: label\(ticket\.technician_name\)/);
   assert.doesNotMatch(publicSerializer, /requester|email|phone|description|followup|token/);
   assert.doesNotMatch(publicSerializer, /raw_payload\s*:/);
   assert.match(coreSource, /title: ticket\.title/);
   assert.match(coreSource, /technician: ticket\.technician/);
+  assert.doesNotMatch(source, /Título restrito/);
+  assert.match(source, /title: row\.title \|\| row\.name \|\| `Chamado #\$\{row\.glpi_id \|\| row\.id\}`/);
 });
 
 test('grupo técnico e responsável pela solução usam as relações reais do GLPI', () => {

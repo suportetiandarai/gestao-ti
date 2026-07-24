@@ -250,6 +250,13 @@ pública. Solicitante, descrição, acompanhamentos, contatos e dados administra
 continuam ausentes do payload. O papel público não pode executar sincronização,
 testes de conexão ou ações administrativas.
 
+Alterações nesse payload exigem republicar a Edge Function; o merge do front-end
+no GitHub Pages não atualiza automaticamente o runtime do Supabase:
+
+```bash
+npx supabase functions deploy glpi-dashboard
+```
+
 ## Plantões e grupo operacional
 
 O Dashboard Diário calcula o período no fuso `America/Sao_Paulo`:

@@ -251,7 +251,7 @@
         const firstResponseAt = row.first_response_at;
         return {
             id: row.glpi_id || row.id,
-            title: row.title || (state.publicMode ? 'Título restrito' : row.name || `Chamado ${row.glpi_id || row.id}`),
+            title: row.title || row.name || `Chamado #${row.glpi_id || row.id}`,
             status,
             statusId: row.status_id,
             technician: row.technician_name || row.technician || 'Não disponível',
@@ -706,7 +706,7 @@
                 return `
                 <article class="glpi-daily-ticket" data-ticket-id="${esc(ticket.id)}" data-operational-priority="${CORE.dailyDashboardTicketPriority(ticket, reference)}">
                     <strong>#${esc(visible.id)}</strong>
-                    <span data-label="Título">${esc(visible.title || 'Título restrito')}</span>
+                    <span data-label="Título">${esc(visible.title || `Chamado #${ticket.id}`)}</span>
                     <span data-label="Status">${esc(visible.status)}</span>
                     <span data-label="Técnico">${esc(CORE.hasAssignedTechnician(ticket) ? technicianDisplayName(visible.technician) : 'Aguardando atendimento')}</span>
                     <time data-label="Abertura">${new Intl.DateTimeFormat('pt-BR', { timeStyle: 'short', timeZone: TZ }).format(parseDate(visible.openedAt))}</time>

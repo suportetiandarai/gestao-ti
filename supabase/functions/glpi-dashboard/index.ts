@@ -149,7 +149,7 @@ function publicDashboardTicket(ticket: JsonRecord) {
     : {};
   return {
     glpi_id: numberOrNull(ticket.glpi_id),
-    title: sanitizePublicText(ticket.title),
+    title: sanitizePublicText(ticket.title || raw.name || raw.title),
     status_id: numberOrNull(ticket.status_id),
     status: statusName(ticket.status_id || ticket.status),
     technician_id: numberOrNull(ticket.technician_id),
