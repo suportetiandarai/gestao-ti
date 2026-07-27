@@ -1,2 +1,5 @@
 [functions.admin-users]
 verify_jwt = false
+
+[functions.glpi-dashboard-public]
+verify_jwt = false

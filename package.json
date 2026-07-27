@@ -13,6 +13,7 @@
     "typecheck": "tsc -p tsconfig.edge.json",
     "test": "node --test \"tests/unit/*.test.cjs\"",
     "test:visual": "playwright test",
+    "measure:snapshot": "node scripts/measure-dashboard-snapshot.mjs",
     "build": "node scripts/build.mjs",
     "validate": "npm run lint && npm run typecheck && npm test && npm run build"
   },

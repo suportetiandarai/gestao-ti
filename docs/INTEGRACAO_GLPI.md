@@ -241,12 +241,15 @@ sincronização não depende de navegador ou sessão administrativa.
 
 ## Dashboard Diário público
 
-`/dashboard-diario` não cria uma sessão de usuário e não recebe acesso `anon`
-às tabelas. O navegador invoca `{ "action": "public-dashboard" }` diretamente
-com a chave pública limitada, sem criar ou reutilizar sessão do Supabase Auth; a Edge
-Function lê o cache com a chave de serviço somente no back-end e devolve uma
-lista permitida sem `raw_payload`, solicitante, descrição, tokens, logs ou
-configurações. Configure:
+`/dashboard-diario` não cria nem reutiliza sessão do Supabase Auth. O navegador
+faz `GET` em `glpi-dashboard-public`, uma função dedicada que não contém ações
+de sincronização e usa apenas a chave anônima. Pela política RLS, ela pode ler
+somente `scope='daily_public'` em `gestao_ti_dashboard_snapshot`.
+
+O snapshot é gerado pela função protegida `glpi-dashboard` somente depois que
+cache, relações e agregados foram gravados. Ele contém cinco contagens, gráfico,
+metadados do plantão e todos os chamados abertos dentro do plantão atual. Não contém `raw_payload`,
+solicitante, descrição, tokens, logs ou configurações. Configure:
 
 ```env
 PUBLIC_DASHBOARD_ENABLED=true
@@ -257,12 +260,26 @@ pública. Solicitante, descrição, acompanhamentos, contatos e dados administra
 continuam ausentes do payload. O papel público não pode executar sincronização,
 testes de conexão ou ações administrativas.
 
-Alterações nesse payload exigem republicar a Edge Function; o merge do front-end
+O endpoint retorna `ETag` baseado no SHA-256 do conteúdo operacional. O instante
+da última sincronização é enviado também em `X-Snapshot-Synced-At`, portanto uma
+resposta `304 Not Modified` mantém a saúde atualizada sem retransmitir o corpo.
+O cache é `public, max-age=15, stale-while-revalidate=45`.
+
+Se o snapshot estiver ausente, o endpoint responde `503` com “Dados ainda não
+sincronizados” e nunca recorre aos 2.000 tickets nem dispara o GLPI.
+
+Alterações nesse contrato exigem republicar as Edge Functions; o merge do front-end
 no GitHub Pages não atualiza automaticamente o runtime do Supabase:
 
 ```bash
 npx supabase functions deploy glpi-dashboard
+npx supabase functions deploy glpi-dashboard-public
 ```
+
+Ordem segura de implantação: aplicar
+`20260727150000_glpi_dashboard_snapshot.sql`, publicar `glpi-dashboard`,
+executar uma sincronização controlada e confirmar a linha do snapshot; só então
+publicar `glpi-dashboard-public` e o front-end. Essa ordem evita indisponibilidade.
 
 ## Plantões e grupo operacional
 

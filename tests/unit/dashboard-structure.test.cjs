@@ -8,6 +8,9 @@ const html = readFileSync(join(root, 'index.html'), 'utf8');
 const source = readFileSync(join(root, 'glpi-dashboard.js'), 'utf8');
 const coreSource = readFileSync(join(root, 'glpi-dashboard-core.js'), 'utf8');
 const edgeSource = readFileSync(join(root, 'supabase', 'functions', 'glpi-dashboard', 'index.ts'), 'utf8');
+const publicEdgeSource = readFileSync(join(root, 'supabase', 'functions', 'glpi-dashboard-public', 'index.ts'), 'utf8');
+const snapshotSource = readFileSync(join(root, 'supabase', 'functions', '_shared', 'dashboard-snapshot.ts'), 'utf8');
+const snapshotMigration = readFileSync(join(root, 'supabase', 'migrations', '20260727150000_glpi_dashboard_snapshot.sql'), 'utf8');
 const authSource = readFileSync(join(root, 'auth.js'), 'utf8');
 const appSource = readFileSync(join(root, 'app.js'), 'utf8');
 const serveSource = readFileSync(join(root, 'scripts', 'serve.mjs'), 'utf8');
@@ -126,14 +129,16 @@ test('rota pública é exclusiva, não exige usuário e recebe somente payload s
   assert.match(source, /name !== 'diario'/);
   assert.match(serveSource, /dashboard-diario/);
   assert.match(buildSource, /dashboard-diario/);
-  assert.match(edgeSource, /action === 'public-dashboard'/);
-  assert.match(edgeSource, /PUBLIC_DASHBOARD_ENABLED/);
-  assert.match(edgeSource, /publicDashboardTicket/);
+  assert.doesNotMatch(edgeSource, /action === 'public-dashboard'/);
+  assert.match(publicEdgeSource, /PUBLIC_DASHBOARD_ENABLED/);
+  assert.match(publicEdgeSource, /gestao_ti_dashboard_snapshot/);
+  assert.doesNotMatch(publicEdgeSource, /GLPI_(?:APP|USER)_TOKEN|initSession|raw_payload/);
   assert.match(source, /async function fetchPublicDashboard/);
+  assert.match(source, /functions\/v1\/glpi-dashboard-public/);
   assert.match(source, /Authorization: `Bearer \$\{publicKey\}`/);
   assert.doesNotMatch(source.match(/if \(state\.publicMode\)[\s\S]*?\n {8}\}/)?.[0] || '', /supabase\.functions\.invoke/);
   assert.match(authSource, /SUPABASE_CONFIGURADO && !ROTA_DASHBOARD_PUBLICO/);
-  assert.doesNotMatch(edgeSource.match(/function publicDashboardTicket[\s\S]*?\n\}/)?.[0] || '', /requester|description|content|session/i);
+  assert.doesNotMatch(publicEdgeSource, /requester|description|followup|session-token/i);
   assert.match(html, /meta name="robots" content="noindex,nofollow"/);
 });
 
@@ -185,11 +190,10 @@ test('listagem diária prioriza atraso e usa indicadores exclusivos no Tempo tot
 });
 
 test('dashboard público libera somente título e técnico completos', () => {
-  const publicSerializer = edgeSource.match(/function publicDashboardTicket[\s\S]*?\n\}/)?.[0] || '';
-  assert.match(publicSerializer, /title: sanitizePublicText\(ticket\.title \|\| raw\.name \|\| raw\.title\)/);
-  assert.match(publicSerializer, /technician_name: label\(ticket\.technician_name\)/);
-  assert.doesNotMatch(publicSerializer, /requester|email|phone|description|followup|token/);
-  assert.doesNotMatch(publicSerializer, /raw_payload\s*:/);
+  assert.match(snapshotSource, /title: text\(ticket\.title\)/);
+  assert.match(snapshotSource, /technician_name: text\(ticket\.technician_name\)/);
+  assert.doesNotMatch(snapshotSource, /requester|email|phone|description|followup|token/i);
+  assert.doesNotMatch(snapshotSource, /raw_payload/);
   assert.match(coreSource, /title: ticket\.title/);
   assert.match(coreSource, /technician: ticket\.technician/);
   assert.doesNotMatch(source, /Título restrito/);
@@ -217,6 +221,39 @@ test('Edge Function aceita chamada operacional validada pelo gateway sem liberar
   assert.match(edgeSource, /if \(!supabaseUrl \|\| !serviceKey \|\| !auth\).*401/);
   assert.match(edgeSource, /Acesso restrito a administradores e gestores/);
 });
+
+test('snapshot público lê uma linha com todos os chamados do plantão, possui ETag e não carrega payload bruto', () => {
+  assert.match(snapshotMigration, /create table if not exists public\.gestao_ti_dashboard_snapshot/i);
+  assert.match(snapshotMigration, /unique \(scope, group_id\)/i);
+  assert.doesNotMatch(snapshotMigration, /jsonb_array_length\(shift_tickets_json\)\s*<=/i);
+  assert.doesNotMatch(snapshotSource, /operationalSort\(openedInShift[\s\S]{0,120}\.slice\(/);
+  assert.doesNotMatch(source, /createdInShift\.slice\(0,\s*10\)/);
+  assert.match(snapshotMigration, /enable row level security/i);
+  assert.match(snapshotMigration, /to anon[\s\S]*scope = 'daily_public'/i);
+  assert.match(publicEdgeSource, /\.maybeSingle\(\)/);
+  assert.match(publicEdgeSource, /If-None-Match/);
+  assert.match(publicEdgeSource, /status: 304/);
+  assert.match(publicEdgeSource, /Cache-Control': 'public, max-age=15, stale-while-revalidate=45'/);
+  assert.doesNotMatch(publicEdgeSource, /select\(['"]\*['"]\)|raw_payload|limit\(2000\)/);
+  assert.match(source, /If-None-Match/);
+  assert.match(source, /response\.status === 304/);
+});
+
+test('sincronização gera o snapshot antes de registrar sucesso', () => {
+  const refreshPosition = edgeSource.lastIndexOf("stage = 'refresh-dashboard-snapshot'");
+  const successPosition = edgeSource.lastIndexOf("stage = 'update-sync-state'");
+  assert.ok(refreshPosition > 0 && successPosition > refreshPosition);
+  assert.match(edgeSource, /\.select\(SNAPSHOT_TICKET_COLUMNS\)[\s\S]*\.eq\('group_id', groupId\)/);
+  assert.match(edgeSource, /\.in\('status_id', \[1, 2, 3, 4\]\)/);
+  assert.match(edgeSource, /opened_at\.gte[\s\S]*solved_at\.gte/);
+  assert.doesNotMatch(SNAPSHOT_TICKET_COLUMNS_FOR_TEST(edgeSource), /raw_payload/);
+});
+
+function SNAPSHOT_TICKET_COLUMNS_FOR_TEST(value) {
+  return value.match(/const SNAPSHOT_TICKET_COLUMNS[\s\S]*?\.join\(','\)/)?.[0]
+    || snapshotSource.match(/export const SNAPSHOT_TICKET_COLUMNS[\s\S]*?\.join\(','\)/)?.[0]
+    || '';
+}
 
 test('sincronização centralizada usa cron único de um minuto e lock expirável', () => {
   assert.match(schedulerMigration, /where jobname = 'gestao-ti-glpi-sync'/);
