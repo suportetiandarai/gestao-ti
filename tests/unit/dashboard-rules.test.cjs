@@ -217,7 +217,7 @@ test('listagem diária prioriza estourados, não solucionados e solucionados com
   assert.equal(core.expiredDeadlineAt(rows[3], NOW).toISOString(), '2026-07-23T13:00:00.000Z');
 });
 
-test('gráfico usa solução/fechamento no plantão, autor da solução e deduplica técnico/chamado', () => {
+test('gráfico usa solved_at no plantão, autor da solução e deduplica técnico/chamado', () => {
   const duplicate = ticket({
     id: 10,
     status: 'Solucionado',
@@ -230,14 +230,94 @@ test('gráfico usa solução/fechamento no plantão, autor da solução e dedupl
   const rows = [
     duplicate,
     { ...duplicate },
-    ticket({ id: 11, status: 'Fechado', technician: 'Bruno Lima', technicianId: 11, closedAt: '2026-07-23T10:00:00-03:00' }),
+    ticket({
+      id: 11,
+      status: 'Fechado',
+      technician: 'Técnico Atual',
+      technicianId: 91,
+      solutionTechnician: 'Bruno Lima',
+      solutionTechnicianId: 11,
+      solvedAt: '2026-07-23T10:00:00-03:00',
+      closedAt: '2026-07-23T10:30:00-03:00',
+    }),
     ticket({ id: 12, status: 'Solucionado', technician: 'Ana Souza', technicianId: 10, solvedAt: '2026-07-23T06:59:00-03:00' }),
-    ticket({ id: 13, status: 'Solucionado', technician: 'Ana Souza', technicianId: 10, solvedAt: '2026-07-23T10:00:00-03:00', groupId: 5, technicalGroupIds: [5] }),
+    ticket({
+      id: 13,
+      status: 'Solucionado',
+      solutionTechnician: 'Ana Souza',
+      solutionTechnicianId: 10,
+      solvedAt: '2026-07-23T10:00:00-03:00',
+      groupId: 5,
+      technicalGroupIds: [5],
+    }),
   ];
   assert.deepEqual(core.technicianResolutionsInShift(rows, NOW, 1), [
     { label: 'Ana Souza', value: 1 },
     { label: 'Bruno Lima', value: 1 },
   ]);
+});
+
+test('fechamento no plantão não move solução antiga para a produtividade atual', () => {
+  const rows = [
+    ticket({
+      id: 20,
+      status: 'Fechado',
+      technician: 'Cabrine Lopo Mendes',
+      technicianId: 46,
+      solutionTechnician: 'Cabrine Lopo Mendes',
+      solutionTechnicianId: 46,
+      solvedAt: '2026-07-22T10:00:00-03:00',
+      closedAt: '2026-07-23T10:00:00-03:00',
+    }),
+  ];
+  assert.deepEqual(core.technicianResolutionsInShift(rows, NOW, 1), []);
+});
+
+test('técnico atual, último atualizador e membro do grupo não substituem autor da solução', () => {
+  const rows = [
+    ticket({
+      id: 21,
+      status: 'Solucionado',
+      technician: 'Técnico atualmente atribuído',
+      technicianId: 43,
+      solvedAt: '2026-07-23T09:30:00-03:00',
+      usersIdLastUpdater: 43,
+    }),
+    ticket({
+      id: 22,
+      status: 'Solucionado',
+      technician: 'Técnico removido antes da solução',
+      technicianId: 44,
+      solutionTechnician: 'Autora Real',
+      solutionTechnicianId: 45,
+      solvedAt: '2026-07-23T10:30:00-03:00',
+      usersIdLastUpdater: 43,
+    }),
+  ];
+  assert.deepEqual(core.technicianResolutionsInShift(rows, NOW, 1), [
+    { label: 'Autora Real', value: 1 },
+  ]);
+});
+
+test('técnicos citados só aparecem com solução própria válida no plantão', () => {
+  const invalidNames = [
+    ['Cabrine Lopo Mendes', 46],
+    ['Rafael Correa', 22],
+    ['Joao Vitor Araujo', 39],
+    ['João Monteiro', 45],
+    ['Joatan Renan Oliveira da Silva', 47],
+  ];
+  const rows = invalidNames.map(([name, id], index) => ticket({
+    id: 100 + index,
+    status: 'Fechado',
+    technician: name,
+    technicianId: id,
+    solutionTechnician: name,
+    solutionTechnicianId: id,
+    solvedAt: '2026-07-22T10:00:00-03:00',
+    closedAt: '2026-07-23T10:00:00-03:00',
+  }));
+  assert.deepEqual(core.technicianResolutionsInShift(rows, NOW, 1), []);
 });
 
 test('formata nome pelos campos oficiais sem inverter palavras', () => {

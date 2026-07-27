@@ -54,7 +54,9 @@ O Dashboard Diário contém exatamente cinco indicadores, um gráfico e uma list
 6. Chamados resolvidos por técnico no plantão;
 7. Últimos chamados registrados.
 
-Ele atualiza os dados a cada 30 segundos sem recarregar a página. A execução no navegador é exclusiva e o back-end também usa lock atômico, evitando sincronizações concorrentes.
+Ele relê o cache a cada 30 segundos sem recarregar a página. A sincronização com
+o GLPI é executada uma vez por minuto pelo Supabase Cron, independentemente de
+navegador ou sessão, e usa lock atômico para evitar concorrência.
 
 O plantão atual é calculado em `America/Sao_Paulo`: diurno das 07:00 às 19:00
 e noturno das 19:00 às 07:00. O Diário exibe exclusivamente chamados vinculados
@@ -72,17 +74,19 @@ Critérios completos: [docs/GLPI_DASHBOARD_CRITERIOS.md](docs/GLPI_DASHBOARD_CRI
 ## Arquitetura da sincronização
 
 ```text
-Navegador (30 s)
-  -> Supabase Edge Function (sessão autenticada admin/gestor)
-    -> lock glpi_sync_state
+Supabase Cron (1 min)
+  -> Supabase Edge Function (service role no Vault)
+    -> lock expirável em glpi_sync_state
     -> GLPI REST somente leitura
-    -> busca incremental ordenada por date_mod
+    -> busca incremental ordenada por date_mod, com sobreposição de 120 s
     -> enriquece técnico atual via Ticket_User e atribuição via Log
+    -> identifica o autor real em ITILSolution.users_id
     -> paginação + retry controlado + timeout
     -> upsert glpi_tickets_dashboard
     -> upsert glpi_ticket_assignments_dashboard (par chamado/técnico)
     -> cursor/saúde/log em PostgreSQL
-  -> navegador lê o cache com RLS
+Navegador (30 s)
+  -> lê somente o cache; não inicia sincronização automática
 ```
 
 O estado é apresentado como `online`, `atrasado`, `sincronizando` ou `offline`. Falhas preservam os últimos chamados válidos.

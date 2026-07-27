@@ -15,6 +15,7 @@ const buildSource = readFileSync(join(root, 'scripts', 'build.mjs'), 'utf8');
 const publicRouteSource = readFileSync(join(root, 'dashboard-diario', 'index.html'), 'utf8');
 const styles = readFileSync(join(root, 'styles.css'), 'utf8');
 const assignmentsMigration = readFileSync(join(root, 'supabase', 'migrations', '20260722110000_glpi_ticket_assignments.sql'), 'utf8');
+const schedulerMigration = readFileSync(join(root, 'supabase', 'migrations', '20260727090000_glpi_backend_scheduler_stable.sql'), 'utf8');
 const dailyView = html.match(/<div id="glpi-view-diario"[\s\S]*?<div id="glpi-view-geral"/)?.[0] || '';
 const dailyRenderer = source.match(/function renderDailyDashboard\(\)[\s\S]*?function renderBarChart/)?.[0] || '';
 
@@ -66,7 +67,7 @@ test('atualização é manual/automática, exclusiva e preserva o último estado
   assert.match(source, /state\.subtab === 'diario'\s*\? DAILY_REFRESH_SECONDS \* 1000/);
   assert.match(source, /if \(state\.refreshing\) return false/);
   assert.match(source, /window\.glpiAtualizarAgora = async function/);
-  assert.match(source, /await refreshData\(canTriggerSync\(\)\)/);
+  assert.match(source, /await refreshData\(false\)/);
   assert.match(source, /if \(!state\.tickets\.length\)/);
   assert.match(source, /últimos dados válidos/i);
   assert.equal((source.match(/state\.countdownTimer = setInterval/g) || []).length, 1);
@@ -84,9 +85,11 @@ test('dados fictícios exigem ativação explícita e falha real permanece offli
   assert.doesNotMatch(source, /Nenhum chamado real sincronizado\. Modo demonstração ativado/);
 });
 
-test('sincronização inicial e automática não ficam bloqueadas pelo cache vazio', () => {
-  assert.match(source, /await refreshData\(canTriggerSync\(\)\)/);
-  assert.match(source, /setInterval\(\(\) => \{[\s\S]*refreshData\(canTriggerSync\(\)\)/);
+test('atualização inicial, automática e pública leem somente o cache', () => {
+  assert.match(source, /await refreshData\(false\)/);
+  assert.match(source, /setInterval\(\(\) => \{[\s\S]*refreshData\(false\)/);
+  assert.match(source, /window\.glpiAtualizarAgora = async function[\s\S]*refreshData\(false\)/);
+  assert.match(source, /window\.glpiSincronizarAgora = async function[\s\S]*refreshData\(true\)/);
   assert.doesNotMatch(source, /refreshData\(!state\.demo/);
 });
 
@@ -213,6 +216,17 @@ test('Edge Function aceita chamada operacional validada pelo gateway sem liberar
   assert.match(edgeSource, /\['service_role', 'postgres'\]\.includes\(operationalRole\)/);
   assert.match(edgeSource, /if \(!supabaseUrl \|\| !serviceKey \|\| !auth\).*401/);
   assert.match(edgeSource, /Acesso restrito a administradores e gestores/);
+});
+
+test('sincronização centralizada usa cron único de um minuto e lock expirável', () => {
+  assert.match(schedulerMigration, /where jobname = 'gestao-ti-glpi-sync'/);
+  assert.match(schedulerMigration, /cron\.unschedule\(existing_job\.jobid\)/);
+  assert.match(schedulerMigration, /'\* \* \* \* \*'/);
+  assert.match(schedulerMigration, /drop function if exists private\.invoke_glpi_scheduled_sync\(integer\)/);
+  assert.match(schedulerMigration, /'expectedIntervalSeconds', 60/);
+  assert.match(schedulerMigration, /timeout_milliseconds := 50000/);
+  assert.match(edgeSource, /GLPI_SYNC_OVERLAP_SECONDS/);
+  assert.match(edgeSource, /Sessão GLPI expirada; autenticação renovada/);
 });
 
 test('bootstrap limita a carga inicial e informa a etapa de falha sem expor credenciais', () => {

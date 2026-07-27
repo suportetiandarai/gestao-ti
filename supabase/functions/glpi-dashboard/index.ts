@@ -190,9 +190,11 @@ async function logSync(client: ReturnType<typeof createClient>, level: string, m
   });
 }
 
-async function updateSyncState(client: ReturnType<typeof createClient>, values: JsonRecord) {
+async function updateSyncState(client: ReturnType<typeof createClient>, values: JsonRecord, strict = true) {
   const { error } = await client.from('glpi_sync_state').update({ ...values, updated_at: new Date().toISOString() }).eq('id', 1);
-  if (error) console.warn('Falha ao atualizar estado da sincronização:', safeError(error));
+  if (!error) return;
+  if (strict) throw error;
+  console.warn('Falha ao atualizar estado da sincronização:', safeError(error));
 }
 
 class GlpiClient {
@@ -246,6 +248,18 @@ class GlpiClient {
         } catch {
           body = text;
         }
+        const invalidSession = Boolean(
+          this.sessionToken
+          && !['initSession', 'killSession'].includes(path)
+          && [400, 401].includes(response.status)
+          && /session[_ -]?token|session.*invalid|invalid.*session/i.test(text)
+        );
+        if (invalidSession && attempt < attempts) {
+          this.sessionToken = '';
+          await this.initSession();
+          lastError = new Error('Sessão GLPI expirada; autenticação renovada.');
+          continue;
+        }
         const retryable = response.status === 429 || response.status >= 500;
         if (!response.ok && retryable && attempt < attempts) {
           lastError = new Error(`GLPI ${response.status}: indisponibilidade temporária.`);
@@ -294,7 +308,12 @@ class GlpiClient {
   async getTickets(cursor: string | null = null) {
     const pageSize = boundedNumber('GLPI_SYNC_PAGE_SIZE', 100, 1, 1000);
     const maxPages = boundedNumber('GLPI_SYNC_MAX_PAGES', 10, 1, 100);
-    const modifiedAfter = env('GLPI_SYNC_MODIFIED_AFTER') || cursor;
+    const configuredCursor = env('GLPI_SYNC_MODIFIED_AFTER') || cursor;
+    const overlapSeconds = boundedNumber('GLPI_SYNC_OVERLAP_SECONDS', 120, 0, 900);
+    const parsedCursor = configuredCursor ? new Date(configuredCursor) : null;
+    const modifiedAfter = parsedCursor && !Number.isNaN(parsedCursor.getTime())
+      ? new Date(parsedCursor.getTime() - overlapSeconds * 1000).toISOString()
+      : configuredCursor;
     const effectiveMaxPages = modifiedAfter
       ? maxPages
       : boundedNumber('GLPI_SYNC_INITIAL_MAX_PAGES', 1, 1, maxPages);
@@ -459,6 +478,7 @@ class GlpiClient {
           id: solutionTechnicianId,
           name: await this.technicianName(solutionTechnicianId),
           resolved_at: normalizeDate(latestSolution?.date_creation || latestSolution?.date_mod || ticket.solvedate || ticket.closedate),
+          source: 'itil_solution_author',
         }
       : null;
 
@@ -480,6 +500,15 @@ class GlpiClient {
       _dashboard_technical_groups: technicalGroups,
       _dashboard_in_tech_group: belongsToTargetGroup,
       _dashboard_solution_technician: solutionTechnician,
+      _dashboard_resolution_diagnostic: isFinal
+        ? {
+            ticket_id: ticketId,
+            solution_author_id: solutionTechnicianId,
+            current_technician_ids: technicians.map((technician) => technician.id),
+            last_updater_id: numberOrNull(ticket.users_id_lastupdater),
+            source: solutionTechnician ? 'itil_solution_author' : 'unavailable',
+          }
+        : null,
     };
   }
 
@@ -605,7 +634,7 @@ Deno.serve(async (request) => {
           .limit(2000),
         admin
           .from('glpi_sync_state')
-          .select('status,last_success_at,updated_at')
+          .select('status,last_started_at,last_success_at,last_error_at,last_duration_ms,last_records_processed,last_records_changed,sync_origin,next_run_at,scheduler_interval_seconds,updated_at')
           .eq('id', 1)
           .maybeSingle(),
       ]);
@@ -683,6 +712,19 @@ Deno.serve(async (request) => {
       if (lockError) throw lockError;
       lockAcquired = Boolean(acquired);
       if (!lockAcquired) return json({ error: 'Sincronização GLPI já está em andamento.' }, 409);
+      const requestedOrigin = String(body.origin || '');
+      const syncOrigin = trustedOperationalCall && requestedOrigin === 'supabase_cron'
+        ? 'supabase_cron'
+        : 'manual_admin';
+      const requestedInterval = Number(body.expectedIntervalSeconds || 60);
+      const expectedIntervalSeconds = Number.isFinite(requestedInterval)
+        ? Math.max(60, Math.min(requestedInterval, 300))
+        : 60;
+      await updateSyncState(admin, {
+        sync_origin: syncOrigin,
+        scheduler_interval_seconds: expectedIntervalSeconds,
+        next_run_at: new Date(Date.now() + expectedIntervalSeconds * 1000).toISOString(),
+      });
     }
 
     stage = 'init-session';
@@ -729,6 +771,9 @@ Deno.serve(async (request) => {
         locked_until: null,
         last_success_at: new Date().toISOString(),
         last_records_processed: matchingIds.length,
+        last_records_changed: matchingIds.length,
+        last_duration_ms: Date.now() - startedAt,
+        last_error_at: null,
         last_error: null,
       });
       await logSync(admin, 'info', 'Cache do grupo técnico e nomes normalizado.', matchingIds.length);
@@ -823,6 +868,9 @@ Deno.serve(async (request) => {
       last_success_at: new Date().toISOString(),
       last_cursor: cursor,
       last_records_processed: mapped.length,
+      last_records_changed: mapped.length,
+      last_duration_ms: Date.now() - startedAt,
+      last_error_at: null,
       last_error: null,
     });
     stage = 'write-sync-log';
@@ -838,7 +886,8 @@ Deno.serve(async (request) => {
         locked_until: null,
         last_error_at: new Date().toISOString(),
         last_error: message,
-      });
+        last_duration_ms: Date.now() - startedAt,
+      }, false);
     }
     await logSync(admin, 'erro', 'Falha na sincronização com o GLPI.', 0, message);
     console.error('glpi-dashboard failed:', message);
