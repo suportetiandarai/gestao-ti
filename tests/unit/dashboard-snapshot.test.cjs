@@ -62,7 +62,7 @@ test('snapshot usa o plantão 07:00–19:00 em America/Sao_Paulo', () => {
   assert.equal(shift.end.toISOString(), '2026-07-27T22:00:00.000Z');
 });
 
-test('snapshot contém cinco indicadores, gráfico por solucionador e somente dez chamados', () => {
+test('snapshot contém cinco indicadores, gráfico e todos os chamados abertos no plantão', () => {
   const tickets = [
     ticket(1),
     ticket(2, { status_id: 1, status: 'Novo', technician_id: null, technician_name: null }),
@@ -104,7 +104,11 @@ test('snapshot contém cinco indicadores, gráfico por solucionador e somente de
   assert.equal(snapshot.waiting_count, 1);
   assert.equal(snapshot.pending_count, 1);
   assert.equal(snapshot.overdue_count, 1);
-  assert.equal(snapshot.latest_tickets_json.length, 10);
+  assert.equal(snapshot.shift_tickets_json.length, 15);
+  assert.deepEqual(
+    new Set(snapshot.shift_tickets_json.map(({ id }) => id)),
+    new Set([1, 2, 3, 4, 5, ...Array.from({ length: 10 }, (_, index) => 100 + index)]),
+  );
   assert.deepEqual(snapshot.technicians_chart_json, [{
     technician_id: 20,
     label: 'VINICIUS SILVA',

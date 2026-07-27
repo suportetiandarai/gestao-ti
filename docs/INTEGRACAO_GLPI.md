@@ -248,7 +248,7 @@ somente `scope='daily_public'` em `gestao_ti_dashboard_snapshot`.
 
 O snapshot é gerado pela função protegida `glpi-dashboard` somente depois que
 cache, relações e agregados foram gravados. Ele contém cinco contagens, gráfico,
-metadados do plantão e no máximo dez chamados. Não contém `raw_payload`,
+metadados do plantão e todos os chamados abertos dentro do plantão atual. Não contém `raw_payload`,
 solicitante, descrição, tokens, logs ou configurações. Configure:
 
 ```env

@@ -66,8 +66,8 @@
 - A lista exibe somente número, título autorizado, status, técnico, hora, categoria e unidade autorizadas.
 - Solicitante, e-mail, telefone, descrição, acompanhamentos, dados clínicos e demais dados sensíveis não são renderizados.
 - O Dashboard Diário oferece modo painel e tela cheia sem alterar o plantão ou o intervalo de sincronização. A rota pública `/dashboard-diario` fica travada no Diário e recebe somente campos operacionais sanitizados pela Edge Function.
-- A quantidade de chamados recentes é configurada na área administrativa; o padrão é 10.
-- No painel público o limite é aplicado no back-end e nunca excede 10 registros.
+- A listagem contém todos os chamados cuja abertura ocorreu dentro do plantão
+  atual, sem incluir chamados de plantões anteriores ou posteriores.
 
 Valores indisponíveis são exibidos como “Não disponível” e não entram em médias.
 

@@ -86,7 +86,7 @@ Supabase Cron (1 min)
     -> paginação + retry controlado + timeout
     -> upsert glpi_tickets_dashboard
     -> upsert glpi_ticket_assignments_dashboard (par chamado/técnico)
-    -> gera gestao_ti_dashboard_snapshot (grupo + plantão, no máximo 10 tickets)
+    -> gera gestao_ti_dashboard_snapshot (todos os tickets abertos no plantão)
     -> cursor/saúde/log em PostgreSQL
 Navegador (30 s)
   -> GET glpi-dashboard-public

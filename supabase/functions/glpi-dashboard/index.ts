@@ -226,7 +226,7 @@ async function refreshDashboardSnapshot(
       ...(activeTickets || []).map((ticket: JsonRecord) => numberOrNull(ticket.glpi_id)),
       ...(shiftTickets || []).map((ticket: JsonRecord) => numberOrNull(ticket.glpi_id)),
     ].filter(Boolean)).size,
-    publicRows: snapshot.latest_tickets_json.length,
+    publicRows: snapshot.shift_tickets_json.length,
   };
 }
 

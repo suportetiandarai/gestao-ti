@@ -7,18 +7,10 @@ export type SnapshotTicket = {
   status_id: number;
   technician_id: number | null;
   technician_name: string | null;
-  group_id: number;
   opened_at: string;
   assigned_at: string | null;
-  first_response_at: string | null;
   solved_at: string | null;
   closed_at: string | null;
-  sla_due_at: string | null;
-  attention_due_at: string | null;
-  internal_sla_due_at: string | null;
-  internal_attention_due_at: string | null;
-  solution_technician_id: number | null;
-  solution_technician_name: string | null;
   is_pending: boolean;
   is_overdue: boolean;
   is_resolved: boolean;
@@ -36,7 +28,7 @@ export type DashboardSnapshot = {
   pending_count: number;
   overdue_count: number;
   technicians_chart_json: Array<{ technician_id: number; label: string; value: number }>;
-  latest_tickets_json: SnapshotTicket[];
+  shift_tickets_json: SnapshotTicket[];
   integration_status: 'online';
   last_synced_at: string;
 };
@@ -185,18 +177,10 @@ function publicTicket(ticket: JsonRecord, reference: Date): SnapshotTicket | nul
     status_id: statusId,
     technician_id: number(ticket.technician_id),
     technician_name: text(ticket.technician_name),
-    group_id: groupId,
     opened_at: openedAt.toISOString(),
     assigned_at: date(ticket.assigned_at)?.toISOString() || null,
-    first_response_at: date(ticket.first_response_at)?.toISOString() || null,
     solved_at: date(ticket.solved_at)?.toISOString() || null,
     closed_at: date(ticket.closed_at)?.toISOString() || null,
-    sla_due_at: date(ticket.sla_due_at)?.toISOString() || null,
-    attention_due_at: date(ticket.attention_due_at)?.toISOString() || null,
-    internal_sla_due_at: date(ticket.internal_sla_due_at)?.toISOString() || null,
-    internal_attention_due_at: date(ticket.internal_attention_due_at)?.toISOString() || null,
-    solution_technician_id: number(ticket.solving_technician_id),
-    solution_technician_name: text(ticket.solving_technician_name),
     is_pending: flags.isPending,
     is_overdue: flags.isOverdue,
     is_resolved: flags.isResolved,
@@ -242,8 +226,7 @@ export function buildDashboardSnapshot(
       value: (current?.value || 0) + 1,
     });
   });
-  const latestTickets = operationalSort(openedInShift, reference)
-    .slice(0, 10)
+  const shiftTickets = operationalSort(openedInShift, reference)
     .map((ticket) => publicTicket(ticket, reference))
     .filter((ticket): ticket is SnapshotTicket => Boolean(ticket));
   return {
@@ -262,7 +245,7 @@ export function buildDashboardSnapshot(
         right.value - left.value
         || left.label.localeCompare(right.label)
         || left.technician_id - right.technician_id),
-    latest_tickets_json: latestTickets,
+    shift_tickets_json: shiftTickets,
     integration_status: 'online',
     last_synced_at: syncedAt,
   };

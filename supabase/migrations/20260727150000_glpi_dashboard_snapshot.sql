@@ -14,7 +14,7 @@ create table if not exists public.gestao_ti_dashboard_snapshot (
   pending_count integer not null default 0 check (pending_count >= 0),
   overdue_count integer not null default 0 check (overdue_count >= 0),
   technicians_chart_json jsonb not null default '[]'::jsonb,
-  latest_tickets_json jsonb not null default '[]'::jsonb,
+  shift_tickets_json jsonb not null default '[]'::jsonb,
   snapshot_hash text not null,
   snapshot_version bigint not null default 1 check (snapshot_version > 0),
   integration_status text not null default 'offline'
@@ -24,8 +24,7 @@ create table if not exists public.gestao_ti_dashboard_snapshot (
   updated_at timestamptz not null default now(),
   unique (scope, group_id),
   check (jsonb_typeof(technicians_chart_json) = 'array'),
-  check (jsonb_typeof(latest_tickets_json) = 'array'),
-  check (jsonb_array_length(latest_tickets_json) <= 10)
+  check (jsonb_typeof(shift_tickets_json) = 'array')
 );
 
 alter table public.gestao_ti_dashboard_snapshot enable row level security;

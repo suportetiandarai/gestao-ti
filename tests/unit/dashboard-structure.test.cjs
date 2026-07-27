@@ -222,10 +222,12 @@ test('Edge Function aceita chamada operacional validada pelo gateway sem liberar
   assert.match(edgeSource, /Acesso restrito a administradores e gestores/);
 });
 
-test('snapshot público limita a leitura a uma linha, possui ETag e não carrega payload bruto', () => {
+test('snapshot público lê uma linha com todos os chamados do plantão, possui ETag e não carrega payload bruto', () => {
   assert.match(snapshotMigration, /create table if not exists public\.gestao_ti_dashboard_snapshot/i);
   assert.match(snapshotMigration, /unique \(scope, group_id\)/i);
-  assert.match(snapshotMigration, /jsonb_array_length\(latest_tickets_json\) <= 10/i);
+  assert.doesNotMatch(snapshotMigration, /jsonb_array_length\(shift_tickets_json\)\s*<=/i);
+  assert.doesNotMatch(snapshotSource, /operationalSort\(openedInShift[\s\S]{0,120}\.slice\(/);
+  assert.doesNotMatch(source, /createdInShift\.slice\(0,\s*10\)/);
   assert.match(snapshotMigration, /enable row level security/i);
   assert.match(snapshotMigration, /to anon[\s\S]*scope = 'daily_public'/i);
   assert.match(publicEdgeSource, /\.maybeSingle\(\)/);

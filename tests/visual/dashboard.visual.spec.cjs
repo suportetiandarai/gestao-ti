@@ -83,7 +83,7 @@ async function preparePublicDashboard(
         shiftType: 'Diurno',
         counts: { open: 6, inProgress: 2, waiting: 1, pending: 1, overdue: 1 },
         techniciansChart: [{ technician_id: 20, label: 'Técnico Teste', value: 2 }],
-        latestTickets: tickets,
+        shiftTickets: tickets,
         version: 1,
         lastSyncedAt: new Date(now).toISOString(),
         integrationStatus: 'online',

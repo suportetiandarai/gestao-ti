@@ -58,8 +58,7 @@
     });
     const DEFAULT_LOCAL_CONFIG = Object.freeze({
         integrationEnabled: true,
-        demoEnabled: false,
-        dailyRecentLimit: 10
+        demoEnabled: false
     });
 
     function esc(value) {
@@ -409,7 +408,7 @@
             const snapshot = data.snapshot;
             if (!snapshot) throw new Error('Snapshot público ainda não foi gerado.');
             state.dailySnapshot = snapshot;
-            state.tickets = (snapshot.latestTickets || []).map(normalizeTicket);
+            state.tickets = (snapshot.shiftTickets || []).map(normalizeTicket);
             state.dailyAssignments = [];
             state.integrationState = {
                 status: snapshot.integrationStatus || data.status || 'offline',
@@ -763,9 +762,8 @@
 
         const reference = new Date();
         const recent = snapshot
-            ? createdInShift.slice(0, 10)
-            : CORE.sortDailyDashboardTickets(createdInShift, reference)
-                .slice(0, Number(state.localConfig.dailyRecentLimit) || 10);
+            ? createdInShift
+            : CORE.sortDailyDashboardTickets(createdInShift, reference);
         getField('glpi-daily-recent').innerHTML = recent.length ? `
             <div class="glpi-daily-ticket glpi-daily-ticket-head" aria-hidden="true">
                 <strong>Chamado</strong><span>Título</span><span>Status</span><span>Técnico</span><span>Abertura</span>
@@ -999,12 +997,10 @@
         const techMode = getField('glpi-public-tech-mode');
         const integrationEnabled = getField('glpi-integration-enabled');
         const demoEnabled = getField('glpi-demo-enabled');
-        const dailyRecentLimit = getField('glpi-daily-recent-limit');
         if (publicEnabled) publicEnabled.value = String(Boolean(state.publicConfig.enabled));
         if (techMode) techMode.value = state.publicConfig.techMode || 'first';
         if (integrationEnabled) integrationEnabled.value = String(state.localConfig.integrationEnabled !== false);
         if (demoEnabled) demoEnabled.value = String(Boolean(state.localConfig.demoEnabled));
-        if (dailyRecentLimit) dailyRecentLimit.value = String(Number(state.localConfig.dailyRecentLimit) || 10);
 
         [
             ['glpi-public-show-title', 'showTitle'],
@@ -1391,8 +1387,7 @@
     window.glpiSalvarConfiguracaoLocal = function () {
         state.localConfig = {
             integrationEnabled: getField('glpi-integration-enabled')?.value !== 'false',
-            demoEnabled: getField('glpi-demo-enabled')?.value === 'true',
-            dailyRecentLimit: Number(getField('glpi-daily-recent-limit')?.value || 10)
+            demoEnabled: getField('glpi-demo-enabled')?.value === 'true'
         };
         saveJsonStorage('glpiDashboardLocalConfig', state.localConfig);
         mostrarAviso('Configuração local salva.', 'sucesso');
