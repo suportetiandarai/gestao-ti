@@ -1,4 +1,10 @@
 import { createClient } from 'npm:@supabase/supabase-js@2';
+import {
+  buildDashboardSnapshot,
+  currentShiftWindow,
+  SNAPSHOT_TICKET_COLUMNS,
+  snapshotHash,
+} from '../_shared/dashboard-snapshot.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -126,50 +132,6 @@ function priorityName(value: unknown) {
   return map[Number(value)] || label(value);
 }
 
-function sanitizePublicText(value: unknown) {
-  return String(value || '')
-    .replace(/(?:&#0*62;?|&gt;)/gi, '')
-    .split('')
-    .map((character) => {
-      const code = character.charCodeAt(0);
-      return code < 32 || code === 127 ? ' ' : character;
-    })
-    .join('')
-    .replace(/\s+/g, ' ')
-    .trim();
-}
-
-function publicDashboardTicket(ticket: JsonRecord) {
-  const raw = ticket.raw_payload && typeof ticket.raw_payload === 'object'
-    ? ticket.raw_payload as JsonRecord
-    : {};
-  const solution = raw._dashboard_solution_technician
-    && typeof raw._dashboard_solution_technician === 'object'
-    ? raw._dashboard_solution_technician as JsonRecord
-    : {};
-  return {
-    glpi_id: numberOrNull(ticket.glpi_id),
-    title: sanitizePublicText(ticket.title || raw.name || raw.title),
-    status_id: numberOrNull(ticket.status_id),
-    status: statusName(ticket.status_id || ticket.status),
-    technician_id: numberOrNull(ticket.technician_id),
-    technician_name: label(ticket.technician_name),
-    group_id: numberOrNull(ticket.group_id),
-    group_name: label(ticket.group_name),
-    opened_at: normalizeDate(ticket.opened_at),
-    assigned_at: normalizeDate(ticket.assigned_at),
-    solved_at: normalizeDate(ticket.solved_at),
-    closed_at: normalizeDate(ticket.closed_at),
-    sla_due_at: normalizeDate(ticket.sla_due_at),
-    attention_due_at: normalizeDate(ticket.attention_due_at),
-    internal_sla_due_at: normalizeDate(ticket.internal_sla_due_at),
-    internal_attention_due_at: normalizeDate(ticket.internal_attention_due_at),
-    solution_technician_id: numberOrNull(solution.id),
-    solution_technician_name: label(solution.name),
-    source_environment: 'real',
-  };
-}
-
 function slaStatus(ticket: JsonRecord) {
   const due = normalizeDate(ticket.time_to_resolve || ticket.sla_due_at);
   if (!due) return 'unavailable';
@@ -195,6 +157,77 @@ async function updateSyncState(client: ReturnType<typeof createClient>, values: 
   if (!error) return;
   if (strict) throw error;
   console.warn('Falha ao atualizar estado da sincronização:', safeError(error));
+}
+
+async function refreshDashboardSnapshot(
+  client: ReturnType<typeof createClient>,
+  groupId: number,
+  syncedAt: string,
+) {
+  const reference = new Date(syncedAt);
+  const shift = currentShiftWindow(reference);
+  const activeRequest = client
+    .from('glpi_tickets_dashboard')
+    .select(SNAPSHOT_TICKET_COLUMNS)
+    .eq('group_id', groupId)
+    .in('status_id', [1, 2, 3, 4])
+    .limit(5000);
+  const shiftRequest = client
+    .from('glpi_tickets_dashboard')
+    .select(SNAPSHOT_TICKET_COLUMNS)
+    .eq('group_id', groupId)
+    .or([
+      `and(opened_at.gte.${shift.start.toISOString()},opened_at.lt.${shift.end.toISOString()})`,
+      `and(solved_at.gte.${shift.start.toISOString()},solved_at.lt.${shift.end.toISOString()})`,
+    ].join(','))
+    .limit(5000);
+  const [
+    { data: activeTickets, error: activeError },
+    { data: shiftTickets, error: shiftError },
+    { data: previous, error: previousError },
+  ] = await Promise.all([
+    activeRequest,
+    shiftRequest,
+    client
+      .from('gestao_ti_dashboard_snapshot')
+      .select('snapshot_hash,snapshot_version')
+      .eq('scope', 'daily_public')
+      .eq('group_id', groupId)
+      .maybeSingle(),
+  ]);
+  if (activeError) throw activeError;
+  if (shiftError) throw shiftError;
+  if (previousError) throw previousError;
+
+  const snapshot = buildDashboardSnapshot(
+    [...(activeTickets || []), ...(shiftTickets || [])],
+    groupId,
+    syncedAt,
+    reference,
+  );
+  const hash = await snapshotHash(snapshot);
+  const previousVersion = Number(previous?.snapshot_version) || 0;
+  const version = previous?.snapshot_hash === hash
+    ? Math.max(previousVersion, 1)
+    : previousVersion + 1;
+  const { error: upsertError } = await client
+    .from('gestao_ti_dashboard_snapshot')
+    .upsert({
+      ...snapshot,
+      snapshot_hash: hash,
+      snapshot_version: version,
+      updated_at: syncedAt,
+    }, { onConflict: 'scope,group_id' });
+  if (upsertError) throw upsertError;
+  return {
+    version,
+    hash,
+    sourceRows: new Set([
+      ...(activeTickets || []).map((ticket: JsonRecord) => numberOrNull(ticket.glpi_id)),
+      ...(shiftTickets || []).map((ticket: JsonRecord) => numberOrNull(ticket.glpi_id)),
+    ].filter(Boolean)).size,
+    publicRows: snapshot.latest_tickets_json.length,
+  };
 }
 
 class GlpiClient {
@@ -531,6 +564,10 @@ class GlpiClient {
 function mapTicket(ticket: JsonRecord) {
   const id = numberOrNull(ticket.id);
   const base = env('GLPI_BASE_URL').replace(/\/+$/, '');
+  const solutionTechnician = ticket._dashboard_solution_technician
+    && typeof ticket._dashboard_solution_technician === 'object'
+    ? ticket._dashboard_solution_technician as JsonRecord
+    : {};
   return {
     glpi_id: id,
     title: label(ticket.name),
@@ -567,6 +604,8 @@ function mapTicket(ticket: JsonRecord) {
     attention_due_at: normalizeDate(ticket.time_to_own),
     internal_sla_due_at: normalizeDate(ticket.internal_time_to_resolve),
     internal_attention_due_at: normalizeDate(ticket.internal_time_to_own),
+    solving_technician_id: numberOrNull(solutionTechnician.id),
+    solving_technician_name: label(solutionTechnician.name),
     sla_status: slaStatus(ticket),
     pending_reason: label(ticket.pending_reason),
     glpi_url: id ? `${base}/front/ticket.form.php?id=${id}` : null,
@@ -620,33 +659,6 @@ Deno.serve(async (request) => {
     trustedOperationalCall = token === serviceKey || ['service_role', 'postgres'].includes(operationalRole);
     const body = await request.json().catch(() => ({})) as JsonRecord;
     action = String(body.action || '');
-
-    if (action === 'public-dashboard') {
-      if (env('PUBLIC_DASHBOARD_ENABLED') !== 'true') return json({ error: 'Dashboard público indisponível.' }, 404);
-      const groupId = numberOrNull(env('GLPI_TECH_GROUP_ID'));
-      if (!groupId) return json({ error: 'Grupo técnico público não configurado.' }, 503);
-      const [{ data: tickets, error: ticketsError }, { data: integrationState, error: stateError }] = await Promise.all([
-        admin
-          .from('glpi_tickets_dashboard')
-          .select('glpi_id,title,status_id,status,technician_id,technician_name,group_id,group_name,opened_at,assigned_at,solved_at,closed_at,sla_due_at,attention_due_at,internal_sla_due_at,internal_attention_due_at,raw_payload')
-          .eq('group_id', groupId)
-          .order('opened_at', { ascending: false })
-          .limit(2000),
-        admin
-          .from('glpi_sync_state')
-          .select('status,last_started_at,last_success_at,last_error_at,last_duration_ms,last_records_processed,last_records_changed,sync_origin,next_run_at,scheduler_interval_seconds,updated_at')
-          .eq('id', 1)
-          .maybeSingle(),
-      ]);
-      if (ticketsError) throw ticketsError;
-      if (stateError) throw stateError;
-      return json({
-        ok: true,
-        tickets: (tickets || []).map((ticket: JsonRecord) => publicDashboardTicket(ticket)),
-        integrationState: integrationState || { status: 'offline' },
-        checkedAt: new Date().toISOString(),
-      });
-    }
 
     if (!trustedOperationalCall) {
       const { data: { user }, error: userError } = await admin.auth.getUser(token);
@@ -766,10 +778,13 @@ Deno.serve(async (request) => {
         if (ticketError) throw ticketError;
         if (assignmentError) throw assignmentError;
       }
+      stage = 'refresh-dashboard-snapshot';
+      const syncedAt = new Date().toISOString();
+      const snapshot = await refreshDashboardSnapshot(admin, technicalGroup.id, syncedAt);
       await updateSyncState(admin, {
         status: 'online',
         locked_until: null,
-        last_success_at: new Date().toISOString(),
+        last_success_at: syncedAt,
         last_records_processed: matchingIds.length,
         last_records_changed: matchingIds.length,
         last_duration_ms: Date.now() - startedAt,
@@ -783,6 +798,7 @@ Deno.serve(async (request) => {
         groupTicketsFound: groupTicketIds.size,
         cacheTicketsMatched: matchingIds.length,
         techniciansNormalized: technicianIds.length,
+        snapshot,
         elapsedMs: Date.now() - startedAt,
       });
     }
@@ -861,11 +877,14 @@ Deno.serve(async (request) => {
       if (!ticket.modified_at) return latest;
       return !latest || ticket.modified_at > latest ? ticket.modified_at : latest;
     }, previousCursor);
+    stage = 'refresh-dashboard-snapshot';
+    const syncedAt = new Date().toISOString();
+    const snapshot = await refreshDashboardSnapshot(admin, technicalGroup.id, syncedAt);
     stage = 'update-sync-state';
     await updateSyncState(admin, {
       status: 'online',
       locked_until: null,
-      last_success_at: new Date().toISOString(),
+      last_success_at: syncedAt,
       last_cursor: cursor,
       last_records_processed: mapped.length,
       last_records_changed: mapped.length,
@@ -877,7 +896,17 @@ Deno.serve(async (request) => {
     await logSync(admin, 'info', action === 'sync-current-shift'
       ? 'Sincronização do período operacional concluída.'
       : 'Sincronização incremental concluída.', mapped.length, '', cursor);
-    return json({ ok: true, records: mapped.length, lastCursor: cursor, elapsedMs: Date.now() - startedAt });
+    return json({
+      ok: true,
+      records: mapped.length,
+      lastCursor: cursor,
+      snapshot: {
+        version: snapshot.version,
+        sourceRows: snapshot.sourceRows,
+        publicRows: snapshot.publicRows,
+      },
+      elapsedMs: Date.now() - startedAt,
+    });
   } catch (error) {
     const message = safeError(error);
     if (lockAcquired || ['sync-incremental', 'sync-current-shift', 'backfill-group-cache'].includes(action)) {

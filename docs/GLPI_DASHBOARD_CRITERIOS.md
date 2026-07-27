@@ -9,7 +9,9 @@
 - Alternativa suportada: login e senha via Basic Auth, somente se autorizado.
 - OAuth: não adotado para o MVP em GLPI 10.0.18.
 - Permissões do usuário de API: somente leitura para chamados, usuários, grupos, categorias, entidades, localizações, SLAs e relacionamentos de chamados.
-- Consumo de dados: o front-end consulta o cache próprio em PostgreSQL/Supabase. O GLPI é acessado apenas pela Edge Function.
+- Consumo de dados: o Dashboard Geral consulta o cache próprio; o Diário público
+  consulta uma única linha sanitizada em `gestao_ti_dashboard_snapshot`. O GLPI
+  é acessado apenas pela Edge Function protegida de sincronização.
 - Atualização: sincronização incremental por data de modificação, paginação e cache. O Dashboard Diário usa intervalo fixado por padrão em 30 segundos, sem recarregar a página.
 
 ## Endpoints GLPI usados
@@ -65,12 +67,14 @@
 - Solicitante, e-mail, telefone, descrição, acompanhamentos, dados clínicos e demais dados sensíveis não são renderizados.
 - O Dashboard Diário oferece modo painel e tela cheia sem alterar o plantão ou o intervalo de sincronização. A rota pública `/dashboard-diario` fica travada no Diário e recebe somente campos operacionais sanitizados pela Edge Function.
 - A quantidade de chamados recentes é configurada na área administrativa; o padrão é 10.
+- No painel público o limite é aplicado no back-end e nunca excede 10 registros.
 
 Valores indisponíveis são exibidos como “Não disponível” e não entram em médias.
 
 ## Sincronização e disponibilidade
 
-- O navegador nunca consulta o GLPI diretamente; lê o cache Supabase.
+- O navegador nunca consulta o GLPI diretamente. A rota pública lê somente o
+  snapshot pronto, sem `raw_payload` e sem recalcular indicadores.
 - O Supabase Cron executa uma sincronização centralizada por minuto. A leitura
   visual continua em 30 segundos e não dispara o GLPI.
 - A Edge Function usa cursor persistente por `date_mod`, paginação, timeout e retry limitado.
@@ -80,6 +84,9 @@ Valores indisponíveis são exibidos como “Não disponível” e não entram e
 - `glpi_sync_state` bloqueia execuções concorrentes e registra `online`, `syncing`, `delayed` ou `offline`.
 - Os últimos dados válidos permanecem visíveis em falhas de rede ou GLPI.
 - A atualização visual do Dashboard Diário continua fixa em 30 segundos.
+- A rota pública envia `If-None-Match`; conteúdo inalterado retorna `304` sem
+  corpo. Respostas `200` usam `Cache-Control: public, max-age=15,
+  stale-while-revalidate=45`.
 - A cada atualização, o intervalo é recalculado; assim, a virada de plantão ocorre automaticamente sem recarregar a página.
 
 ## Tempos operacionais

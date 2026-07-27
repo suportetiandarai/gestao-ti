@@ -54,7 +54,7 @@ O Dashboard Diário contém exatamente cinco indicadores, um gráfico e uma list
 6. Chamados resolvidos por técnico no plantão;
 7. Últimos chamados registrados.
 
-Ele relê o cache a cada 30 segundos sem recarregar a página. A sincronização com
+Ele verifica um snapshot sanitizado a cada 30 segundos sem recarregar a página. A sincronização com
 o GLPI é executada uma vez por minuto pelo Supabase Cron, independentemente de
 navegador ou sessão, e usa lock atômico para evitar concorrência.
 
@@ -63,9 +63,11 @@ e noturno das 19:00 às 07:00. O Diário exibe exclusivamente chamados vinculado
 ao grupo técnico real `SUPORTE TI` (ID `1`). O Diário e o Geral oferecem modo
 painel e tela cheia sem recarregar a página.
 
-A rota `/dashboard-diario` abre somente o Diário sem login. Ela não concede
-acesso direto ao banco: usa a ação sanitizada `public-dashboard` da Edge
-Function, habilitada por `PUBLIC_DASHBOARD_ENABLED=true`. O payload público inclui
+A rota `/dashboard-diario` abre somente o Diário sem login. Ela usa a Edge
+Function dedicada e somente leitura `glpi-dashboard-public`, habilitada por
+`PUBLIC_DASHBOARD_ENABLED=true`. A função lê uma única linha protegida por RLS
+em `gestao_ti_dashboard_snapshot`; não acessa GLPI, cache bruto ou service role.
+O payload público inclui
 o título operacional e o nome completo do técnico, sem solicitante, descrições,
 acompanhamentos, contatos ou dados administrativos.
 
@@ -84,9 +86,12 @@ Supabase Cron (1 min)
     -> paginação + retry controlado + timeout
     -> upsert glpi_tickets_dashboard
     -> upsert glpi_ticket_assignments_dashboard (par chamado/técnico)
+    -> gera gestao_ti_dashboard_snapshot (grupo + plantão, no máximo 10 tickets)
     -> cursor/saúde/log em PostgreSQL
 Navegador (30 s)
-  -> lê somente o cache; não inicia sincronização automática
+  -> GET glpi-dashboard-public
+  -> If-None-Match/ETag: 304 sem corpo quando nada mudou
+  -> lê uma linha de snapshot; não inicia sincronização automática
 ```
 
 O estado é apresentado como `online`, `atrasado`, `sincronizando` ou `offline`. Falhas preservam os últimos chamados válidos.
@@ -110,10 +115,11 @@ Quando a rede não permitir a conexão PostgreSQL do CLI, execute
 Editor descrito em `docs/INTEGRACAO_GLPI.md`. Esse caminho exige reconciliar o
 histórico de migrações antes do próximo `db push`.
 
-Publique a função:
+Depois de aplicar a migração do snapshot, publique as duas funções:
 
 ```bash
 npx supabase functions deploy glpi-dashboard
+npx supabase functions deploy glpi-dashboard-public
 ```
 
 Configure secrets sem gravar valores no repositório. Preencha localmente

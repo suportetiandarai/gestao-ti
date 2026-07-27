@@ -38,6 +38,8 @@
         panelMode: false,
         menuCollapsedBeforePanel: null,
         publicMode: false,
+        dailySnapshot: null,
+        publicSnapshotEtag: '',
         serverTimeOffsetMs: 0,
         serverTimeVerified: false,
         publicConfig: {},
@@ -78,19 +80,32 @@
     async function fetchPublicDashboard() {
         const { url, publicKey } = publicSupabaseConfig();
         if (!url || !publicKey) throw new Error('Back-end público não configurado.');
-        const response = await fetch(`${url}/functions/v1/glpi-dashboard`, {
-            method: 'POST',
+        const headers = {
+            apikey: publicKey,
+            Authorization: `Bearer ${publicKey}`
+        };
+        if (state.publicSnapshotEtag) headers['If-None-Match'] = state.publicSnapshotEtag;
+        const response = await fetch(`${url}/functions/v1/glpi-dashboard-public`, {
+            method: 'GET',
             headers: {
-                apikey: publicKey,
-                Authorization: `Bearer ${publicKey}`,
-                'Content-Type': 'application/json'
+                ...headers
             },
-            body: JSON.stringify({ action: 'public-dashboard' }),
-            cache: 'no-store'
+            cache: 'no-cache'
         });
+        const metadata = {
+            etag: response.headers.get('ETag') || state.publicSnapshotEtag,
+            checkedAt: response.headers.get('X-Snapshot-Checked-At'),
+            syncedAt: response.headers.get('X-Snapshot-Synced-At'),
+            status: response.headers.get('X-Snapshot-Status')
+        };
+        if (response.status === 304) return { notModified: true, ...metadata };
         const data = await response.json().catch(() => ({}));
-        if (!response.ok || !data?.ok) throw new Error('Dashboard público indisponível.');
-        return data;
+        if (!response.ok || !data?.ok) {
+            throw new Error(data?.state === 'not_ready'
+                ? 'Dados ainda não sincronizados.'
+                : 'Dashboard público indisponível.');
+        }
+        return { ...data, ...metadata, notModified: false };
     }
 
     function safeExternalUrl(value) {
@@ -260,6 +275,9 @@
             currentTechnicianCount: currentTechnicians.length,
             solutionTechnician: solutionTechnician.name || null,
             solutionTechnicianId: Number(solutionTechnician.id) || null,
+            snapshotIsPending: typeof row.is_pending === 'boolean' ? row.is_pending : null,
+            snapshotIsOverdue: typeof row.is_overdue === 'boolean' ? row.is_overdue : null,
+            snapshotIsResolved: typeof row.is_resolved === 'boolean' ? row.is_resolved : null,
             group: row.group_name || row.group || 'Não disponível',
             groupId: Number(row.group_id) || null,
             technicalGroupIds: technicalGroups.map(group => Number(group.id)).filter(Number.isFinite),
@@ -379,11 +397,26 @@
                 state.serverTimeOffsetMs = checkedAt.getTime() - Date.now();
                 state.serverTimeVerified = true;
             }
-            state.tickets = (data.tickets || []).map(normalizeTicket);
+            if (data.etag) state.publicSnapshotEtag = data.etag;
+            if (data.notModified) {
+                state.integrationState = {
+                    ...(state.integrationState || {}),
+                    status: data.status || state.integrationState?.status || 'offline',
+                    last_success_at: data.syncedAt || state.integrationState?.last_success_at || null
+                };
+                return false;
+            }
+            const snapshot = data.snapshot;
+            if (!snapshot) throw new Error('Snapshot público ainda não foi gerado.');
+            state.dailySnapshot = snapshot;
+            state.tickets = (snapshot.latestTickets || []).map(normalizeTicket);
             state.dailyAssignments = [];
-            state.integrationState = data.integrationState || { status: 'offline' };
+            state.integrationState = {
+                status: snapshot.integrationStatus || data.status || 'offline',
+                last_success_at: snapshot.lastSyncedAt || data.syncedAt || null
+            };
             state.syncLogs = [];
-            return;
+            return true;
         }
 
         if (state.localConfig.demoEnabled) {
@@ -629,8 +662,10 @@
             if (element.dataset.timeKind !== 'total') return;
             const solvedLabel = element.querySelector('.ticket-solved-label');
             const overdueLabel = element.querySelector('.ticket-overdue-label');
-            const flags = CORE.calculateTicketFlags(ticket, reference);
-            if (flags.isOverdue) {
+            const isOverdue = state.publicMode && typeof ticket.snapshotIsOverdue === 'boolean'
+                ? ticket.snapshotIsOverdue
+                : CORE.calculateTicketFlags(ticket, reference).isOverdue;
+            if (isOverdue) {
                 solvedLabel?.remove();
                 if (overdueLabel) return;
                 const label = document.createElement('span');
@@ -664,7 +699,38 @@
 
     function renderDailyDashboard() {
         const groupId = 1;
-        const metrics = CORE.shiftMetrics(state.tickets, new Date(), groupId);
+        const snapshot = state.publicMode ? state.dailySnapshot : null;
+        if (state.publicMode && !snapshot) {
+            const shiftWindow = CORE.currentShift();
+            const shift = getField('glpi-current-shift');
+            if (shift) {
+                shift.innerHTML = `
+                    <strong>Plantão atual: ${esc(shiftWindow.type)} — ${esc(shiftWindow.label)}</strong>
+                    <span>${esc(formatDateTime(shiftWindow.start))} até ${esc(formatDateTime(shiftWindow.end))} • Grupo SUPORTE TI</span>
+                `;
+            }
+            getField('glpi-daily-kpis').innerHTML = [
+                ['Chamados abertos', 0, 'Dados ainda não sincronizados'],
+                ['Em atendimento', 0, 'Dados ainda não sincronizados'],
+                ['Aguardando atendimento', 0, 'Dados ainda não sincronizados'],
+                ['Chamados estourados', 0, 'Dados ainda não sincronizados'],
+                ['Pendentes', 0, 'Dados ainda não sincronizados']
+            ].map((card) => dailyCard(card)).join('');
+            renderBarChart('glpi-daily-technicians', []);
+            getField('glpi-daily-recent').innerHTML = '<p class="glpi-empty">Dados ainda não sincronizados.</p>';
+            return;
+        }
+        const metrics = snapshot ? {
+            type: snapshot.shiftType,
+            label: snapshot.shiftType === 'Diurno' ? '07:00 às 19:00' : '19:00 às 07:00',
+            start: parseDate(snapshot.shiftStart),
+            end: parseDate(snapshot.shiftEnd),
+            createdInShift: state.tickets,
+            inServiceNow: { length: Number(snapshot.counts?.inProgress) || 0 },
+            waitingNow: { length: Number(snapshot.counts?.waiting) || 0 },
+            pendingNow: { length: Number(snapshot.counts?.pending) || 0 },
+            breachedNow: { length: Number(snapshot.counts?.overdue) || 0 }
+        } : CORE.shiftMetrics(state.tickets, new Date(), groupId);
         const { createdInShift, inServiceNow, waitingNow, pendingNow, breachedNow } = metrics;
         const shift = getField('glpi-current-shift');
         if (shift) {
@@ -675,7 +741,7 @@
         }
 
         const cards = [
-            ['Chamados abertos', createdInShift.length, `${metrics.label} • SUPORTE TI`],
+            ['Chamados abertos', snapshot ? Number(snapshot.counts?.open) || 0 : createdInShift.length, `${metrics.label} • SUPORTE TI`],
             ['Em atendimento', inServiceNow.length, 'Não finalizados com técnico atribuído'],
             ['Aguardando atendimento', waitingNow.length, 'Não finalizados sem técnico atribuído'],
             ['Chamados estourados', breachedNow.length, 'Prazo real SLA/OLA ultrapassado'],
@@ -686,7 +752,9 @@
             .map((card) => dailyCard(card))
             .join('');
 
-        const techRows = CORE.technicianResolutionsInShift(state.tickets, new Date(), groupId);
+        const techRows = snapshot
+            ? (snapshot.techniciansChart || [])
+            : CORE.technicianResolutionsInShift(state.tickets, new Date(), groupId);
 
         renderBarChart('glpi-daily-technicians', techRows.map(tech => ({
             label: technicianDisplayName(tech.label),
@@ -694,8 +762,10 @@
         })), 20);
 
         const reference = new Date();
-        const recent = CORE.sortDailyDashboardTickets(createdInShift, reference)
-            .slice(0, Number(state.localConfig.dailyRecentLimit) || 10);
+        const recent = snapshot
+            ? createdInShift.slice(0, 10)
+            : CORE.sortDailyDashboardTickets(createdInShift, reference)
+                .slice(0, Number(state.localConfig.dailyRecentLimit) || 10);
         getField('glpi-daily-recent').innerHTML = recent.length ? `
             <div class="glpi-daily-ticket glpi-daily-ticket-head" aria-hidden="true">
                 <strong>Chamado</strong><span>Título</span><span>Status</span><span>Técnico</span><span>Abertura</span>
@@ -704,7 +774,7 @@
             ${recent.map(ticket => {
                 const visible = state.publicMode ? CORE.publicTicket(ticket, state.publicConfig) : ticket;
                 return `
-                <article class="glpi-daily-ticket" data-ticket-id="${esc(ticket.id)}" data-operational-priority="${CORE.dailyDashboardTicketPriority(ticket, reference)}">
+                <article class="glpi-daily-ticket" data-ticket-id="${esc(ticket.id)}" data-operational-priority="${snapshot ? (ticket.snapshotIsOverdue ? 1 : ticket.snapshotIsResolved ? 3 : 2) : CORE.dailyDashboardTicketPriority(ticket, reference)}">
                     <strong>#${esc(visible.id)}</strong>
                     <span data-label="Título">${esc(visible.title || `Chamado #${ticket.id}`)}</span>
                     <span data-label="Status">${esc(visible.status)}</span>
@@ -1038,11 +1108,12 @@
                 const { error } = await supabase.functions.invoke('glpi-dashboard', { body: { action: 'sync-incremental' } });
                 if (error) throw error;
             }
-            await loadTickets();
+            const changed = await loadTickets();
             state.lastUpdatedAt = new Date();
             if (state.subtab === 'diario') {
                 renderStatus();
-                renderDailyDashboard();
+                if (changed !== false) renderDailyDashboard();
+                else renderDailyTimers();
             } else {
                 populateFilters();
                 applyFilters();
@@ -1053,7 +1124,12 @@
             state.demo = false;
             state.integrationState = { ...(state.integrationState || {}), status: 'offline' };
             state.syncLogs.unshift({ level: 'erro', message: 'Falha na atualização. Os últimos dados válidos foram mantidos.', created_at: new Date().toISOString() });
-            mostrarAviso('Não foi possível atualizar agora. Mantive os últimos dados válidos.', 'aviso');
+            mostrarAviso(
+                error instanceof Error && error.message === 'Dados ainda não sincronizados.'
+                    ? error.message
+                    : 'Não foi possível atualizar agora. Mantive os últimos dados válidos.',
+                'aviso'
+            );
             renderAll();
             return false;
         } finally {

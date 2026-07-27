@@ -57,19 +57,37 @@ async function preparePublicDashboard(
     source_environment: 'real',
   };
   const tickets = [
-    { ...baseTicket, glpi_id: 9001, status_id: 1, status: 'Novo', technician_id: null, technician_name: null, assigned_at: null, solved_at: null, closed_at: null },
-    { ...baseTicket, glpi_id: 9002, status_id: 2, status: 'Atribuído', technician_id: 20, technician_name: 'VINICIUS SILVA PASCOAL MANOEL', assigned_at: new Date(now - 50000).toISOString(), solved_at: null, closed_at: null },
-    { ...baseTicket, glpi_id: 9003, status_id: 4, status: 'Pendente', technician_id: 20, technician_name: 'Técnico Teste', assigned_at: new Date(now - 50000).toISOString(), solved_at: null, closed_at: null, sla_due_at: new Date(now - 300000).toISOString() },
-    { ...baseTicket, glpi_id: 9004, status_id: 5, status: 'Solucionado', technician_id: 20, technician_name: 'Técnico Teste', assigned_at: new Date(now - 50000).toISOString(), solved_at: new Date(now - 30000).toISOString(), closed_at: null },
-    { ...baseTicket, glpi_id: 9005, status_id: 6, status: 'Fechado', technician_id: 20, technician_name: 'Técnico Teste', assigned_at: new Date(now - 50000).toISOString(), solved_at: new Date(now - 30000).toISOString(), closed_at: new Date(now - 10000).toISOString() },
-    { ...baseTicket, glpi_id: 9006, status_id: 2, status: 'Atribuído', technician_id: 21, technician_name: 'Técnico Atrasado', assigned_at: new Date(now - 60000).toISOString(), solved_at: null, closed_at: null, sla_due_at: new Date(now - 300000).toISOString() },
+    { ...baseTicket, id: 9006, status_id: 2, status: 'Atribuído', technician_id: 21, technician_name: 'Técnico Atrasado', assigned_at: new Date(now - 60000).toISOString(), solved_at: null, closed_at: null, sla_due_at: new Date(now - 300000).toISOString(), is_pending: false, is_overdue: true, is_resolved: false },
+    { ...baseTicket, id: 9001, status_id: 1, status: 'Novo', technician_id: null, technician_name: null, assigned_at: null, solved_at: null, closed_at: null, is_pending: false, is_overdue: false, is_resolved: false },
+    { ...baseTicket, id: 9002, status_id: 2, status: 'Atribuído', technician_id: 20, technician_name: 'VINICIUS SILVA PASCOAL MANOEL', assigned_at: new Date(now - 50000).toISOString(), solved_at: null, closed_at: null, is_pending: false, is_overdue: false, is_resolved: false },
+    { ...baseTicket, id: 9003, status_id: 4, status: 'Pendente', technician_id: 20, technician_name: 'Técnico Teste', assigned_at: new Date(now - 50000).toISOString(), solved_at: null, closed_at: null, sla_due_at: new Date(now - 300000).toISOString(), is_pending: true, is_overdue: false, is_resolved: false },
+    { ...baseTicket, id: 9004, status_id: 5, status: 'Solucionado', technician_id: 20, technician_name: 'Técnico Teste', assigned_at: new Date(now - 50000).toISOString(), solved_at: new Date(now - 30000).toISOString(), closed_at: null, is_pending: false, is_overdue: false, is_resolved: true },
+    { ...baseTicket, id: 9005, status_id: 6, status: 'Fechado', technician_id: 20, technician_name: 'Técnico Teste', assigned_at: new Date(now - 50000).toISOString(), solved_at: new Date(now - 30000).toISOString(), closed_at: new Date(now - 10000).toISOString(), is_pending: false, is_overdue: false, is_resolved: true },
   ];
-  await page.route('https://example.supabase.co/functions/v1/glpi-dashboard', (route) => route.fulfill({
+  await page.route('https://example.supabase.co/functions/v1/glpi-dashboard-public', (route) => route.fulfill({
     contentType: 'application/json',
+    headers: {
+      ETag: '"visual-snapshot"',
+      'Access-Control-Expose-Headers': 'ETag, X-Snapshot-Synced-At, X-Snapshot-Status, X-Snapshot-Checked-At',
+      'X-Snapshot-Synced-At': new Date(now).toISOString(),
+      'X-Snapshot-Status': 'online',
+      'X-Snapshot-Checked-At': new Date(now).toISOString(),
+    },
     body: JSON.stringify({
       ok: true,
-      tickets,
-      integrationState: { status: 'online', last_success_at: new Date(now).toISOString() },
+      snapshot: {
+        scope: 'daily_public',
+        groupId: 1,
+        shiftStart: new Date(now - 3600000).toISOString(),
+        shiftEnd: new Date(now + 3600000).toISOString(),
+        shiftType: 'Diurno',
+        counts: { open: 6, inProgress: 2, waiting: 1, pending: 1, overdue: 1 },
+        techniciansChart: [{ technician_id: 20, label: 'Técnico Teste', value: 2 }],
+        latestTickets: tickets,
+        version: 1,
+        lastSyncedAt: new Date(now).toISOString(),
+        integrationStatus: 'online',
+      },
       checkedAt: new Date(now).toISOString(),
     }),
   }));
@@ -276,6 +294,30 @@ test('entrada estática do GitHub Pages carrega a rota pública sem autenticaç�
   await expect(page.locator('.sidebar')).toBeHidden();
   await expect(page.locator('#glpi-daily-kpis .glpi-kpi')).toHaveCount(5);
   await expect(page.locator('meta[name="robots"]')).toHaveAttribute('content', /noindex/);
+});
+
+test('dashboard público envia ETag e preserva a tela ao receber 304', async ({ page }) => {
+  await preparePublicDashboard(page);
+  const initialCards = await page.locator('#glpi-daily-kpis').textContent();
+  let receivedEtag = '';
+  await page.unroute('https://example.supabase.co/functions/v1/glpi-dashboard-public');
+  await page.route('https://example.supabase.co/functions/v1/glpi-dashboard-public', (route) => {
+    receivedEtag = route.request().headers()['if-none-match'] || '';
+    return route.fulfill({
+      status: 304,
+      headers: {
+        ETag: '"visual-snapshot"',
+        'Access-Control-Expose-Headers': 'ETag, X-Snapshot-Synced-At, X-Snapshot-Status, X-Snapshot-Checked-At',
+        'X-Snapshot-Synced-At': new Date().toISOString(),
+        'X-Snapshot-Status': 'online',
+        'X-Snapshot-Checked-At': new Date().toISOString(),
+      },
+    });
+  });
+  await page.evaluate(() => window.glpiAtualizarAgora());
+  await expect.poll(() => receivedEtag).toBe('"visual-snapshot"');
+  await expect(page.locator('#glpi-daily-kpis')).toHaveText(initialCards);
+  await expect(page.getByText('Online • GLPI', { exact: true })).toBeVisible();
 });
 
 test('cards e fontes do Diário possuem aumento moderado', async ({ page }) => {
