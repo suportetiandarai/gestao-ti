@@ -1079,7 +1079,7 @@
         }
         state.initialized = true;
         loadLocalConfig();
-        await refreshData(canTriggerSync());
+        await refreshData(false);
         setDefaultPeriod();
         applyFilters();
         window.glpiAbrirSubaba(window.GESTAO_TI_PUBLIC_DASHBOARD ? 'diario' : state.subtab || 'diario');
@@ -1158,12 +1158,20 @@
 
     window.glpiAtualizarAgora = async function () {
         if (state.refreshing) return;
-        mostrarAviso('Atualizando dados do GLPI...', 'aviso');
-        const updated = await refreshData(canTriggerSync());
-        if (updated) mostrarAviso('Dashboard GLPI atualizado.', 'sucesso');
+        mostrarAviso('Atualizando dados do cache...', 'aviso');
+        const updated = await refreshData(false);
+        if (updated) mostrarAviso('Dashboard atualizado com o cache mais recente.', 'sucesso');
     };
 
-    window.glpiSincronizarAgora = window.glpiAtualizarAgora;
+    window.glpiSincronizarAgora = async function () {
+        if (!canTriggerSync()) {
+            mostrarAviso('Sincronização restrita a administradores e gestores.', 'aviso');
+            return;
+        }
+        mostrarAviso('Sincronizando dados do GLPI...', 'aviso');
+        const updated = await refreshData(true);
+        if (updated) mostrarAviso('Sincronização GLPI concluída.', 'sucesso');
+    };
 
     window.glpiAbrirSupabase = function () {
         const { projectRef } = publicSupabaseConfig();
@@ -1371,7 +1379,7 @@
         state.secondsToRefresh = Math.round(interval / 1000);
         state.refreshTimer = setInterval(() => {
             const aba = getField('aba-glpi');
-            if (aba && !aba.classList.contains('hidden')) refreshData(canTriggerSync());
+            if (aba && !aba.classList.contains('hidden')) refreshData(false);
         }, interval);
         state.countdownTimer = setInterval(() => {
             state.secondsToRefresh = state.secondsToRefresh <= 1 ? Math.round(interval / 1000) : state.secondsToRefresh - 1;

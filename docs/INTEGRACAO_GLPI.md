@@ -79,6 +79,7 @@ GLPI_REQUEST_TIMEOUT=15000
 GLPI_SYNC_PAGE_SIZE=100
 GLPI_SYNC_MAX_PAGES=10
 GLPI_SYNC_MODIFIED_AFTER=
+GLPI_SYNC_OVERLAP_SECONDS=120
 GLPI_SLA_WARNING_MINUTES=240
 GLPI_RETRY_ATTEMPTS=3
 GLPI_RETRY_BASE_DELAY_MS=300
@@ -213,14 +214,20 @@ status
 
 1. A Edge Function adquire `acquire_glpi_sync_lock`.
 2. Lê `glpi_sync_state.last_cursor`.
-3. Consulta páginas ordenadas por `date_mod DESC`.
-4. Para ao atingir registros anteriores ao cursor.
+3. Retrocede o cursor por `GLPI_SYNC_OVERLAP_SECONDS` (padrão 120 segundos).
+4. Consulta páginas ordenadas por `date_mod DESC` e para ao atingir registros anteriores à janela.
 5. Enriquece técnico por `Ticket_User`, grupo responsável por `Group_Ticket`, solução por `ITILSolution` e atribuição pelo histórico quando `date_assign` está ausente.
 6. Faz `upsert` por `glpi_id` e pelo par chamado/técnico.
-7. Atualiza cursor, saúde e log.
+7. Atualiza cursor, saúde e log somente após gravar o cache.
 8. Encerra a sessão GLPI em `finally`.
 
-Erros 429/5xx, falhas de rede e timeout recebem até três tentativas por padrão. Erros definitivos preservam o cache anterior e marcam a integração como `offline`. O front-end considera a sincronização atrasada após 90 segundos sem sucesso (três ciclos de 30 segundos). Na rota pública, a comparação usa o horário `checkedAt` retornado pela Edge Function para neutralizar relógio local incorreto ou conversão duplicada de fuso.
+Erros 429/5xx, falhas de rede e timeout recebem até três tentativas por padrão.
+Sessão GLPI inválida é renovada uma vez de forma controlada. Erros definitivos
+preservam o cache anterior e marcam a integração como `offline`. O Supabase Cron
+executa um único job por minuto; o front-end relê o cache a cada 30 segundos e
+considera atraso após a tolerância configurada. Na rota pública, a comparação
+usa `checkedAt` retornado pela Edge Function para neutralizar relógio local
+incorreto ou conversão duplicada de fuso.
 
 No primeiro bootstrap, quando ainda não existe cursor, a função limita a carga a
 `GLPI_SYNC_INITIAL_MAX_PAGES` (padrão `1`, com 100 chamados por página). Isso
@@ -229,8 +236,8 @@ do primeiro cursor, `GLPI_SYNC_MAX_PAGES` controla as páginas incrementais.
 
 O modo demonstração é exclusivamente local e opt-in. Cache vazio, falha de RLS,
 sessão ausente ou indisponibilidade do GLPI exibem `Offline • GLPI` e não criam
-chamados fictícios. A sincronização inicial e o temporizador de 30 segundos não
-dependem da existência prévia de registros no cache.
+chamados fictícios. O temporizador de 30 segundos apenas relê o cache; a
+sincronização não depende de navegador ou sessão administrativa.
 
 ## Dashboard Diário público
 

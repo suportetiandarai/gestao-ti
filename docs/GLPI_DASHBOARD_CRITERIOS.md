@@ -47,7 +47,12 @@
 - Aguardando atendimento: chamado do grupo ID `1`, não solucionado/fechado, não pendente e sem qualquer relação `Ticket_User.type=2`.
 - Resolvido pelo técnico: status `5 Solucionado` ou `6 Fechado`. A classificação centralizada é mutuamente exclusiva, na ordem: resolvido/fechado, pendente, em atendimento, aguardando.
 - Pendentes: código real `4 Pendente` no grupo ID `1`, independentemente de técnico ou prazo vencido. Um pendente aparece somente nesse card.
-- Gráfico do Dashboard Diário: tickets solucionados ou fechados durante o plantão, somente do grupo ID `1`. O responsável preferencial é `ITILSolution.users_id`; na ausência de solução identificável, usa-se o técnico atual `Ticket_User.type=2`. Cada par técnico/chamado é contado uma única vez. Acompanhamentos, atribuições e fechamentos sem status final não aumentam o gráfico.
+- Gráfico do Dashboard Diário: tickets do grupo ID `1` cujo `solved_at` esteja
+  dentro do plantão. O responsável é obrigatoriamente
+  `ITILSolution.users_id`; sem autor de solução confiável, o ticket não entra
+  na produtividade. `closed_at`, técnico atual, último atualizador e simples
+  associação ao grupo nunca substituem o autor. Cada par técnico/chamado é
+  contado uma única vez.
 - Tempo médio de primeira resposta: soma de `first_response_at - opened_at` dividida pela quantidade de chamados com as duas datas válidas.
 - Tempo médio de solução: soma de `solved_at - opened_at` dividida pela quantidade de chamados solucionados com datas válidas.
 - Tempo médio de fechamento: soma de `closed_at - opened_at` dividida pela quantidade de chamados fechados com datas válidas.
@@ -66,7 +71,11 @@ Valores indisponíveis são exibidos como “Não disponível” e não entram e
 ## Sincronização e disponibilidade
 
 - O navegador nunca consulta o GLPI diretamente; lê o cache Supabase.
+- O Supabase Cron executa uma sincronização centralizada por minuto. A leitura
+  visual continua em 30 segundos e não dispara o GLPI.
 - A Edge Function usa cursor persistente por `date_mod`, paginação, timeout e retry limitado.
+- A consulta incremental retrocede 120 segundos a partir do cursor e deduplica
+  por `glpi_id`, evitando perdas em alterações próximas ao limite.
 - As atribuições ficam em `glpi_ticket_assignments_dashboard`, deduplicadas pela chave `(ticket_glpi_id, technician_id)`; isso preserva chamados com mais de um técnico atual.
 - `glpi_sync_state` bloqueia execuções concorrentes e registra `online`, `syncing`, `delayed` ou `offline`.
 - Os últimos dados válidos permanecem visíveis em falhas de rede ou GLPI.
@@ -80,7 +89,8 @@ Valores indisponíveis são exibidos como “Não disponível” e não entram e
 - Tempo total: solução menos abertura; enquanto não solucionado, horário atual menos abertura.
 - Para fechado sem `solvedate`, `closedate` é o fallback documentado.
 - A primeira atribuição usa o evento mais antigo do histórico `Log.id_search_option=5`; `date_assign` é alternativa quando o histórico não estiver disponível.
-- O navegador recalcula somente os textos dos contadores a cada segundo. Não há consulta adicional ao GLPI; a sincronização permanece a cada 30 segundos.
+- O navegador recalcula somente os textos dos contadores a cada segundo. Não há
+  consulta adicional ao GLPI; o back-end sincroniza uma vez por minuto.
 
 ## Nomes dos técnicos
 
