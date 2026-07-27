@@ -65,8 +65,10 @@ painel e tela cheia sem recarregar a página.
 
 A rota `/dashboard-diario` abre somente o Diário sem login. Ela usa a Edge
 Function dedicada e somente leitura `glpi-dashboard-public`, habilitada por
-`PUBLIC_DASHBOARD_ENABLED=true`. A função lê uma única linha protegida por RLS
-em `gestao_ti_dashboard_snapshot`; não acessa GLPI, cache bruto ou service role.
+`PUBLIC_DASHBOARD_ENABLED=true`. A função lê o resumo em
+`gestao_ti_dashboard_snapshot` e páginas de 50 registros em
+`gestao_ti_dashboard_shift_tickets`, ambas protegidas por RLS; não acessa GLPI,
+cache bruto ou service role.
 O payload público inclui
 o título operacional e o nome completo do técnico, sem solicitante, descrições,
 acompanhamentos, contatos ou dados administrativos.
@@ -86,12 +88,13 @@ Supabase Cron (1 min)
     -> paginação + retry controlado + timeout
     -> upsert glpi_tickets_dashboard
     -> upsert glpi_ticket_assignments_dashboard (par chamado/técnico)
-    -> gera gestao_ti_dashboard_snapshot (todos os tickets abertos no plantão)
+    -> gera gestao_ti_dashboard_snapshot (cards, gráfico e metadados)
+    -> substitui gestao_ti_dashboard_shift_tickets (listagem sanitizada do plantão)
     -> cursor/saúde/log em PostgreSQL
 Navegador (30 s)
   -> GET glpi-dashboard-public
   -> If-None-Match/ETag: 304 sem corpo quando nada mudou
-  -> lê uma linha de snapshot; não inicia sincronização automática
+  -> lê o resumo e a página solicitada; não inicia sincronização automática
 ```
 
 O estado é apresentado como `online`, `atrasado`, `sincronizando` ou `offline`. Falhas preservam os últimos chamados válidos.

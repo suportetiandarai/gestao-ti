@@ -1651,6 +1651,46 @@ body.glpi-daily-active .glpi-daily-kpi strong {
     font-size: clamp(.78rem, .82vw, .92rem);
 }
 
+.glpi-daily-ticket-search {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    padding: 10px 12px 0;
+    min-width: min(100%, 520px);
+}
+
+.glpi-daily-ticket-search input {
+    flex: 1;
+    min-width: 180px;
+}
+
+.glpi-daily-pagination {
+    justify-content: space-between;
+    padding: 0 12px 10px;
+}
+
+.glpi-page-button {
+    min-height: 38px;
+    padding: 0.55rem 0.9rem;
+    border: 1px solid var(--glpi-border);
+    border-radius: 8px;
+    background: var(--glpi-surface);
+    color: var(--glpi-text);
+    font: inherit;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.glpi-page-button:disabled {
+    cursor: not-allowed;
+    opacity: 0.5;
+}
+
+.glpi-daily-pagination .glpi-filter-button:disabled {
+    cursor: not-allowed;
+    opacity: .5;
+}
+
 .glpi-ticket-time {
     font-variant-numeric: tabular-nums;
     font-weight: 800;
