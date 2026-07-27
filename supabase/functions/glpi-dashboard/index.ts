@@ -1,6 +1,7 @@
 import { createClient } from 'npm:@supabase/supabase-js@2';
 import {
   buildDashboardSnapshot,
+  contentHash,
   currentShiftWindow,
   SNAPSHOT_TICKET_COLUMNS,
   snapshotHash,
@@ -178,7 +179,9 @@ async function refreshDashboardSnapshot(
     .eq('group_id', groupId)
     .or([
       `and(opened_at.gte.${shift.start.toISOString()},opened_at.lt.${shift.end.toISOString()})`,
+      `and(assigned_at.gte.${shift.start.toISOString()},assigned_at.lt.${shift.end.toISOString()})`,
       `and(solved_at.gte.${shift.start.toISOString()},solved_at.lt.${shift.end.toISOString()})`,
+      `and(operational_updated_at.gte.${shift.start.toISOString()},operational_updated_at.lt.${shift.end.toISOString()})`,
     ].join(','))
     .limit(5000);
   const [
@@ -199,26 +202,28 @@ async function refreshDashboardSnapshot(
   if (shiftError) throw shiftError;
   if (previousError) throw previousError;
 
-  const snapshot = buildDashboardSnapshot(
+  const bundle = buildDashboardSnapshot(
     [...(activeTickets || []), ...(shiftTickets || [])],
     groupId,
     syncedAt,
     reference,
   );
-  const hash = await snapshotHash(snapshot);
+  const listHash = await contentHash(bundle.shiftTickets);
+  bundle.snapshot.list_hash = listHash;
+  const hash = await snapshotHash(bundle.snapshot);
   const previousVersion = Number(previous?.snapshot_version) || 0;
   const version = previous?.snapshot_hash === hash
     ? Math.max(previousVersion, 1)
     : previousVersion + 1;
-  const { error: upsertError } = await client
-    .from('gestao_ti_dashboard_snapshot')
-    .upsert({
-      ...snapshot,
+  const { error: replaceError } = await client.rpc('replace_gestao_ti_dashboard_snapshot', {
+    snapshot_payload: {
+      ...bundle.snapshot,
       snapshot_hash: hash,
       snapshot_version: version,
-      updated_at: syncedAt,
-    }, { onConflict: 'scope,group_id' });
-  if (upsertError) throw upsertError;
+    },
+    tickets_payload: bundle.shiftTickets,
+  });
+  if (replaceError) throw replaceError;
   return {
     version,
     hash,
@@ -226,7 +231,7 @@ async function refreshDashboardSnapshot(
       ...(activeTickets || []).map((ticket: JsonRecord) => numberOrNull(ticket.glpi_id)),
       ...(shiftTickets || []).map((ticket: JsonRecord) => numberOrNull(ticket.glpi_id)),
     ].filter(Boolean)).size,
-    publicRows: snapshot.shift_tickets_json.length,
+    publicRows: bundle.shiftTickets.length,
   };
 }
 
@@ -634,6 +639,52 @@ function mapTicketAssignments(ticket: JsonRecord) {
   });
 }
 
+const OPERATIONAL_CHANGE_FIELDS = Object.freeze([
+  'status_id',
+  'technician_id',
+  'assigned_at',
+  'pending_reason',
+  'solved_at',
+  'sla_due_at',
+  'attention_due_at',
+  'internal_sla_due_at',
+  'internal_attention_due_at',
+  'solving_technician_id',
+]);
+
+function operationalValue(value: unknown) {
+  return value === undefined || value === null || value === '' ? null : String(value);
+}
+
+async function markOperationalChanges(
+  client: ReturnType<typeof createClient>,
+  mapped: JsonRecord[],
+  changedAt: string,
+) {
+  const ticketIds = mapped
+    .map((ticket) => numberOrNull(ticket.glpi_id))
+    .filter((id): id is number => Boolean(id));
+  if (!ticketIds.length) return;
+  const { data: previousRows, error } = await client
+    .from('glpi_tickets_dashboard')
+    .select(['glpi_id', ...OPERATIONAL_CHANGE_FIELDS, 'operational_updated_at'].join(','))
+    .in('glpi_id', ticketIds);
+  if (error) throw error;
+  const previousById = new Map<number | null, JsonRecord>(
+    (previousRows || []).map((ticket: JsonRecord) => [numberOrNull(ticket.glpi_id), ticket]),
+  );
+  mapped.forEach((ticket) => {
+    const previous = previousById.get(numberOrNull(ticket.glpi_id));
+    if (!previous) {
+      ticket.operational_updated_at = null;
+      return;
+    }
+    const changed = OPERATIONAL_CHANGE_FIELDS.some((field) =>
+      operationalValue(previous[field]) !== operationalValue(ticket[field]));
+    ticket.operational_updated_at = changed ? changedAt : previous.operational_updated_at || null;
+  });
+}
+
 Deno.serve(async (request) => {
   if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: corsHeaders });
   if (request.method !== 'POST') return json({ error: 'Método não permitido.' }, 405);
@@ -853,6 +904,8 @@ Deno.serve(async (request) => {
     const tickets = await glpi.enrichTickets(rawTickets);
     const mapped = tickets.map(mapTicket).filter((ticket) => ticket.glpi_id);
     if (mapped.length) {
+      stage = 'detect-operational-changes';
+      await markOperationalChanges(admin, mapped, new Date().toISOString());
       stage = 'upsert-tickets';
       const { error } = await admin.from('glpi_tickets_dashboard').upsert(mapped, { onConflict: 'glpi_id' });
       if (error) throw error;

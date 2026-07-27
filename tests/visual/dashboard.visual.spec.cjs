@@ -42,6 +42,7 @@ async function preparePublicDashboard(
   page,
   viewport = { width: 1366, height: 768 },
   path = '/dashboard-diario',
+  totalTicketCount = 6,
 ) {
   await page.setViewportSize(viewport);
   await page.route('**/config.js', (route) => route.fulfill({
@@ -50,47 +51,82 @@ async function preparePublicDashboard(
   }));
   const now = Date.now();
   const baseTicket = {
-    title: 'Título operacional completo do chamado', group_id: 1, group_name: 'SUPORTE TI',
+    title: 'Título operacional completo do chamado',
     opened_at: new Date(now - 65000).toISOString(),
-    sla_due_at: null, attention_due_at: null,
-    internal_sla_due_at: null, internal_attention_due_at: null,
-    source_environment: 'real',
+    assignment_time: 5,
+    solution_time: 0,
+    total_time: 65,
   };
   const tickets = [
-    { ...baseTicket, id: 9006, status_id: 2, status: 'Atribuído', technician_id: 21, technician_name: 'Técnico Atrasado', assigned_at: new Date(now - 60000).toISOString(), solved_at: null, closed_at: null, sla_due_at: new Date(now - 300000).toISOString(), is_pending: false, is_overdue: true, is_resolved: false },
-    { ...baseTicket, id: 9001, status_id: 1, status: 'Novo', technician_id: null, technician_name: null, assigned_at: null, solved_at: null, closed_at: null, is_pending: false, is_overdue: false, is_resolved: false },
-    { ...baseTicket, id: 9002, status_id: 2, status: 'Atribuído', technician_id: 20, technician_name: 'VINICIUS SILVA PASCOAL MANOEL', assigned_at: new Date(now - 50000).toISOString(), solved_at: null, closed_at: null, is_pending: false, is_overdue: false, is_resolved: false },
-    { ...baseTicket, id: 9003, status_id: 4, status: 'Pendente', technician_id: 20, technician_name: 'Técnico Teste', assigned_at: new Date(now - 50000).toISOString(), solved_at: null, closed_at: null, sla_due_at: new Date(now - 300000).toISOString(), is_pending: true, is_overdue: false, is_resolved: false },
-    { ...baseTicket, id: 9004, status_id: 5, status: 'Solucionado', technician_id: 20, technician_name: 'Técnico Teste', assigned_at: new Date(now - 50000).toISOString(), solved_at: new Date(now - 30000).toISOString(), closed_at: null, is_pending: false, is_overdue: false, is_resolved: true },
-    { ...baseTicket, id: 9005, status_id: 6, status: 'Fechado', technician_id: 20, technician_name: 'Técnico Teste', assigned_at: new Date(now - 50000).toISOString(), solved_at: new Date(now - 30000).toISOString(), closed_at: new Date(now - 10000).toISOString(), is_pending: false, is_overdue: false, is_resolved: true },
+    { ...baseTicket, ticket_id: 9006, dashboard_status: 'Chamado estourado', glpi_status: 'Atribuído', technician_name: 'Técnico Atrasado', assigned_at: new Date(now - 60000).toISOString(), solved_at: null, is_pending: false, is_overdue: true, is_resolved: false, operational_priority: 1 },
+    { ...baseTicket, ticket_id: 9001, dashboard_status: 'Aguardando Atribuição', glpi_status: 'Novo', technician_name: null, assigned_at: null, solved_at: null, is_pending: false, is_overdue: false, is_resolved: false, operational_priority: 2 },
+    { ...baseTicket, ticket_id: 9002, dashboard_status: 'Em atendimento', glpi_status: 'Atribuído', technician_name: 'VINICIUS SILVA PASCOAL MANOEL', assigned_at: new Date(now - 50000).toISOString(), solved_at: null, is_pending: false, is_overdue: false, is_resolved: false, operational_priority: 2 },
+    { ...baseTicket, ticket_id: 9003, dashboard_status: 'Pendente', glpi_status: 'Pendente', technician_name: 'Técnico Teste', assigned_at: new Date(now - 50000).toISOString(), solved_at: null, is_pending: true, is_overdue: false, is_resolved: false, operational_priority: 2 },
+    { ...baseTicket, ticket_id: 9004, dashboard_status: 'Solucionado', glpi_status: 'Solucionado', technician_name: 'Técnico Teste', assigned_at: new Date(now - 50000).toISOString(), solved_at: new Date(now - 30000).toISOString(), is_pending: false, is_overdue: false, is_resolved: true, operational_priority: 3, total_time: 35, solution_time: 20 },
+    { ...baseTicket, ticket_id: 9005, dashboard_status: 'Solucionado', glpi_status: 'Fechado', technician_name: 'Técnico Teste', assigned_at: new Date(now - 50000).toISOString(), solved_at: new Date(now - 30000).toISOString(), is_pending: false, is_overdue: false, is_resolved: true, operational_priority: 3, total_time: 35, solution_time: 20 },
   ];
-  await page.route('https://example.supabase.co/functions/v1/glpi-dashboard-public', (route) => route.fulfill({
-    contentType: 'application/json',
-    headers: {
-      ETag: '"visual-snapshot"',
-      'Access-Control-Expose-Headers': 'ETag, X-Snapshot-Synced-At, X-Snapshot-Status, X-Snapshot-Checked-At',
-      'X-Snapshot-Synced-At': new Date(now).toISOString(),
-      'X-Snapshot-Status': 'online',
-      'X-Snapshot-Checked-At': new Date(now).toISOString(),
-    },
-    body: JSON.stringify({
-      ok: true,
-      snapshot: {
-        scope: 'daily_public',
-        groupId: 1,
-        shiftStart: new Date(now - 3600000).toISOString(),
-        shiftEnd: new Date(now + 3600000).toISOString(),
-        shiftType: 'Diurno',
-        counts: { open: 6, inProgress: 2, waiting: 1, pending: 1, overdue: 1 },
-        techniciansChart: [{ technician_id: 20, label: 'Técnico Teste', value: 2 }],
-        shiftTickets: tickets,
-        version: 1,
-        lastSyncedAt: new Date(now).toISOString(),
-        integrationStatus: 'online',
+  for (let index = tickets.length; index < totalTicketCount; index += 1) {
+    tickets.splice(tickets.length - 2, 0, {
+      ...baseTicket,
+      ticket_id: 9100 + index,
+      title: `Chamado paginado ${index + 1}`,
+      dashboard_status: 'Em atendimento',
+      glpi_status: 'Atribuído',
+      technician_name: 'Técnico Paginação',
+      assigned_at: new Date(now - 50000).toISOString(),
+      solved_at: null,
+      is_pending: false,
+      is_overdue: false,
+      is_resolved: false,
+      operational_priority: 2,
+    });
+  }
+  await page.route('https://example.supabase.co/functions/v1/glpi-dashboard-public**', (route) => {
+    const url = new URL(route.request().url());
+    const isTickets = url.searchParams.get('resource') === 'tickets';
+    const requestedPage = Number(url.searchParams.get('page') || 1);
+    const requestedSize = Number(url.searchParams.get('pageSize') || 50);
+    const pageTickets = tickets.slice(
+      (requestedPage - 1) * requestedSize,
+      requestedPage * requestedSize,
+    );
+    return route.fulfill({
+      contentType: 'application/json',
+      headers: {
+        ETag: isTickets ? '"visual-tickets-1"' : '"visual-snapshot"',
+        'Access-Control-Expose-Headers': 'ETag, X-Snapshot-Synced-At, X-Snapshot-Status, X-Snapshot-Checked-At, X-Total-Count, X-Page, X-Page-Size',
+        'X-Snapshot-Synced-At': new Date(now).toISOString(),
+        'X-Snapshot-Status': 'online',
+        'X-Snapshot-Checked-At': new Date(now).toISOString(),
       },
-      checkedAt: new Date(now).toISOString(),
-    }),
-  }));
+      body: JSON.stringify(isTickets ? {
+        ok: true,
+        tickets: pageTickets,
+        pagination: {
+          page: requestedPage,
+          pageSize: requestedSize,
+          total: tickets.length,
+          totalPages: Math.max(1, Math.ceil(tickets.length / requestedSize)),
+        },
+      } : {
+        ok: true,
+        snapshot: {
+          scope: 'daily_public',
+          groupId: 1,
+          shiftStart: new Date(now - 3600000).toISOString(),
+          shiftEnd: new Date(now + 3600000).toISOString(),
+          shiftType: 'Diurno',
+          counts: { open: 6, inProgress: 2, waiting: 1, pending: 1, overdue: 1 },
+          techniciansChart: [{ technician_id: 20, label: 'Técnico Teste', value: 2 }],
+          ticketsCount: tickets.length,
+          version: 1,
+          lastSyncedAt: new Date(now).toISOString(),
+          integrationStatus: 'online',
+        },
+        checkedAt: new Date(now).toISOString(),
+      }),
+    });
+  });
   await page.route('https://cdn.jsdelivr.net/**', (route) => route.fulfill({
     contentType: 'text/javascript',
     body: 'window.supabase={createClient:()=>{throw new Error("Auth client must not be created on the public route.");}};',
@@ -300,8 +336,8 @@ test('dashboard público envia ETag e preserva a tela ao receber 304', async ({ 
   await preparePublicDashboard(page);
   const initialCards = await page.locator('#glpi-daily-kpis').textContent();
   let receivedEtag = '';
-  await page.unroute('https://example.supabase.co/functions/v1/glpi-dashboard-public');
-  await page.route('https://example.supabase.co/functions/v1/glpi-dashboard-public', (route) => {
+  await page.unroute('https://example.supabase.co/functions/v1/glpi-dashboard-public**');
+  await page.route('https://example.supabase.co/functions/v1/glpi-dashboard-public**', (route) => {
     receivedEtag = route.request().headers()['if-none-match'] || '';
     return route.fulfill({
       status: 304,
@@ -318,6 +354,17 @@ test('dashboard público envia ETag e preserva a tela ao receber 304', async ({ 
   await expect.poll(() => receivedEtag).toBe('"visual-snapshot"');
   await expect(page.locator('#glpi-daily-kpis')).toHaveText(initialCards);
   await expect(page.getByText('Online • GLPI', { exact: true })).toBeVisible();
+});
+
+test('listagem pública pagina mais de 50 chamados sem carregar o plantão inteiro', async ({ page }) => {
+  await preparePublicDashboard(page, { width: 1366, height: 768 }, '/dashboard-diario', 75);
+  await expect(page.locator('.glpi-daily-ticket:not(.glpi-daily-ticket-head)')).toHaveCount(50);
+  await expect(page.getByText('Página 1 de 2 • 75 chamados', { exact: true })).toBeVisible();
+  const nextPage = page.locator('button[onclick="glpiPaginaChamadosPlantao(1)"]');
+  await nextPage.scrollIntoViewIfNeeded();
+  await nextPage.click();
+  await expect(page.locator('.glpi-daily-ticket:not(.glpi-daily-ticket-head)')).toHaveCount(25);
+  await expect(page.getByText('Página 2 de 2 • 75 chamados', { exact: true })).toBeVisible();
 });
 
 test('cards e fontes do Diário possuem aumento moderado', async ({ page }) => {

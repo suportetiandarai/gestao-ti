@@ -61,19 +61,49 @@ test('plantões usam America/Sao_Paulo e limites 07:00–19:00 / 19:00–07:00',
 });
 
 for (const [time, expected] of [
-  ['2026-07-23T07:59:00', 'Diurno'],
-  ['2026-07-23T08:00:00', 'Diurno'],
+  ['2026-07-23T06:59:00', 'Noturno'],
+  ['2026-07-23T07:00:00', 'Diurno'],
   ['2026-07-23T12:00:00', 'Diurno'],
-  ['2026-07-23T19:59:00', 'Noturno'],
-  ['2026-07-23T20:00:00', 'Noturno'],
+  ['2026-07-23T18:59:00', 'Diurno'],
+  ['2026-07-23T19:00:00', 'Noturno'],
   ['2026-07-23T23:59:00', 'Noturno'],
   ['2026-07-24T00:00:00', 'Noturno'],
-  ['2026-07-24T07:59:00', 'Diurno'],
+  ['2026-07-24T06:59:00', 'Noturno'],
 ]) {
   test(`seleciona plantão ${expected} às ${time.slice(11)}`, () => {
     assert.equal(core.currentShift(at(time)).type, expected);
   });
 }
+
+test('status do dashboard depende de técnico individual, não do grupo', () => {
+  assert.equal(core.getDashboardTicketStatus(ticket({
+    status: 'Atribuído',
+    statusId: 2,
+    groupId: 1,
+    technicalGroupIds: [1],
+  }), NOW).dashboardStatus, 'Aguardando Atribuição');
+  assert.equal(core.getDashboardTicketStatus(ticket({
+    status: 'Atribuído',
+    statusId: 2,
+    technician: 'Ana Souza',
+    technicianId: 10,
+    currentTechnicians: [{ id: 10 }],
+    currentTechnicianCount: 1,
+  }), NOW).dashboardStatus, 'Em atendimento');
+  assert.equal(core.getDashboardTicketStatus(ticket({
+    status: 'Pendente',
+    statusId: 4,
+    technician: 'Ana Souza',
+    technicianId: 10,
+    currentTechnicians: [{ id: 10 }],
+    currentTechnicianCount: 1,
+  }), NOW).dashboardStatus, 'Pendente');
+  assert.equal(core.getDashboardTicketStatus(ticket({
+    status: 'Solucionado',
+    statusId: 5,
+    solvedAt: '2026-07-23T10:00:00-03:00',
+  }), NOW).dashboardStatus, 'Solucionado');
+});
 
 test('passagens solicitadas permanecem no mesmo plantão sob os limites confirmados', () => {
   assert.equal(core.currentShift(at('2026-07-23T19:59:00')).type, 'Noturno');

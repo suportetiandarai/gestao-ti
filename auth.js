@@ -2,6 +2,8 @@ const SUPABASE_URL = window.GESTAO_TI_CONFIG?.SUPABASE_URL || 'https://ditygnxtt
 const SUPABASE_PUBLIC_KEY = window.GESTAO_TI_CONFIG?.SUPABASE_PUBLIC_KEY || '';
 const PERFIS_VALIDOS = Object.freeze(['admin', 'gestor', 'supervisor', 'tecnico', 'operacional']);
 const ROTA_DASHBOARD_PUBLICO = /\/dashboard-diario\/?$/.test(window.location.pathname);
+const LOGIN_TIMEOUT_MS = Number(window.GESTAO_TI_CONFIG?.LOGIN_TIMEOUT_MS) || 15000;
+const SIGN_OUT_TIMEOUT_MS = 2000;
 
 function chavePublicaValida(chave) {
     if (!chave) return false;
@@ -23,6 +25,64 @@ var supabase = window.supabaseClient;
 window.usuarioAtual = null;
 window.perfilAtual = null;
 let recuperandoSenha = false;
+let loginEmAndamento = false;
+
+class AuthTimeoutError extends Error {
+    constructor() {
+        super('Tempo limite da autenticação excedido.');
+        this.name = 'AuthTimeoutError';
+        this.code = 'AUTH_TIMEOUT';
+    }
+}
+
+function registrarEtapaLogin(etapa, detalhes = {}) {
+    const dadosSeguros = {
+        etapa,
+        codigo: detalhes.codigo || undefined,
+        duracaoMs: Number.isFinite(detalhes.duracaoMs) ? detalhes.duracaoMs : undefined
+    };
+    console.info('[auth]', dadosSeguros);
+}
+
+function comTimeout(promessa, tempoMs, erro = new AuthTimeoutError()) {
+    let temporizador;
+    const limite = new Promise((_, rejeitar) => {
+        temporizador = window.setTimeout(() => rejeitar(erro), tempoMs);
+    });
+
+    return Promise.race([promessa, limite]).finally(() => window.clearTimeout(temporizador));
+}
+
+function encerrarSessaoSemBloquear() {
+    if (!supabase?.auth) return;
+    void comTimeout(
+        supabase.auth.signOut({ scope: 'local' }),
+        SIGN_OUT_TIMEOUT_MS,
+        new Error('Tempo limite ao limpar a sessão local.')
+    ).catch(error => {
+        console.warn('[auth]', { etapa: 'session_cleanup_failed', codigo: error.code || error.name });
+    });
+}
+
+function mensagemLoginSegura(error) {
+    if (error?.message === 'Invalid login credentials' || error?.code === 'invalid_credentials') {
+        return 'E-mail ou senha incorretos. Confira os dados ou use “Esqueci minha senha”.';
+    }
+
+    if (error?.code === 'AUTH_TIMEOUT' || error?.name === 'AuthTimeoutError'
+        || error?.name === 'TypeError' || error?.message === 'Failed to fetch') {
+        return 'Não foi possível concluir o acesso. Verifique sua conexão e tente novamente.';
+    }
+
+    if (error?.message?.startsWith('Seu login foi aceito')
+        || error?.message?.startsWith('Perfil de acesso')
+        || error?.message?.startsWith('Perfil sem nível')
+        || error?.message?.startsWith('Não foi possível acessar seu perfil')) {
+        return error.message;
+    }
+
+    return 'Não foi possível concluir o acesso. Tente novamente ou contate um administrador.';
+}
 
 function aplicarLayout(estado) {
     const autenticado = estado === 'autenticado';
@@ -125,37 +185,64 @@ async function sincronizarSessao(session) {
     }
 
     try {
-        await carregarPerfil(session.user);
+        await comTimeout(carregarPerfil(session.user), LOGIN_TIMEOUT_MS);
     } catch (error) {
-        console.error('Falha ao carregar perfil:', error);
-        await supabase.auth.signOut();
+        console.error('[auth]', { etapa: 'session_profile_failed', codigo: error.code || error.name });
+        encerrarSessaoSemBloquear();
         aplicarLayout('anonimo');
-        mostrarAviso(error.message, 'erro');
+        mostrarAviso(mensagemLoginSegura(error), 'erro');
     }
 }
 
 async function realizarLogin() {
     if (!SUPABASE_CONFIGURADO) return mostrarAviso('Configure a chave pública do Supabase em config.js.', 'erro');
+    if (loginEmAndamento) return;
+
     const email = document.getElementById('login-email').value.trim();
     const senha = document.getElementById('login-senha').value;
     const botao = document.getElementById('btn-login');
 
     if (!email || !senha) return mostrarAviso('Informe e-mail e senha.', 'aviso');
 
+    loginEmAndamento = true;
     botao.disabled = true;
     botao.textContent = 'Entrando...';
+    const inicio = performance.now();
+    registrarEtapaLogin('form_submitted');
 
     try {
-        const { data, error } = await supabase.auth.signInWithPassword({ email, password: senha });
+        registrarEtapaLogin('authentication_started');
+        const { data, error } = await comTimeout(
+            supabase.auth.signInWithPassword({ email, password: senha }),
+            LOGIN_TIMEOUT_MS
+        );
+        registrarEtapaLogin('auth_response_received', {
+            codigo: error?.code,
+            duracaoMs: Math.round(performance.now() - inicio)
+        });
         if (error) throw error;
-        await carregarPerfil(data.user);
+        if (!data?.session || !data?.user) throw new Error('Sessão não criada.');
+
+        registrarEtapaLogin('session_created');
+        registrarEtapaLogin('profile_requested');
+        const tempoRestante = Math.max(1, LOGIN_TIMEOUT_MS - (performance.now() - inicio));
+        await comTimeout(carregarPerfil(data.user), tempoRestante);
+        registrarEtapaLogin('profile_loaded');
+        registrarEtapaLogin('redirect_started');
+        registrarEtapaLogin('dashboard_loaded', {
+            duracaoMs: Math.round(performance.now() - inicio)
+        });
     } catch (error) {
-        await supabase.auth.signOut();
-        const mensagem = error.message === 'Invalid login credentials'
-            ? 'E-mail ou senha incorretos. Confira os dados ou use “Esqueci minha senha”.'
-            : `Não foi possível entrar: ${error.message}`;
-        mostrarAviso(mensagem, 'erro');
+        console.error('[auth]', {
+            etapa: 'login_failed',
+            codigo: error.code || error.name,
+            duracaoMs: Math.round(performance.now() - inicio)
+        });
+        encerrarSessaoSemBloquear();
+        aplicarLayout('anonimo');
+        mostrarAviso(mensagemLoginSegura(error), 'erro');
     } finally {
+        loginEmAndamento = false;
         botao.disabled = false;
         botao.textContent = 'Entrar';
     }
@@ -287,17 +374,28 @@ document.addEventListener('DOMContentLoaded', async () => {
     supabase.auth.onAuthStateChange((evento, sessao) => {
         if (evento === 'PASSWORD_RECOVERY') return mostrarRecuperacaoSenha();
         if (recuperandoSenha) return;
-        if (evento === 'SIGNED_OUT') sincronizarSessao(null);
-        if (evento === 'TOKEN_REFRESHED' && sessao) sincronizarSessao(sessao);
-        if (evento === 'SIGNED_IN' && sessao) sincronizarSessao(sessao);
+        if (evento === 'SIGNED_IN' && loginEmAndamento) return;
+        if (evento === 'SIGNED_OUT') void sincronizarSessao(null);
+        if (evento === 'TOKEN_REFRESHED' && sessao) void sincronizarSessao(sessao);
+        if (evento === 'SIGNED_IN' && sessao) void sincronizarSessao(sessao);
     });
 
-    const fluxoRecuperacao = await prepararSessaoRecuperacaoSenha();
-    if (fluxoRecuperacao) return;
+    aplicarLayout('anonimo');
+    try {
+        const fluxoRecuperacao = await comTimeout(prepararSessaoRecuperacaoSenha(), LOGIN_TIMEOUT_MS);
+        if (fluxoRecuperacao) return;
 
-    const { data: { session }, error } = await supabase.auth.getSession();
-    if (error) console.error('Falha ao restaurar sessão:', error);
-    await sincronizarSessao(session);
+        const { data: { session }, error } = await comTimeout(
+            supabase.auth.getSession(),
+            LOGIN_TIMEOUT_MS
+        );
+        if (error) console.error('[auth]', { etapa: 'session_restore_failed', codigo: error.code || error.name });
+        await sincronizarSessao(session);
+    } catch (error) {
+        console.error('[auth]', { etapa: 'session_initialization_failed', codigo: error.code || error.name });
+        aplicarLayout('anonimo');
+        mostrarAviso(mensagemLoginSegura(error), 'erro');
+    }
 });
 
 window.addEventListener('hashchange', () => {

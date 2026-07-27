@@ -244,11 +244,14 @@ sincronização não depende de navegador ou sessão administrativa.
 `/dashboard-diario` não cria nem reutiliza sessão do Supabase Auth. O navegador
 faz `GET` em `glpi-dashboard-public`, uma função dedicada que não contém ações
 de sincronização e usa apenas a chave anônima. Pela política RLS, ela pode ler
-somente `scope='daily_public'` em `gestao_ti_dashboard_snapshot`.
+somente `scope='daily_public'` no resumo `gestao_ti_dashboard_snapshot` e na
+listagem sanitizada `gestao_ti_dashboard_shift_tickets`.
 
 O snapshot é gerado pela função protegida `glpi-dashboard` somente depois que
-cache, relações e agregados foram gravados. Ele contém cinco contagens, gráfico,
-metadados do plantão e todos os chamados abertos dentro do plantão atual. Não contém `raw_payload`,
+cache, relações e agregados foram gravados. O snapshot contém cinco contagens,
+gráfico e metadados; a tabela separada contém todos os chamados relacionados ao
+plantão, consultados em páginas de 50. Entram chamados abertos, atribuídos,
+solucionados ou alterados operacionalmente no período. Não contém `raw_payload`,
 solicitante, descrição, tokens, logs ou configurações. Configure:
 
 ```env
@@ -266,7 +269,9 @@ resposta `304 Not Modified` mantém a saúde atualizada sem retransmitir o corpo
 O cache é `public, max-age=15, stale-while-revalidate=45`.
 
 Se o snapshot estiver ausente, o endpoint responde `503` com “Dados ainda não
-sincronizados” e nunca recorre aos 2.000 tickets nem dispara o GLPI.
+sincronizados” e nunca recorre aos 2.000 tickets nem dispara o GLPI. A listagem
+usa `resource=tickets&page=1&pageSize=50`, mantém ordenação operacional no banco
+e retorna total e quantidade de páginas.
 
 Alterações nesse contrato exigem republicar as Edge Functions; o merge do front-end
 no GitHub Pages não atualiza automaticamente o runtime do Supabase:

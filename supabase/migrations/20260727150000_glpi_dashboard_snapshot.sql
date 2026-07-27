@@ -14,7 +14,8 @@ create table if not exists public.gestao_ti_dashboard_snapshot (
   pending_count integer not null default 0 check (pending_count >= 0),
   overdue_count integer not null default 0 check (overdue_count >= 0),
   technicians_chart_json jsonb not null default '[]'::jsonb,
-  shift_tickets_json jsonb not null default '[]'::jsonb,
+  tickets_count integer not null default 0 check (tickets_count >= 0),
+  list_hash text not null,
   snapshot_hash text not null,
   snapshot_version bigint not null default 1 check (snapshot_version > 0),
   integration_status text not null default 'offline'
@@ -23,8 +24,7 @@ create table if not exists public.gestao_ti_dashboard_snapshot (
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
   unique (scope, group_id),
-  check (jsonb_typeof(technicians_chart_json) = 'array'),
-  check (jsonb_typeof(shift_tickets_json) = 'array')
+  check (jsonb_typeof(technicians_chart_json) = 'array')
 );
 
 alter table public.gestao_ti_dashboard_snapshot enable row level security;
@@ -40,9 +40,47 @@ create policy "Public can read sanitized daily snapshot"
   to anon
   using (scope = 'daily_public');
 
+create table if not exists public.gestao_ti_dashboard_shift_tickets (
+  scope text not null default 'daily_public',
+  group_id bigint not null,
+  shift_start timestamptz not null,
+  shift_end timestamptz not null,
+  ticket_id bigint not null,
+  title text not null,
+  dashboard_status text not null,
+  glpi_status text not null,
+  technician_name text,
+  opened_at timestamptz not null,
+  assigned_at timestamptz,
+  solved_at timestamptz,
+  total_time bigint,
+  assignment_time bigint,
+  solution_time bigint,
+  is_overdue boolean not null default false,
+  is_pending boolean not null default false,
+  is_resolved boolean not null default false,
+  operational_priority smallint not null check (operational_priority between 1 and 3),
+  sort_key bigint not null,
+  updated_at timestamptz not null default now(),
+  primary key (scope, group_id, shift_start, ticket_id)
+);
+
+alter table public.gestao_ti_dashboard_shift_tickets enable row level security;
+revoke all on table public.gestao_ti_dashboard_shift_tickets from public, authenticated;
+grant select on table public.gestao_ti_dashboard_shift_tickets to anon;
+
+drop policy if exists "Public can read sanitized shift tickets"
+  on public.gestao_ti_dashboard_shift_tickets;
+create policy "Public can read sanitized shift tickets"
+  on public.gestao_ti_dashboard_shift_tickets
+  for select
+  to anon
+  using (scope = 'daily_public');
+
 alter table public.glpi_tickets_dashboard
   add column if not exists solving_technician_id bigint,
-  add column if not exists solving_technician_name text;
+  add column if not exists solving_technician_name text,
+  add column if not exists operational_updated_at timestamptz;
 
 -- Backfill controlado: extrai somente os dois campos normalizados necessários.
 -- O payload bruto continua interno e nunca integra a tabela de snapshot.
@@ -60,8 +98,127 @@ create index if not exists glpi_tickets_dashboard_group_opened_idx
 create index if not exists glpi_tickets_dashboard_group_solved_idx
   on public.glpi_tickets_dashboard (group_id, solved_at desc)
   where solved_at is not null;
+create index if not exists glpi_tickets_dashboard_group_assigned_idx
+  on public.glpi_tickets_dashboard (group_id, assigned_at desc)
+  where assigned_at is not null;
+create index if not exists glpi_tickets_dashboard_group_operational_updated_idx
+  on public.glpi_tickets_dashboard (group_id, operational_updated_at desc)
+  where operational_updated_at is not null;
+create index if not exists gestao_ti_shift_tickets_page_idx
+  on public.gestao_ti_dashboard_shift_tickets
+  (scope, group_id, shift_start, operational_priority, sort_key, ticket_id);
+
+create or replace function public.replace_gestao_ti_dashboard_snapshot(
+  snapshot_payload jsonb,
+  tickets_payload jsonb
+)
+returns void
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  target_scope text := snapshot_payload ->> 'scope';
+  target_group_id bigint := (snapshot_payload ->> 'group_id')::bigint;
+  target_shift_start timestamptz := (snapshot_payload ->> 'shift_start')::timestamptz;
+  target_shift_end timestamptz := (snapshot_payload ->> 'shift_end')::timestamptz;
+begin
+  if target_scope <> 'daily_public'
+    or target_group_id is null
+    or target_shift_start is null
+    or target_shift_end is null then
+    raise exception 'Snapshot diário inválido.';
+  end if;
+
+  delete from public.gestao_ti_dashboard_shift_tickets
+  where scope = target_scope
+    and group_id = target_group_id;
+
+  insert into public.gestao_ti_dashboard_shift_tickets (
+    scope, group_id, shift_start, shift_end, ticket_id, title,
+    dashboard_status, glpi_status, technician_name, opened_at, assigned_at,
+    solved_at, total_time, assignment_time, solution_time, is_overdue,
+    is_pending, is_resolved, operational_priority, sort_key, updated_at
+  )
+  select
+    target_scope, target_group_id, target_shift_start, target_shift_end,
+    item.ticket_id, item.title, item.dashboard_status, item.glpi_status,
+    item.technician_name, item.opened_at, item.assigned_at, item.solved_at,
+    item.total_time, item.assignment_time, item.solution_time, item.is_overdue,
+    item.is_pending, item.is_resolved, item.operational_priority, item.sort_key,
+    (snapshot_payload ->> 'last_synced_at')::timestamptz
+  from jsonb_to_recordset(coalesce(tickets_payload, '[]'::jsonb)) as item(
+    ticket_id bigint,
+    title text,
+    dashboard_status text,
+    glpi_status text,
+    technician_name text,
+    opened_at timestamptz,
+    assigned_at timestamptz,
+    solved_at timestamptz,
+    total_time bigint,
+    assignment_time bigint,
+    solution_time bigint,
+    is_overdue boolean,
+    is_pending boolean,
+    is_resolved boolean,
+    operational_priority smallint,
+    sort_key bigint
+  );
+
+  insert into public.gestao_ti_dashboard_snapshot (
+    scope, group_id, shift_start, shift_end, shift_type, open_count,
+    in_progress_count, waiting_count, pending_count, overdue_count,
+    technicians_chart_json, tickets_count, list_hash, snapshot_hash,
+    snapshot_version, integration_status, last_synced_at, updated_at
+  ) values (
+    target_scope,
+    target_group_id,
+    target_shift_start,
+    target_shift_end,
+    snapshot_payload ->> 'shift_type',
+    (snapshot_payload ->> 'open_count')::integer,
+    (snapshot_payload ->> 'in_progress_count')::integer,
+    (snapshot_payload ->> 'waiting_count')::integer,
+    (snapshot_payload ->> 'pending_count')::integer,
+    (snapshot_payload ->> 'overdue_count')::integer,
+    snapshot_payload -> 'technicians_chart_json',
+    (snapshot_payload ->> 'tickets_count')::integer,
+    snapshot_payload ->> 'list_hash',
+    snapshot_payload ->> 'snapshot_hash',
+    (snapshot_payload ->> 'snapshot_version')::bigint,
+    snapshot_payload ->> 'integration_status',
+    (snapshot_payload ->> 'last_synced_at')::timestamptz,
+    (snapshot_payload ->> 'last_synced_at')::timestamptz
+  )
+  on conflict (scope, group_id) do update set
+    shift_start = excluded.shift_start,
+    shift_end = excluded.shift_end,
+    shift_type = excluded.shift_type,
+    open_count = excluded.open_count,
+    in_progress_count = excluded.in_progress_count,
+    waiting_count = excluded.waiting_count,
+    pending_count = excluded.pending_count,
+    overdue_count = excluded.overdue_count,
+    technicians_chart_json = excluded.technicians_chart_json,
+    tickets_count = excluded.tickets_count,
+    list_hash = excluded.list_hash,
+    snapshot_hash = excluded.snapshot_hash,
+    snapshot_version = excluded.snapshot_version,
+    integration_status = excluded.integration_status,
+    last_synced_at = excluded.last_synced_at,
+    updated_at = excluded.updated_at;
+end;
+$$;
+
+revoke all on function public.replace_gestao_ti_dashboard_snapshot(jsonb, jsonb)
+  from public, anon, authenticated;
+grant execute on function public.replace_gestao_ti_dashboard_snapshot(jsonb, jsonb)
+  to service_role;
 
 comment on table public.gestao_ti_dashboard_snapshot is
-  'Snapshot sanitizado do Dashboard Diário público; uma linha por grupo e escopo.';
+  'Resumo sanitizado do Dashboard Diário público; uma linha por grupo e escopo.';
+comment on table public.gestao_ti_dashboard_shift_tickets is
+  'Listagem sanitizada e paginável dos chamados relacionados ao plantão.';
 comment on column public.gestao_ti_dashboard_snapshot.snapshot_hash is
   'SHA-256 estável do conteúdo operacional, sem o instante da sincronização.';
