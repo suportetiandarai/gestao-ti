@@ -10,9 +10,8 @@
 - OAuth: não adotado para o MVP em GLPI 10.0.18.
 - Permissões do usuário de API: somente leitura para chamados, usuários, grupos, categorias, entidades, localizações, SLAs e relacionamentos de chamados.
 - Consumo de dados: o Dashboard Geral consulta o cache próprio; o Diário público
-  consulta o resumo sanitizado em `gestao_ti_dashboard_snapshot` e a listagem
-  paginada em `gestao_ti_dashboard_shift_tickets`. O GLPI é acessado apenas pela
-  Edge Function protegida de sincronização.
+  consulta uma única linha sanitizada em `gestao_ti_dashboard_snapshot`. O GLPI
+  é acessado apenas pela Edge Function protegida de sincronização.
 - Atualização: sincronização incremental por data de modificação, paginação e cache. O Dashboard Diário usa intervalo fixado por padrão em 30 segundos, sem recarregar a página.
 
 ## Endpoints GLPI usados
@@ -67,19 +66,15 @@
 - A lista exibe somente número, título autorizado, status, técnico, hora, categoria e unidade autorizadas.
 - Solicitante, e-mail, telefone, descrição, acompanhamentos, dados clínicos e demais dados sensíveis não são renderizados.
 - O Dashboard Diário oferece modo painel e tela cheia sem alterar o plantão ou o intervalo de sincronização. A rota pública `/dashboard-diario` fica travada no Diário e recebe somente campos operacionais sanitizados pela Edge Function.
-- A listagem contém, sem duplicidade, os chamados abertos, atribuídos,
-  solucionados ou alterados operacionalmente dentro do plantão. Fechamento
-  administrativo isolado não inclui nem desloca o chamado entre plantões.
-- O status bruto do GLPI permanece em `glpi_status`. `dashboard_status` mostra
-  “Aguardando Atribuição” quando não há relação individual `Ticket_User.type=2`,
-  mesmo que o grupo esteja atribuído ou o status bruto seja “Atribuído”.
+- A listagem contém todos os chamados cuja abertura ocorreu dentro do plantão
+  atual, sem incluir chamados de plantões anteriores ou posteriores.
 
 Valores indisponíveis são exibidos como “Não disponível” e não entram em médias.
 
 ## Sincronização e disponibilidade
 
-- O navegador nunca consulta o GLPI diretamente. A rota pública lê o resumo e
-  páginas de 50 chamados já preparados, sem `raw_payload` e sem recalcular indicadores.
+- O navegador nunca consulta o GLPI diretamente. A rota pública lê somente o
+  snapshot pronto, sem `raw_payload` e sem recalcular indicadores.
 - O Supabase Cron executa uma sincronização centralizada por minuto. A leitura
   visual continua em 30 segundos e não dispara o GLPI.
 - A Edge Function usa cursor persistente por `date_mod`, paginação, timeout e retry limitado.

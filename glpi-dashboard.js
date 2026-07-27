@@ -40,12 +40,6 @@
         publicMode: false,
         dailySnapshot: null,
         publicSnapshotEtag: '',
-        publicPageEtags: {},
-        dailyTicketsPage: 1,
-        dailyTicketsPageSize: 50,
-        dailyTicketsTotal: 0,
-        dailyTicketsTotalPages: 1,
-        dailyTicketsSearch: '',
         serverTimeOffsetMs: 0,
         serverTimeVerified: false,
         publicConfig: {},
@@ -111,29 +105,6 @@
                 : 'Dashboard público indisponível.');
         }
         return { ...data, ...metadata, notModified: false };
-    }
-
-    async function fetchPublicShiftTickets(page = state.dailyTicketsPage, search = state.dailyTicketsSearch) {
-        const { url, publicKey } = publicSupabaseConfig();
-        if (!url || !publicKey) throw new Error('Back-end público não configurado.');
-        const key = `${page}:${state.dailyTicketsPageSize}:${search}`;
-        const endpoint = new URL(`${url}/functions/v1/glpi-dashboard-public`);
-        endpoint.searchParams.set('resource', 'tickets');
-        endpoint.searchParams.set('page', String(page));
-        endpoint.searchParams.set('pageSize', String(state.dailyTicketsPageSize));
-        if (search) endpoint.searchParams.set('search', search);
-        const headers = {
-            apikey: publicKey,
-            Authorization: `Bearer ${publicKey}`
-        };
-        if (state.publicPageEtags[key]) headers['If-None-Match'] = state.publicPageEtags[key];
-        const response = await fetch(endpoint, { method: 'GET', headers, cache: 'no-cache' });
-        const responseEtag = response.headers.get('ETag');
-        if (responseEtag) state.publicPageEtags[key] = responseEtag;
-        if (response.status === 304) return { notModified: true };
-        const data = await response.json().catch(() => ({}));
-        if (!response.ok || !data?.ok) throw new Error('Listagem pública do plantão indisponível.');
-        return { ...data, notModified: false };
     }
 
     function safeExternalUrl(value) {
@@ -286,33 +257,26 @@
             id: row.solution_technician_id,
             name: row.solution_technician_name
         };
-        const status = row.dashboard_status || GLPI_STATUS[row.status_id] || row.status || 'Não disponível';
+        const status = GLPI_STATUS[row.status_id] || row.status || 'Não disponível';
         const openedAt = row.opened_at || row.date || row.created_at;
         const solvedAt = row.solved_at || row.solvedate;
         const closedAt = row.closed_at || row.closedate;
         const assignedAt = row.assigned_at || row.date_assign;
         const firstResponseAt = row.first_response_at;
         return {
-            id: row.ticket_id || row.glpi_id || row.id,
-            title: row.title || row.name || `Chamado #${row.ticket_id || row.glpi_id || row.id}`,
+            id: row.glpi_id || row.id,
+            title: row.title || row.name || `Chamado #${row.glpi_id || row.id}`,
             status,
             statusId: row.status_id,
-            glpiStatus: row.glpi_status || GLPI_STATUS[row.status_id] || row.status || 'Não disponível',
             technician: row.technician_name || row.technician || 'Não disponível',
             technicianId: row.technician_id || null,
             currentTechnicians,
-            currentTechnicianCount: currentTechnicians.length || (row.technician_name ? 1 : 0),
+            currentTechnicianCount: currentTechnicians.length,
             solutionTechnician: solutionTechnician.name || null,
             solutionTechnicianId: Number(solutionTechnician.id) || null,
             snapshotIsPending: typeof row.is_pending === 'boolean' ? row.is_pending : null,
             snapshotIsOverdue: typeof row.is_overdue === 'boolean' ? row.is_overdue : null,
             snapshotIsResolved: typeof row.is_resolved === 'boolean' ? row.is_resolved : null,
-            snapshotOperationalPriority: Number(row.operational_priority) || null,
-            snapshotDurations: {
-                assignmentSeconds: row.assignment_time !== null && row.assignment_time !== undefined && Number.isFinite(Number(row.assignment_time)) ? Number(row.assignment_time) : null,
-                solutionSeconds: row.solution_time !== null && row.solution_time !== undefined && Number.isFinite(Number(row.solution_time)) ? Number(row.solution_time) : null,
-                totalSeconds: row.total_time !== null && row.total_time !== undefined && Number.isFinite(Number(row.total_time)) ? Number(row.total_time) : null
-            },
             group: row.group_name || row.group || 'Não disponível',
             groupId: Number(row.group_id) || null,
             technicalGroupIds: technicalGroups.map(group => Number(group.id)).filter(Number.isFinite),
@@ -443,19 +407,8 @@
             }
             const snapshot = data.snapshot;
             if (!snapshot) throw new Error('Snapshot público ainda não foi gerado.');
-            const shiftChanged = state.dailySnapshot?.shiftStart !== snapshot.shiftStart;
             state.dailySnapshot = snapshot;
-            if (shiftChanged) {
-                state.dailyTicketsPage = 1;
-                state.publicPageEtags = {};
-            }
-            const pageData = await fetchPublicShiftTickets();
-            if (!pageData.notModified) {
-                state.tickets = (pageData.tickets || []).map(normalizeTicket);
-                state.dailyTicketsPage = Number(pageData.pagination?.page) || 1;
-                state.dailyTicketsTotal = Number(pageData.pagination?.total) || 0;
-                state.dailyTicketsTotalPages = Number(pageData.pagination?.totalPages) || 1;
-            }
+            state.tickets = (snapshot.shiftTickets || []).map(normalizeTicket);
             state.dailyAssignments = [];
             state.integrationState = {
                 status: snapshot.integrationStatus || data.status || 'offline',
@@ -680,9 +633,6 @@
     }
 
     function hasRecordedSolution(ticket) {
-        if (state.publicMode && typeof ticket?.snapshotIsResolved === 'boolean') {
-            return ticket.snapshotIsResolved && Boolean(parseDate(ticket?.solvedAt));
-        }
         const statusId = Number(ticket?.statusId);
         const resolvedStatus =
             statusId === CORE.STATUS_CODE.SOLVED
@@ -700,9 +650,7 @@
                 element.querySelector('.ticket-overdue-label')?.remove();
                 return;
             }
-            const durations = state.publicMode && ticket.snapshotIsResolved && !ticket.solvedAt
-                ? ticket.snapshotDurations
-                : CORE.calculateTicketDurations(ticket, reference);
+            const durations = CORE.calculateTicketDurations(ticket, reference);
             const field = {
                 assignment: 'assignmentSeconds',
                 solution: 'solutionSeconds',
@@ -816,40 +764,28 @@
         const recent = snapshot
             ? createdInShift
             : CORE.sortDailyDashboardTickets(createdInShift, reference);
-        const ticketRows = recent.length ? `
+        getField('glpi-daily-recent').innerHTML = recent.length ? `
             <div class="glpi-daily-ticket glpi-daily-ticket-head" aria-hidden="true">
                 <strong>Chamado</strong><span>Título</span><span>Status</span><span>Técnico</span><span>Abertura</span>
                 <span>Tempo de atribuição</span><span>Tempo de solução</span><span>Tempo total</span>
             </div>
             ${recent.map(ticket => {
                 const visible = state.publicMode ? CORE.publicTicket(ticket, state.publicConfig) : ticket;
-                const dashboardStatus = state.publicMode
+                const displayStatus = state.publicMode
                     ? visible.status
-                    : CORE.getDashboardTicketStatus(ticket, reference).dashboardStatus;
+                    : CORE.dashboardTicketStatus(ticket);
                 return `
-                <article class="glpi-daily-ticket" data-ticket-id="${esc(ticket.id)}" data-operational-priority="${snapshot ? ticket.snapshotOperationalPriority : CORE.dailyDashboardTicketPriority(ticket, reference)}">
+                <article class="glpi-daily-ticket" data-ticket-id="${esc(ticket.id)}" data-operational-priority="${snapshot ? (ticket.snapshotIsOverdue ? 1 : ticket.snapshotIsResolved ? 3 : 2) : CORE.dailyDashboardTicketPriority(ticket, reference)}">
                     <strong>#${esc(visible.id)}</strong>
                     <span data-label="Título">${esc(visible.title || `Chamado #${ticket.id}`)}</span>
-                    <span data-label="Status" title="Status GLPI: ${esc(ticket.glpiStatus || ticket.status)}">${esc(dashboardStatus)}</span>
+                    <span data-label="Status">${esc(displayStatus)}</span>
                     <span data-label="Técnico">${esc(CORE.hasAssignedTechnician(ticket) ? technicianDisplayName(visible.technician) : 'Aguardando atendimento')}</span>
                     <time data-label="Abertura">${new Intl.DateTimeFormat('pt-BR', { timeStyle: 'short', timeZone: TZ }).format(parseDate(visible.openedAt))}</time>
                     <span class="glpi-ticket-time" data-label="Tempo de atribuição" data-ticket-id="${esc(ticket.id)}" data-time-kind="assignment">Não disponível</span>
                     <span class="glpi-ticket-time" data-label="Tempo de solução" data-ticket-id="${esc(ticket.id)}" data-time-kind="solution">Não disponível</span>
                     <span class="glpi-ticket-time glpi-ticket-total" data-label="Tempo total" data-ticket-id="${esc(ticket.id)}" data-time-kind="total"><span class="glpi-ticket-time-value">Não disponível</span></span>
                 </article>
-            `; }).join('')}` : '<p class="glpi-empty">Nenhum chamado relacionado a este plantão.</p>';
-        const pagination = state.publicMode ? `
-            <form class="glpi-daily-ticket-search" onsubmit="glpiBuscarChamadosPlantao(event)">
-                <input id="glpi-daily-ticket-search" type="search" value="${esc(state.dailyTicketsSearch)}" placeholder="Buscar por título ou técnico" maxlength="80">
-                <button class="glpi-filter-button" type="submit">Buscar</button>
-            </form>
-            <nav class="glpi-pagination glpi-daily-pagination" aria-label="Paginação dos chamados do plantão">
-                <button class="glpi-page-button" type="button" onclick="glpiPaginaChamadosPlantao(-1)" ${state.dailyTicketsPage <= 1 ? 'disabled' : ''}>Página anterior</button>
-                <span>Página ${esc(state.dailyTicketsPage)} de ${esc(state.dailyTicketsTotalPages)} • ${esc(state.dailyTicketsTotal)} chamados</span>
-                <button class="glpi-page-button" type="button" onclick="glpiPaginaChamadosPlantao(1)" ${state.dailyTicketsPage >= state.dailyTicketsTotalPages ? 'disabled' : ''}>Próxima página</button>
-            </nav>
-        ` : '';
-        getField('glpi-daily-recent').innerHTML = `${ticketRows}${pagination}`;
+            `; }).join('')}` : '<p class="glpi-empty">Nenhum chamado aberto neste plantão.</p>';
         renderDailyTimers();
     }
 
@@ -1449,43 +1385,6 @@
         } catch (error) {
             mostrarAviso('Tela cheia indisponível neste navegador.', 'aviso');
         }
-    };
-
-    async function loadPublicTicketPage(page) {
-        if (!state.publicMode || state.refreshing) return false;
-        state.refreshing = true;
-        try {
-            const data = await fetchPublicShiftTickets(page, state.dailyTicketsSearch);
-            if (!data.notModified) {
-                state.tickets = (data.tickets || []).map(normalizeTicket);
-                state.dailyTicketsPage = Number(data.pagination?.page) || 1;
-                state.dailyTicketsTotal = Number(data.pagination?.total) || 0;
-                state.dailyTicketsTotalPages = Number(data.pagination?.totalPages) || 1;
-            }
-            renderDailyDashboard();
-            return true;
-        } catch (error) {
-            console.error('Falha ao carregar página do plantão:', error);
-            mostrarAviso('Não foi possível carregar esta página de chamados.', 'aviso');
-            return false;
-        } finally {
-            state.refreshing = false;
-        }
-    }
-
-    window.glpiPaginaChamadosPlantao = function (direction) {
-        const target = Math.min(
-            state.dailyTicketsTotalPages,
-            Math.max(1, state.dailyTicketsPage + Number(direction || 0))
-        );
-        if (target !== state.dailyTicketsPage) loadPublicTicketPage(target);
-    };
-
-    window.glpiBuscarChamadosPlantao = function (event) {
-        event?.preventDefault();
-        state.dailyTicketsSearch = String(getField('glpi-daily-ticket-search')?.value || '').trim().slice(0, 80);
-        state.dailyTicketsPage = 1;
-        loadPublicTicketPage(1);
     };
 
     window.glpiSalvarConfiguracaoLocal = function () {

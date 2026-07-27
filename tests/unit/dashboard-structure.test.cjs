@@ -197,7 +197,7 @@ test('dashboard público libera somente título e técnico completos', () => {
   assert.match(coreSource, /title: ticket\.title/);
   assert.match(coreSource, /technician: ticket\.technician/);
   assert.doesNotMatch(source, /Título restrito/);
-  assert.match(source, /title: row\.title \|\| row\.name \|\| `Chamado #\$\{row\.ticket_id \|\| row\.glpi_id \|\| row\.id\}`/);
+  assert.match(source, /title: row\.title \|\| row\.name \|\| `Chamado #\$\{row\.glpi_id \|\| row\.id\}`/);
 });
 
 test('grupo técnico e responsável pela solução usam as relações reais do GLPI', () => {
@@ -222,42 +222,30 @@ test('Edge Function aceita chamada operacional validada pelo gateway sem liberar
   assert.match(edgeSource, /Acesso restrito a administradores e gestores/);
 });
 
-test('snapshot resumido e listagem paginada são separados, usam ETag e não carregam payload bruto', () => {
+test('snapshot público lê uma linha com todos os chamados do plantão, possui ETag e não carrega payload bruto', () => {
   assert.match(snapshotMigration, /create table if not exists public\.gestao_ti_dashboard_snapshot/i);
-  assert.match(snapshotMigration, /create table if not exists public\.gestao_ti_dashboard_shift_tickets/i);
   assert.match(snapshotMigration, /unique \(scope, group_id\)/i);
-  assert.doesNotMatch(snapshotMigration, /shift_tickets_json/i);
-  assert.match(snapshotMigration, /primary key \(scope, group_id, shift_start, ticket_id\)/i);
-  assert.doesNotMatch(snapshotSource, /shiftTickets[\s\S]{0,120}\.slice\(0,\s*10\)/);
+  assert.doesNotMatch(snapshotMigration, /jsonb_array_length\(shift_tickets_json\)\s*<=/i);
+  assert.doesNotMatch(snapshotSource, /operationalSort\(openedInShift[\s\S]{0,120}\.slice\(/);
   assert.doesNotMatch(source, /createdInShift\.slice\(0,\s*10\)/);
   assert.match(snapshotMigration, /enable row level security/i);
   assert.match(snapshotMigration, /to anon[\s\S]*scope = 'daily_public'/i);
   assert.match(publicEdgeSource, /\.maybeSingle\(\)/);
-  assert.match(publicEdgeSource, /resource === 'tickets'/);
-  assert.match(publicEdgeSource, /DEFAULT_PAGE_SIZE = 50/);
-  assert.match(publicEdgeSource, /\.range\(first, first \+ pageSize - 1\)/);
-  assert.match(publicEdgeSource, /gestao_ti_dashboard_shift_tickets/);
   assert.match(publicEdgeSource, /If-None-Match/);
   assert.match(publicEdgeSource, /status: 304/);
   assert.match(publicEdgeSource, /Cache-Control': 'public, max-age=15, stale-while-revalidate=45'/);
   assert.doesNotMatch(publicEdgeSource, /select\(['"]\*['"]\)|raw_payload|limit\(2000\)/);
   assert.match(source, /If-None-Match/);
   assert.match(source, /response\.status === 304/);
-  assert.match(source, /resource', 'tickets'/);
-  assert.match(source, /pageSize', String\(state\.dailyTicketsPageSize\)/);
-  assert.match(source, /glpiPaginaChamadosPlantao/);
 });
 
-test('sincronização gera resumo e listagem transacional antes de registrar sucesso', () => {
+test('sincronização gera o snapshot antes de registrar sucesso', () => {
   const refreshPosition = edgeSource.lastIndexOf("stage = 'refresh-dashboard-snapshot'");
   const successPosition = edgeSource.lastIndexOf("stage = 'update-sync-state'");
   assert.ok(refreshPosition > 0 && successPosition > refreshPosition);
   assert.match(edgeSource, /\.select\(SNAPSHOT_TICKET_COLUMNS\)[\s\S]*\.eq\('group_id', groupId\)/);
   assert.match(edgeSource, /\.in\('status_id', \[1, 2, 3, 4\]\)/);
-  assert.match(edgeSource, /opened_at\.gte[\s\S]*assigned_at\.gte[\s\S]*solved_at\.gte[\s\S]*operational_updated_at\.gte/);
-  assert.match(edgeSource, /replace_gestao_ti_dashboard_snapshot/);
-  assert.match(snapshotMigration, /create or replace function public\.replace_gestao_ti_dashboard_snapshot/i);
-  assert.match(snapshotMigration, /grant execute on function public\.replace_gestao_ti_dashboard_snapshot\(jsonb, jsonb\)\s+to service_role/i);
+  assert.match(edgeSource, /opened_at\.gte[\s\S]*solved_at\.gte/);
   assert.doesNotMatch(SNAPSHOT_TICKET_COLUMNS_FOR_TEST(edgeSource), /raw_payload/);
 });
 

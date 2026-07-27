@@ -174,13 +174,10 @@
         return flags.isInProgress ? 'in_service' : 'waiting';
     }
 
-    function getDashboardTicketStatus(ticket, reference = new Date()) {
-        const flags = calculateTicketFlags(ticket, reference);
-        if (flags.isResolved) return { ...flags, dashboardStatus: 'Solucionado' };
-        if (flags.isPending) return { ...flags, dashboardStatus: 'Pendente' };
-        if (flags.isOverdue) return { ...flags, dashboardStatus: 'Chamado estourado' };
-        if (flags.isInProgress) return { ...flags, dashboardStatus: 'Em atendimento' };
-        return { ...flags, dashboardStatus: 'Aguardando Atribuição' };
+    function dashboardTicketStatus(ticket) {
+        const flags = calculateTicketFlags(ticket);
+        if (flags.isWaiting) return 'Aguardando Atribuição';
+        return ticket.status || 'Não disponível';
     }
 
     function isDeadlineBreached(ticket, dueField, completedField, now = new Date()) {
@@ -388,7 +385,7 @@
         hasExpiredSlaOrOla,
         calculateTicketFlags,
         classifyTicket,
-        getDashboardTicketStatus,
+        dashboardTicketStatus,
         isDeadlineBreached,
         isTicketBreached,
         shiftMetrics,
