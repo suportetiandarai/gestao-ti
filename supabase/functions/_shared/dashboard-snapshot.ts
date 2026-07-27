@@ -1,22 +1,19 @@
 type JsonRecord = Record<string, unknown>;
 
-export type DashboardShiftTicket = {
-  ticket_id: number;
+export type SnapshotTicket = {
+  id: number;
   title: string;
-  dashboard_status: string;
-  glpi_status: string;
+  status: string;
+  status_id: number;
+  technician_id: number | null;
   technician_name: string | null;
   opened_at: string;
   assigned_at: string | null;
   solved_at: string | null;
-  total_time: number | null;
-  assignment_time: number | null;
-  solution_time: number | null;
+  closed_at: string | null;
   is_pending: boolean;
   is_overdue: boolean;
   is_resolved: boolean;
-  operational_priority: number;
-  sort_key: number;
 };
 
 export type DashboardSnapshot = {
@@ -31,15 +28,9 @@ export type DashboardSnapshot = {
   pending_count: number;
   overdue_count: number;
   technicians_chart_json: Array<{ technician_id: number; label: string; value: number }>;
-  tickets_count: number;
-  list_hash: string;
+  shift_tickets_json: SnapshotTicket[];
   integration_status: 'online';
   last_synced_at: string;
-};
-
-export type DashboardSnapshotBundle = {
-  snapshot: DashboardSnapshot;
-  shiftTickets: DashboardShiftTicket[];
 };
 
 const STATUS = Object.freeze({
@@ -143,13 +134,10 @@ export function snapshotTicketFlags(ticket: JsonRecord, reference = new Date()) 
   };
 }
 
-export function getDashboardTicketStatus(ticket: JsonRecord, reference = new Date()) {
+export function dashboardTicketStatus(ticket: JsonRecord, reference = new Date()) {
   const flags = snapshotTicketFlags(ticket, reference);
-  if (flags.isResolved) return { ...flags, dashboardStatus: 'Solucionado' };
-  if (flags.isPending) return { ...flags, dashboardStatus: 'Pendente' };
-  if (flags.isOverdue) return { ...flags, dashboardStatus: 'Chamado estourado' };
-  if (flags.isInProgress) return { ...flags, dashboardStatus: 'Em atendimento' };
-  return { ...flags, dashboardStatus: 'Aguardando Atribuição' };
+  if (flags.isWaiting) return 'Aguardando Atribuição';
+  return text(ticket.status) || 'Não disponível';
 }
 
 function earliestExpiredDeadline(ticket: JsonRecord, reference: Date) {
@@ -181,45 +169,27 @@ function operationalSort(tickets: JsonRecord[], reference: Date) {
   });
 }
 
-function elapsedSeconds(start: Date | null, end: Date | null) {
-  if (!start || !end) return null;
-  return Math.max(0, Math.floor((end.getTime() - start.getTime()) / 1000));
-}
-
-function publicTicket(ticket: JsonRecord, reference: Date): DashboardShiftTicket | null {
+function publicTicket(ticket: JsonRecord, reference: Date): SnapshotTicket | null {
   const id = number(ticket.glpi_id);
   const groupId = number(ticket.group_id);
   const openedAt = date(ticket.opened_at);
   const statusId = number(ticket.status_id);
   if (!id || !groupId || !openedAt || !statusId) return null;
-  const assignedAt = date(ticket.assigned_at);
-  const solvedAt = date(ticket.solved_at);
-  const status = getDashboardTicketStatus(ticket, reference);
-  const priority = status.isOverdue ? 1 : status.isResolved ? 3 : 2;
-  const sortDate = status.isOverdue
-    ? earliestExpiredDeadline(ticket, reference)
-    : status.isResolved
-      ? -(solvedAt?.getTime() || 0)
-      : openedAt.getTime();
+  const flags = snapshotTicketFlags(ticket, reference);
   return {
-    ticket_id: id,
+    id,
     title: text(ticket.title) || `Chamado #${id}`,
-    dashboard_status: status.dashboardStatus,
-    glpi_status: text(ticket.status) || 'Não disponível',
+    status: dashboardTicketStatus(ticket, reference),
+    status_id: statusId,
+    technician_id: number(ticket.technician_id),
     technician_name: text(ticket.technician_name),
     opened_at: openedAt.toISOString(),
-    assigned_at: assignedAt?.toISOString() || null,
-    solved_at: solvedAt?.toISOString() || null,
-    assignment_time: elapsedSeconds(openedAt, assignedAt || reference),
-    solution_time: assignedAt
-      ? elapsedSeconds(assignedAt, solvedAt || (status.isResolved ? null : reference))
-      : 0,
-    total_time: elapsedSeconds(openedAt, solvedAt || (status.isResolved ? null : reference)),
-    is_pending: status.isPending,
-    is_overdue: status.isOverdue,
-    is_resolved: status.isResolved,
-    operational_priority: priority,
-    sort_key: Number.isFinite(sortDate) ? sortDate : openedAt.getTime(),
+    assigned_at: date(ticket.assigned_at)?.toISOString() || null,
+    solved_at: date(ticket.solved_at)?.toISOString() || null,
+    closed_at: date(ticket.closed_at)?.toISOString() || null,
+    is_pending: flags.isPending,
+    is_overdue: flags.isOverdue,
+    is_resolved: flags.isResolved,
   };
 }
 
@@ -228,7 +198,7 @@ export function buildDashboardSnapshot(
   groupId: number,
   syncedAt: string,
   reference = new Date(),
-): DashboardSnapshotBundle {
+): DashboardSnapshot {
   const shift = currentShiftWindow(reference);
   const unique = new Map<number, JsonRecord>();
   tickets.forEach((ticket) => {
@@ -262,37 +232,28 @@ export function buildDashboardSnapshot(
       value: (current?.value || 0) + 1,
     });
   });
-  const relatedToShift = groupTickets.filter((ticket) =>
-    isWithin(ticket.opened_at, shift.start, shift.end)
-    || isWithin(ticket.assigned_at, shift.start, shift.end)
-    || isWithin(ticket.solved_at, shift.start, shift.end)
-    || isWithin(ticket.operational_updated_at, shift.start, shift.end));
-  const shiftTickets = operationalSort(relatedToShift, reference)
+  const shiftTickets = operationalSort(openedInShift, reference)
     .map((ticket) => publicTicket(ticket, reference))
-    .filter((ticket): ticket is DashboardShiftTicket => Boolean(ticket));
+    .filter((ticket): ticket is SnapshotTicket => Boolean(ticket));
   return {
-    snapshot: {
-      scope: 'daily_public',
-      group_id: groupId,
-      shift_start: shift.start.toISOString(),
-      shift_end: shift.end.toISOString(),
-      shift_type: shift.type,
-      open_count: openedInShift.length,
-      in_progress_count: classified.filter(({ flags }) => flags.isInProgress).length,
-      waiting_count: classified.filter(({ flags }) => flags.isWaiting).length,
-      pending_count: classified.filter(({ flags }) => flags.isPending).length,
-      overdue_count: classified.filter(({ flags }) => flags.isOverdue).length,
-      technicians_chart_json: [...technicians.values()]
-        .sort((left, right) =>
-          right.value - left.value
-          || left.label.localeCompare(right.label)
-          || left.technician_id - right.technician_id),
-      tickets_count: shiftTickets.length,
-      list_hash: '',
-      integration_status: 'online',
-      last_synced_at: syncedAt,
-    },
-    shiftTickets,
+    scope: 'daily_public',
+    group_id: groupId,
+    shift_start: shift.start.toISOString(),
+    shift_end: shift.end.toISOString(),
+    shift_type: shift.type,
+    open_count: openedInShift.length,
+    in_progress_count: classified.filter(({ flags }) => flags.isInProgress).length,
+    waiting_count: classified.filter(({ flags }) => flags.isWaiting).length,
+    pending_count: classified.filter(({ flags }) => flags.isPending).length,
+    overdue_count: classified.filter(({ flags }) => flags.isOverdue).length,
+    technicians_chart_json: [...technicians.values()]
+      .sort((left, right) =>
+        right.value - left.value
+        || left.label.localeCompare(right.label)
+        || left.technician_id - right.technician_id),
+    shift_tickets_json: shiftTickets,
+    integration_status: 'online',
+    last_synced_at: syncedAt,
   };
 }
 
@@ -306,12 +267,6 @@ export async function snapshotHash(snapshot: DashboardSnapshot) {
   const bytes = new TextEncoder().encode(JSON.stringify(etagPayload(snapshot)));
   const digest = await crypto.subtle.digest('SHA-256', bytes);
   return [...new Uint8Array(digest)].map((value) => value.toString(16).padStart(2, '0')).join('');
-}
-
-export async function contentHash(value: unknown) {
-  const bytes = new TextEncoder().encode(JSON.stringify(value));
-  const digest = await crypto.subtle.digest('SHA-256', bytes);
-  return [...new Uint8Array(digest)].map((item) => item.toString(16).padStart(2, '0')).join('');
 }
 
 export const SNAPSHOT_TICKET_COLUMNS = [
@@ -333,5 +288,4 @@ export const SNAPSHOT_TICKET_COLUMNS = [
   'internal_attention_due_at',
   'solving_technician_id',
   'solving_technician_name',
-  'operational_updated_at',
 ].join(',');
