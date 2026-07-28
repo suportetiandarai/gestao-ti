@@ -4,8 +4,9 @@
     const source = document.body.dataset.dashboard;
     const isTraining = source === 'training';
     const isAd = source === 'ad';
+    const core = window.SheetsDashboardCore;
     const pageSize = 50;
-    const state = { page: 1, etag: '', timer: null, loading: false };
+    const state = { page: 1, etag: '', timer: null, shiftTimer: null, loading: false };
 
     function get(id) {
         return document.getElementById(id);
@@ -30,8 +31,23 @@
 
     function statusLabel(status) {
         const labels = isTraining
-            ? { completed: 'Realizado', scheduled: 'Agendado', not_scheduled: 'Não agendado' }
-            : { completed: 'Realizado', pending: 'Pendente', not_completed: 'Não realizado' };
+            ? {
+                completed: 'Realizado',
+                scheduled: 'Agendado',
+                not_scheduled: 'Pendente de agendamento',
+                no_contact: 'Sem contato',
+                duplicate: 'Duplicado',
+                other: 'Outros',
+                pending: 'Pendente de tratamento'
+            }
+            : isAd
+                ? {
+                    completed: 'Realizado',
+                    already_exists: 'Já existente',
+                    pending: 'Pendente',
+                    not_completed: 'Não realizado'
+                }
+                : { completed: 'Realizado', pending: 'Pendente', not_completed: 'Não realizado' };
         return labels[status] || 'Não informado';
     }
 
@@ -150,8 +166,22 @@
         get('next-page').addEventListener('click', () => changePage(1));
         load({ preserveEtag: false });
         state.timer = window.setInterval(() => load(), 30000);
+        scheduleShiftRefresh();
     }
 
-    window.addEventListener('beforeunload', () => window.clearInterval(state.timer));
+    function scheduleShiftRefresh() {
+        window.clearTimeout(state.shiftTimer);
+        const milliseconds = Math.max(1000, core.getShiftEnd(new Date()).getTime() - Date.now() + 1000);
+        state.shiftTimer = window.setTimeout(() => {
+            state.page = 1;
+            state.etag = '';
+            load({ preserveEtag: false }).finally(scheduleShiftRefresh);
+        }, milliseconds);
+    }
+
+    window.addEventListener('beforeunload', () => {
+        window.clearInterval(state.timer);
+        window.clearTimeout(state.shiftTimer);
+    });
     document.addEventListener('DOMContentLoaded', start);
 })();

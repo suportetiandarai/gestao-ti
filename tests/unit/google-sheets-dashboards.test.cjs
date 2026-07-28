@@ -15,15 +15,15 @@ test('rotas públicas são independentes do Auth e não possuem referências sen
   }
 });
 
-test('sincronizador aplica o corte, ignora vermelho e mantém os status esperados', () => {
+test('sincronizador aplica o corte e usa o texto normalizado como fonte do status', () => {
   const shared = read('supabase/functions/_shared/google-sheets.ts');
   const sync = read('supabase/functions/google-sheets-sync/index.ts');
   assert.match(sync, /2026-07-28T00:00:00-03:00/);
-  assert.match(sync, /colorStatus === 'ignore'/);
-  assert.match(shared, /CADASTRADO/);
-  assert.match(shared, /PENDENTE/);
-  assert.match(shared, /return 'scheduled'/);
-  assert.match(shared, /return 'not_scheduled'/);
+  assert.doesNotMatch(sync, /trainingColors|backgroundColor/);
+  assert.match(shared, /classifyTrainingStatus/);
+  assert.match(shared, /normalizeStatus/);
+  assert.match(shared, /already_exists/);
+  assert.match(shared, /no_contact/);
 });
 
 test('endpoint público usa paginação, ETag e seleção explícita sem payload bruto', () => {
@@ -32,7 +32,30 @@ test('endpoint público usa paginação, ETag e seleção explícita sem payload
   assert.match(endpoint, /status: 304/);
   assert.match(endpoint, /page_size/);
   assert.match(endpoint, /limit=\$\{pageSize\}/);
+  assert.match(endpoint, /hidden_after_shift\.gt/);
+  assert.match(endpoint, /is_source_present=eq\.true/);
   assert.doesNotMatch(endpoint, /raw_payload|select=\*/);
+});
+
+test('migração preserva histórico e registra os horários de status e conclusão', () => {
+  const migration = read('supabase/migrations/20260728190000_016_google_sheets_status_shifts.sql');
+  assert.match(migration, /status_updated_at timestamptz/);
+  assert.match(migration, /completed_at timestamptz/);
+  assert.match(migration, /hidden_after_shift timestamptz/);
+  assert.match(migration, /is_source_present boolean/);
+  assert.match(migration, /mark_missing_google_sheet_requests/);
+  assert.doesNotMatch(migration, /\bdelete\s+from\b/i);
+});
+
+test('títulos públicos contêm somente os textos operacionais solicitados', () => {
+  const timed = read('dashboard-timed/index.html');
+  const training = read('dashboard-treinamentos/index.html');
+  const ad = read('dashboard-ad/index.html');
+  assert.match(timed, /<h1>Solicitações TIMED<\/h1>[\s\S]*Solicitações recebidas a partir de 28\/07\/2026/);
+  assert.match(training, /<h1>Solicitações de Treinamento<\/h1>[\s\S]*Solicitações recebidas a partir de 28\/07\/2026/);
+  assert.doesNotMatch(training, /registros antigos|são ignorados/i);
+  assert.match(ad, /<h1>Solicitações AD<\/h1>[\s\S]*Solicitações AD recebidas a partir de 28\/07\/2026/);
+  assert.doesNotMatch(ad, /Acompanhamento operacional/);
 });
 
 test('estado público usa o último sucesso e participa do ETag', () => {

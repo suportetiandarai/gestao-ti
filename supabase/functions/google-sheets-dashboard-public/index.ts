@@ -1,4 +1,4 @@
-export {};
+import { getShiftEnd } from '../_shared/google-sheets.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -68,7 +68,8 @@ Deno.serve(async (request) => {
     if (!syncStateResponse.ok) throw new Error(`Sincronização HTTP ${syncStateResponse.status}`);
     const syncState = (await syncStateResponse.json())?.[0];
     const status = synchronizationStatus(syncState?.last_success_at || snapshot.last_synced_at);
-    const etag = `"${snapshot.snapshot_hash}-${status}-${page}-${pageSize}"`;
+    const shiftEnd = getShiftEnd(new Date()).toISOString();
+    const etag = `"${snapshot.snapshot_hash}-${status}-${shiftEnd}-${page}-${pageSize}"`;
     const responseHeaders = {
       'Cache-Control': 'public, max-age=15, stale-while-revalidate=45',
       ETag: etag,
@@ -88,11 +89,17 @@ Deno.serve(async (request) => {
       : source === 'timed'
         ? 'source_row,requested_at,requester_name,sector,job_title,dashboard_status'
         : 'source_row,requested_at,requester_name,dashboard_status';
+    const now = encodeURIComponent(new Date().toISOString());
     const rowsResponse = await database(
-      `google_sheet_requests?source=eq.${source}&select=${fields}&order=sort_priority.asc,requested_at.desc&offset=${offset}&limit=${pageSize}`,
+      `google_sheet_requests?source=eq.${source}&is_source_present=eq.true` +
+      `&or=(hidden_after_shift.is.null,hidden_after_shift.gt.${now})` +
+      `&select=${fields}&order=sort_priority.asc,requested_at.desc&offset=${offset}&limit=${pageSize}`,
     );
     if (!rowsResponse.ok) throw new Error(`Listagem HTTP ${rowsResponse.status}`);
     const rows = await rowsResponse.json();
+    const contentRange = rowsResponse.headers.get('Content-Range') || '';
+    const visibleTotal = Number.parseInt(contentRange.split('/')[1] || '', 10);
+    const total = Number.isFinite(visibleTotal) ? visibleTotal : rows.length;
     return json({
       ok: true,
       dashboard: source,
@@ -103,7 +110,7 @@ Deno.serve(async (request) => {
         notStarted: snapshot.not_started_count,
       },
       rows,
-      page: { current: page, pageSize, total: snapshot.total_count },
+      page: { current: page, pageSize, total },
       status,
       cutoffAt: snapshot.cutoff_at,
       lastSyncedAt: snapshot.last_synced_at,

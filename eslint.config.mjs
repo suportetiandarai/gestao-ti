@@ -49,7 +49,7 @@ export default [
     },
   },
   {
-    files: ['glpi-dashboard-core.js'],
+    files: ['glpi-dashboard-core.js', 'sheets-dashboard-core.js'],
     languageOptions: {
       globals: { ...sharedBrowserGlobals, module: 'readonly' },
     },

@@ -29,11 +29,13 @@ body.sheet-dashboard {
 }
 
 .sheet-dashboard-header {
+    position: relative;
     display: flex;
-    align-items: flex-start;
-    justify-content: space-between;
+    align-items: center;
+    justify-content: center;
     gap: 1rem;
     margin-bottom: 1.25rem;
+    text-align: center;
 }
 
 .sheet-dashboard-header h1 {
@@ -52,6 +54,8 @@ body.sheet-dashboard {
 }
 
 .sheet-dashboard-actions {
+    position: absolute;
+    right: 0;
     display: flex;
     flex-wrap: wrap;
     justify-content: flex-end;
@@ -232,6 +236,7 @@ body.sheet-dashboard {
     }
 
     .sheet-dashboard-actions {
+        position: static;
         justify-content: stretch;
     }
 

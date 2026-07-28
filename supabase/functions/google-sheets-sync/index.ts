@@ -1,8 +1,12 @@
 import {
+  classifyAdStatus,
   classifyTimedStatus,
-  classifyTrainingColor,
+  classifyTrainingStatus,
   columnValues,
   getGoogleAccessToken,
+  getShiftEnd,
+  isTerminalStatus,
+  normalizeStatus,
   parseSheetDate,
   sanitizeText,
   sha256,
@@ -14,17 +18,17 @@ const CONFIG = {
   timed: {
     spreadsheetId: Deno.env.get('GOOGLE_TIMED_SPREADSHEET_ID') || '1EVGXL_NUV_koXR1mH_X4z_YqVmsaLytCX84ONYTzD9I',
     sheetName: Deno.env.get('GOOGLE_TIMED_SHEET_NAME') || 'Respostas ao formulário 1',
-    columns: ['A:A', 'D:D', 'J:J', 'N:N', 'Q:Q'],
+    columns: ['A:A', 'D:D', 'J:J', 'N:N', 'Q:Q', 'T:T', 'U:U'],
   },
   training: {
     spreadsheetId: Deno.env.get('GOOGLE_TRAINING_SPREADSHEET_ID') || '1vcNxK3VQ4TwIxdHWWPCQcyYY6nS1MfRLFw9c8lxza_U',
     sheetName: Deno.env.get('GOOGLE_TRAINING_SHEET_NAME') || 'Respostas ao formulário 1',
-    columns: ['A:A', 'C:C', 'D:D', 'E:E', 'I:I', 'K:K'],
+    columns: ['A:A', 'C:C', 'D:D', 'E:E', 'I:I', 'K:K', 'O:O', 'P:P'],
   },
   ad: {
     spreadsheetId: Deno.env.get('GOOGLE_AD_SPREADSHEET_ID') || '1_j13tglIFAWDcvLx2dsMGLugThdrrzbjKHYNt9H5Qj4',
     sheetName: Deno.env.get('GOOGLE_AD_SHEET_NAME') || 'SOLICITACÕES AD',
-    columns: ['A:A', 'B:B', 'F:F'],
+    columns: ['A:A', 'B:B', 'F:F', 'H:H', 'I:I'],
   },
 } as const;
 
@@ -78,33 +82,30 @@ async function valuesFor(source: SheetSource, accessToken: string) {
   return (await response.json()).valueRanges || [];
 }
 
-async function trainingColors(accessToken: string) {
-  const config = CONFIG.training;
-  const query = new URLSearchParams({
-    includeGridData: 'true',
-    ranges: `'${config.sheetName}'!K1:K`,
-    fields: 'sheets.data(startRow,rowData.values.effectiveFormat.backgroundColor)',
-  });
-  const response = await fetch(
-    `https://sheets.googleapis.com/v4/spreadsheets/${config.spreadsheetId}?${query}`,
-    { headers: { Authorization: `Bearer ${accessToken}` } },
+type ExistingStatus = {
+  source_row: number;
+  normalized_status: string;
+  status_updated_at: string | null;
+  completed_at: string | null;
+};
+
+async function existingStatuses(source: SheetSource) {
+  const response = await database(
+    `google_sheet_requests?source=eq.${source}&select=source_row,normalized_status,status_updated_at,completed_at`,
   );
-  if (!response.ok) throw new Error(`Google Sheets cores HTTP ${response.status}`);
-  const body = await response.json();
-  const data = body.sheets?.[0]?.data?.[0];
-  const startRow = Number(data?.startRow || 0);
-  const colors = new Map<number, { red?: number; green?: number; blue?: number }>();
-  for (const [index, row] of (data?.rowData || []).entries()) {
-    colors.set(startRow + index + 1, row?.values?.[0]?.effectiveFormat?.backgroundColor || {});
-  }
-  return colors;
+  const rows = await response.json() as ExistingStatus[];
+  return new Map(rows.map((row) => [row.source_row, row]));
 }
 
-async function normalize(source: SheetSource, accessToken: string, marker: string) {
+async function normalize(
+  source: SheetSource,
+  accessToken: string,
+  marker: string,
+  existing: Map<number, ExistingStatus>,
+) {
   const ranges = await valuesFor(source, accessToken);
   const columns = ranges.map((_: unknown, index: number) => columnValues(ranges, index));
   const rowCount = Math.max(...columns.map((column: unknown[]) => column.length), 0);
-  const colors = source === 'training' ? await trainingColors(accessToken) : new Map();
   const records: NormalizedSheetRequest[] = [];
 
   for (let sourceRow = 2; sourceRow <= rowCount; sourceRow += 1) {
@@ -130,16 +131,26 @@ async function normalize(source: SheetSource, accessToken: string, marker: strin
       jobTitle = sanitizeText(columns[3]?.[index], 120);
       trainingTopic = sanitizeText(columns[4]?.[index], 180) || null;
       sourceStatus = sanitizeText(columns[5]?.[index], 80);
-      const colorStatus = classifyTrainingColor(colors.get(sourceRow));
-      if (colorStatus === 'ignore') continue;
-      dashboardStatus = colorStatus;
+      dashboardStatus = classifyTrainingStatus(sourceStatus);
     } else {
       sector = '';
       jobTitle = '';
       sourceStatus = sanitizeText(columns[2]?.[index], 80);
-      dashboardStatus = classifyTimedStatus(sourceStatus);
+      dashboardStatus = classifyAdStatus(sourceStatus);
     }
 
+    const normalized = normalizeStatus(sourceStatus);
+    const previous = existing.get(sourceRow);
+    const sheetStatusUpdatedAt = parseSheetDate(columns[columns.length - 2]?.[index]);
+    const sheetCompletedAt = parseSheetDate(columns[columns.length - 1]?.[index]);
+    const statusChanged = !previous || previous.normalized_status !== normalized;
+    const statusUpdatedAt = sheetStatusUpdatedAt ||
+      (statusChanged ? new Date().toISOString() : previous?.status_updated_at || null);
+    const terminal = isTerminalStatus(source, dashboardStatus);
+    const completedAt = terminal
+      ? sheetCompletedAt || (statusChanged ? statusUpdatedAt : previous?.completed_at) || null
+      : null;
+    const hiddenAfterShift = completedAt ? getShiftEnd(new Date(completedAt)).toISOString() : null;
     const record = {
       source,
       source_row: sourceRow,
@@ -149,8 +160,14 @@ async function normalize(source: SheetSource, accessToken: string, marker: strin
       job_title: jobTitle || null,
       training_topic: trainingTopic,
       source_status: sourceStatus || null,
+      normalized_status: normalized,
       dashboard_status: dashboardStatus,
-      sort_priority: dashboardStatus === 'pending' ? 1 : dashboardStatus === 'scheduled' ? 2 :
+      status_updated_at: statusUpdatedAt,
+      completed_at: completedAt,
+      hidden_after_shift: hiddenAfterShift,
+      is_source_present: true,
+      sort_priority: ['pending', 'no_contact', 'duplicate', 'other'].includes(dashboardStatus) ? 1 :
+        dashboardStatus === 'scheduled' ? 2 :
         dashboardStatus === 'not_completed' || dashboardStatus === 'not_scheduled' ? 3 : 4,
       row_hash: '',
       sync_marker: marker,
@@ -179,7 +196,8 @@ async function synchronize(source: SheetSource, accessToken: string) {
 
   let processed = 0;
   try {
-    const records = await normalize(source, accessToken, marker);
+    const existing = await existingStatuses(source);
+    const records = await normalize(source, accessToken, marker, existing);
     processed = records.length;
     if (records.length) {
       await database('google_sheet_requests?on_conflict=source,source_row', {
@@ -188,7 +206,7 @@ async function synchronize(source: SheetSource, accessToken: string) {
         body: JSON.stringify(records),
       });
     }
-    await database('rpc/prune_google_sheet_requests', {
+    await database('rpc/mark_missing_google_sheet_requests', {
       method: 'POST',
       body: JSON.stringify({ p_source: source, p_sync_marker: marker, p_cutoff_at: cutoff }),
     });
@@ -196,7 +214,9 @@ async function synchronize(source: SheetSource, accessToken: string) {
     const counts = {
       completed: records.filter((row) => row.dashboard_status === 'completed').length,
       pending: records.filter((row) => ['pending', 'scheduled'].includes(row.dashboard_status)).length,
-      notStarted: records.filter((row) => ['not_completed', 'not_scheduled'].includes(row.dashboard_status)).length,
+      notStarted: records.filter((row) =>
+        ['not_completed', 'not_scheduled', 'no_contact', 'duplicate', 'other'].includes(row.dashboard_status)
+      ).length,
     };
     const snapshotHash = await sha256(records.map((row) => ({
       source: row.source,
@@ -208,6 +228,8 @@ async function synchronize(source: SheetSource, accessToken: string) {
       training_topic: row.training_topic,
       source_status: row.source_status,
       dashboard_status: row.dashboard_status,
+      status_updated_at: row.status_updated_at,
+      completed_at: row.completed_at,
       sort_priority: row.sort_priority,
       row_hash: row.row_hash,
     })));

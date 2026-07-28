@@ -9,13 +9,20 @@ export type NormalizedSheetRequest = {
   job_title: string | null;
   training_topic: string | null;
   source_status: string | null;
-  dashboard_status: 'completed' | 'pending' | 'not_completed' | 'scheduled' | 'not_scheduled';
+  normalized_status: string;
+  dashboard_status: DashboardSheetStatus;
+  status_updated_at: string | null;
+  completed_at: string | null;
+  hidden_after_shift: string | null;
+  is_source_present: boolean;
   sort_priority: number;
   row_hash: string;
   sync_marker: string;
 };
 
-type Rgb = { red?: number; green?: number; blue?: number };
+export type DashboardSheetStatus =
+  'completed' | 'pending' | 'not_completed' | 'scheduled' | 'not_scheduled' |
+  'already_exists' | 'no_contact' | 'duplicate' | 'other';
 
 const encoder = new TextEncoder();
 
@@ -44,21 +51,85 @@ export function parseSheetDate(value: unknown) {
   return Number.isNaN(parsed.getTime()) ? null : parsed.toISOString();
 }
 
-export function classifyTrainingColor(color: Rgb | null | undefined) {
-  const red = color?.red ?? 1;
-  const green = color?.green ?? 1;
-  const blue = color?.blue ?? 1;
-  if (red > 0.75 && red - green > 0.15 && blue < 0.75) return 'ignore';
-  if (green > 0.75 && green - red > 0.15 && blue < 0.55) return 'completed';
-  if (red > 0.8 && green > 0.75 && blue < 0.55) return 'scheduled';
-  return 'not_scheduled';
+export function normalizeStatus(value: unknown) {
+  return String(value || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '');
 }
 
 export function classifyTimedStatus(value: unknown) {
-  const normalized = String(value || '').trim().toLocaleUpperCase('pt-BR');
-  if (normalized === 'CADASTRADO' || normalized === 'REALIZADO') return 'completed';
-  if (normalized === 'PENDENTE') return 'pending';
+  const normalized = normalizeStatus(value);
+  if (['cadastrado', 'realizado', 'concluido'].includes(normalized)) return 'completed';
+  if (normalized === 'pendente') return 'pending';
   return 'not_completed';
+}
+
+export function classifyAdStatus(value: unknown): DashboardSheetStatus {
+  const normalized = normalizeStatus(value);
+  if (normalized === 'realizado') return 'completed';
+  if (normalized === 'ja_existente') return 'already_exists';
+  return normalized ? 'pending' : 'not_completed';
+}
+
+export function classifyTrainingStatus(value: unknown): DashboardSheetStatus {
+  const normalized = normalizeStatus(value);
+  if (['realizado', 'concluido'].includes(normalized)) return 'completed';
+  if (normalized === 'agendado') return 'scheduled';
+  if (normalized === 'sem_contato') return 'no_contact';
+  if (normalized === 'duplicado') return 'duplicate';
+  if (['outro', 'outros'].includes(normalized)) return 'other';
+  return normalized ? 'pending' : 'not_scheduled';
+}
+
+export function isTerminalStatus(source: SheetSource, status: DashboardSheetStatus) {
+  return status === 'completed' || (source === 'ad' && status === 'already_exists');
+}
+
+function saoPauloParts(value: Date) {
+  const values: Record<string, number> = {};
+  for (const part of new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Sao_Paulo',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hourCycle: 'h23',
+  }).formatToParts(value)) {
+    if (part.type !== 'literal') values[part.type] = Number(part.value);
+  }
+  return values;
+}
+
+function localDateTime(parts: Record<string, number>) {
+  const target = Date.UTC(parts.year, parts.month - 1, parts.day, parts.hour, parts.minute || 0, parts.second || 0);
+  let candidate = target;
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    const current = saoPauloParts(new Date(candidate));
+    const represented = Date.UTC(
+      current.year, current.month - 1, current.day, current.hour, current.minute, current.second,
+    );
+    candidate += target - represented;
+  }
+  return new Date(candidate);
+}
+
+export function getShiftEnd(value: Date) {
+  const parts = saoPauloParts(value);
+  const endHour = parts.hour >= 7 && parts.hour < 19 ? 19 : 7;
+  const nextDay = parts.hour >= 19;
+  const calendar = new Date(Date.UTC(parts.year, parts.month - 1, parts.day + (nextDay ? 1 : 0)));
+  return localDateTime({
+    year: calendar.getUTCFullYear(),
+    month: calendar.getUTCMonth() + 1,
+    day: calendar.getUTCDate(),
+    hour: endHour,
+  });
 }
 
 export async function sha256(value: unknown) {

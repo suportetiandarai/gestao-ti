@@ -14,6 +14,7 @@ const assets = [
   'glpi-dashboard-core.js',
   'glpi-dashboard.js',
   'sheets-dashboard.js',
+  'sheets-dashboard-core.js',
   'sheets-dashboard.css',
   'inventory-scanner.js',
   'inventory-transfer.js',
@@ -34,7 +35,7 @@ for (const asset of assets) {
 const html = await readFile(join(dist, 'index.html'), 'utf8');
 for (const asset of assets.filter((name) =>
   /\.(?:js|css|png)$/.test(name) &&
-  !['config.example.js', 'sheets-dashboard.js', 'sheets-dashboard.css'].includes(name)
+  !['config.example.js', 'sheets-dashboard.js', 'sheets-dashboard-core.js', 'sheets-dashboard.css'].includes(name)
 )) {
   if (!html.includes(asset) && !['fundo.png'].includes(asset)) {
     throw new Error(`Artefato não referenciado no HTML: ${asset}`);
