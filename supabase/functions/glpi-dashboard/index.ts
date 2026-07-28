@@ -361,6 +361,55 @@ class GlpiClient {
     return ids;
   }
 
+  async ticketsByIds(ticketIds: number[]) {
+    const batchSize = boundedNumber('GLPI_RECONCILE_BATCH_SIZE', 50, 1, 100);
+    const tickets: JsonRecord[] = [];
+    for (let start = 0; start < ticketIds.length; start += batchSize) {
+      const ids = ticketIds.slice(start, start + batchSize);
+      const params = new URLSearchParams({ expand_dropdowns: 'true' });
+      ids.forEach((id, index) => {
+        params.set(`items[${index}][itemtype]`, 'Ticket');
+        params.set(`items[${index}][items_id]`, String(id));
+      });
+      try {
+        const result = await this.request(`getMultipleItems?${params.toString()}`, { method: 'GET' });
+        const rows = Array.isArray(result) ? result as JsonRecord[] : [];
+        rows.forEach((row) => {
+          const candidate = row.data && typeof row.data === 'object'
+            ? row.data as JsonRecord
+            : row;
+          if (numberOrNull(candidate.id)) tickets.push(candidate);
+        });
+      } catch {
+        const fallback = await Promise.all(ids.map(async (id) =>
+          this.request(`Ticket/${id}?expand_dropdowns=true`, { method: 'GET' }) as Promise<JsonRecord>
+        ));
+        tickets.push(...fallback.filter((ticket) => numberOrNull(ticket.id)));
+      }
+    }
+    return tickets;
+  }
+
+  async getRelevantGroupTickets(groupId: number, shiftStart: string, shiftEnd: string) {
+    const ids = [...await this.technicalGroupTicketIds(groupId)];
+    const tickets = await this.ticketsByIds(ids);
+    const start = new Date(shiftStart).getTime();
+    const end = new Date(shiftEnd).getTime();
+    const withinShift = (value: unknown) => {
+      const normalized = normalizeDate(value);
+      if (!normalized) return false;
+      const instant = new Date(normalized).getTime();
+      return instant >= start && instant < end;
+    };
+    return tickets
+      .filter((ticket) =>
+        ![5, 6].includes(Number(ticket.status))
+        || withinShift(ticket.date)
+        || withinShift(ticket.solvedate)
+      )
+      .map((ticket) => ({ ...ticket, _dashboard_group_prevalidated: true }));
+  }
+
   async technicianName(userId: number) {
     const cached = this.userCache.get(userId);
     if (cached) return cached;
@@ -375,10 +424,14 @@ class GlpiClient {
     if (!ticketId) return ticket;
 
     const isFinal = [5, 6].includes(Number(ticket.status));
+    const targetGroup = await this.resolveTechnicalGroup();
+    const groupPrevalidated = ticket._dashboard_group_prevalidated === true;
     const [relationsResult, logsResult, groupsResult, solutionsResult] = await Promise.all([
       this.request(`Ticket/${ticketId}/Ticket_User`, { method: 'GET' }),
       this.request(`Ticket/${ticketId}/Log?range=0-99`, { method: 'GET' }),
-      this.request(`Ticket/${ticketId}/Group_Ticket`, { method: 'GET' }),
+      groupPrevalidated
+        ? Promise.resolve([])
+        : this.request(`Ticket/${ticketId}/Group_Ticket`, { method: 'GET' }),
       isFinal
         ? this.request(`Ticket/${ticketId}/ITILSolution`, { method: 'GET' })
         : Promise.resolve([]),
@@ -388,9 +441,11 @@ class GlpiClient {
     const groupRelations = Array.isArray(groupsResult) ? groupsResult as JsonRecord[] : [];
     const solutions = Array.isArray(solutionsResult) ? solutionsResult as JsonRecord[] : [];
     const technicianRelations = relations.filter((relation) => Number(relation.type) === 2 && numberOrNull(relation.users_id));
-    const technicalGroups = groupRelations
-      .filter((relation) => Number(relation.type) === 2 && numberOrNull(relation.groups_id))
-      .map((relation) => ({ id: Number(relation.groups_id) }));
+    const technicalGroups = groupPrevalidated
+      ? [{ id: targetGroup.id }]
+      : groupRelations
+        .filter((relation) => Number(relation.type) === 2 && numberOrNull(relation.groups_id))
+        .map((relation) => ({ id: Number(relation.groups_id) }));
     const assignmentEvents = logs
       .filter((entry) => {
         const assignedValue = comparable(entry.new_value);
@@ -416,7 +471,6 @@ class GlpiClient {
         source: ticket.date_assign ? 'ticket_date_assign' : 'history',
       };
     }));
-    const targetGroup = await this.resolveTechnicalGroup();
     const belongsToTargetGroup = technicalGroups.some((group) => group.id === targetGroup.id);
     const latestSolution = [...solutions]
       .filter((solution) => numberOrNull(solution.users_id))
@@ -704,7 +758,21 @@ Deno.serve(async (request) => {
     if (syncStateError) throw syncStateError;
     const previousCursor = action === 'sync-current-shift' ? null : (syncState.last_cursor ? String(syncState.last_cursor) : null);
     stage = 'fetch-tickets';
-    const rawTickets = await glpi.getTickets(previousCursor);
+    const fullReconciliation = action === 'sync-current-shift' || !previousCursor;
+    let rawTickets: JsonRecord[];
+    if (fullReconciliation) {
+      const { data: shifts, error: shiftError } = await admin.rpc('get_current_shift', {
+        p_reference: new Date().toISOString(),
+      });
+      if (shiftError) throw shiftError;
+      const shift = Array.isArray(shifts) ? shifts[0] as JsonRecord : null;
+      const shiftStart = normalizeDate(shift?.shift_start);
+      const shiftEnd = normalizeDate(shift?.shift_end);
+      if (!shiftStart || !shiftEnd) throw new Error('Não foi possível calcular o plantão para a reconciliação.');
+      rawTickets = await glpi.getRelevantGroupTickets(technicalGroup.id, shiftStart, shiftEnd);
+    } else {
+      rawTickets = await glpi.getTickets(previousCursor);
+    }
     stage = 'enrich-tickets';
     const enriched = await glpi.enrichTickets(rawTickets);
     const targetTickets = enriched.filter((ticket) => ticket._dashboard_in_tech_group === true);

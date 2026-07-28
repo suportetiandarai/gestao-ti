@@ -228,14 +228,16 @@ Erros 429/5xx, falhas de rede e timeout recebem até três tentativas por padrã
 Sessão GLPI inválida é renovada uma vez de forma controlada. Erros definitivos
 preservam o cache anterior e marcam a integração como `offline`. O Supabase Cron
 executa um único job por minuto; o front-end relê o cache a cada 30 segundos e
-considera atraso após a tolerância configurada. Na rota pública, a comparação
+considera atraso após três ciclos reais do back-end (180 segundos). Na rota pública, a comparação
 usa `checkedAt` retornado pela Edge Function para neutralizar relógio local
 incorreto ou conversão duplicada de fuso.
 
-No primeiro bootstrap, quando ainda não existe cursor, a função limita a carga a
-`GLPI_SYNC_INITIAL_MAX_PAGES` (padrão `1`, com 100 chamados por página). Isso
-evita tentar enriquecer todo o histórico dentro de uma única execução. Depois
-do primeiro cursor, `GLPI_SYNC_MAX_PAGES` controla as páginas incrementais.
+No primeiro bootstrap, quando ainda não existe cursor, a função pesquisa os IDs
+reais associados como grupo técnico “Suporte TI”. Em lotes, carrega somente os
+chamados não finalizados do grupo e os abertos ou solucionados no plantão atual.
+Isso inclui pendências antigas sem reprocessar todo o histórico. Depois da
+reconciliação, `GLPI_SYNC_MAX_PAGES` controla somente as páginas incrementais
+por `date_mod`, com sobreposição de segurança.
 
 O modo demonstração é exclusivamente local e opt-in. Cache vazio, falha de RLS,
 sessão ausente ou indisponibilidade do GLPI exibem `Offline • GLPI` e não criam
@@ -246,8 +248,9 @@ sincronização não depende de navegador ou sessão administrativa.
 
 `/dashboard-diario` não cria nem reutiliza sessão do Supabase Auth. O navegador
 faz `GET` em `glpi-dashboard-public`, uma função dedicada que não contém ações
-de sincronização e usa apenas a chave anônima. Pela política RLS, ela pode ler
-somente `scope='daily_public'` em `gestao_ti_dashboard_snapshot`.
+de sincronização. A Service Role permanece somente no runtime da função; o
+navegador recebe apenas snapshot e página projetada por
+`get_shift_tickets`, sem acesso direto às tabelas internas.
 
 O snapshot é gerado pela função protegida `glpi-dashboard` somente depois que
 cache, relações e agregados foram gravados. Ele contém cinco contagens, gráfico,
