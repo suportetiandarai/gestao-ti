@@ -30,6 +30,14 @@ function etag(value: unknown) {
   return hash ? `"${hash}"` : '';
 }
 
+function matchesEtag(ifNoneMatch: string | null, currentEtag: string) {
+  if (!ifNoneMatch || !currentEtag) return false;
+  return ifNoneMatch.split(',').some((candidate) => {
+    const normalized = candidate.trim().replace(/^W\//i, '');
+    return normalized === '*' || normalized === currentEtag;
+  });
+}
+
 Deno.serve(async (request) => {
   if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: corsHeaders });
   if (!['GET', 'HEAD'].includes(request.method)) {
@@ -43,41 +51,38 @@ Deno.serve(async (request) => {
   }
 
   const supabaseUrl = env('SUPABASE_URL');
-  const anonKey = env('SUPABASE_ANON_KEY');
-  const groupId = Number(env('GLPI_TECH_GROUP_ID'));
-  if (!supabaseUrl || !anonKey || !Number.isFinite(groupId) || groupId <= 0) {
+  const serviceKey = env('SUPABASE_SERVICE_ROLE_KEY');
+  if (!supabaseUrl || !serviceKey) {
     return json({ error: 'Configuração pública incompleta.' }, 503, {
       ...corsHeaders,
       'Cache-Control': 'no-store',
     });
   }
 
-  const publicClient = createClient(supabaseUrl, anonKey, {
+  const publicClient = createClient(supabaseUrl, serviceKey, {
     auth: { autoRefreshToken: false, persistSession: false },
   });
   const { data: snapshot, error } = await publicClient
-    .from('gestao_ti_dashboard_snapshot')
+    .from('dashboard_shift_snapshots')
     .select([
-      'scope',
       'group_id',
       'shift_start',
       'shift_end',
       'shift_type',
       'open_count',
       'in_progress_count',
-      'waiting_count',
+      'waiting_assignment_count',
       'pending_count',
       'overdue_count',
-      'technicians_chart_json',
-      'shift_tickets_json',
+      'technician_chart',
       'snapshot_hash',
       'snapshot_version',
       'integration_status',
       'last_synced_at',
       'updated_at',
     ].join(','))
-    .eq('scope', 'daily_public')
-    .eq('group_id', groupId)
+    .order('shift_start', { ascending: false })
+    .limit(1)
     .maybeSingle();
 
   if (error) {
@@ -99,8 +104,25 @@ Deno.serve(async (request) => {
     });
   }
 
+  const url = new URL(request.url);
+  const page = Math.max(1, Number.parseInt(url.searchParams.get('page') || '1', 10) || 1);
+  const pageSize = Math.max(1, Math.min(100, Number.parseInt(url.searchParams.get('page_size') || '50', 10) || 50));
+  const { data: shiftTickets, error: ticketsError } = await publicClient.rpc('get_shift_tickets', {
+    p_shift_start: snapshot.shift_start,
+    p_shift_end: snapshot.shift_end,
+    p_page: page,
+    p_page_size: pageSize,
+  });
+  if (ticketsError) {
+    console.error('Falha ao ler chamados do plantão:', String(ticketsError.message || 'erro desconhecido').slice(0, 300));
+    return json({ error: 'Listagem do plantão indisponível.' }, 503, {
+      ...corsHeaders,
+      'Cache-Control': 'no-store',
+    });
+  }
+
   const checkedAt = new Date().toISOString();
-  const responseEtag = etag(snapshot.snapshot_hash);
+  const responseEtag = etag(`${snapshot.snapshot_hash}${page.toString(16)}${pageSize.toString(16)}`);
   const headers = {
     ...cacheHeaders,
     ETag: responseEtag,
@@ -109,7 +131,7 @@ Deno.serve(async (request) => {
     'X-Snapshot-Status': String(snapshot.integration_status),
     'X-Snapshot-Checked-At': checkedAt,
   };
-  if (responseEtag && request.headers.get('If-None-Match') === responseEtag) {
+  if (matchesEtag(request.headers.get('If-None-Match'), responseEtag)) {
     return new Response(null, { status: 304, headers });
   }
   if (request.method === 'HEAD') return new Response(null, { status: 200, headers });
@@ -117,7 +139,6 @@ Deno.serve(async (request) => {
   return json({
     ok: true,
     snapshot: {
-      scope: snapshot.scope,
       groupId: snapshot.group_id,
       shiftStart: snapshot.shift_start,
       shiftEnd: snapshot.shift_end,
@@ -125,12 +146,17 @@ Deno.serve(async (request) => {
       counts: {
         open: snapshot.open_count,
         inProgress: snapshot.in_progress_count,
-        waiting: snapshot.waiting_count,
+        waiting: snapshot.waiting_assignment_count,
         pending: snapshot.pending_count,
         overdue: snapshot.overdue_count,
       },
-      techniciansChart: snapshot.technicians_chart_json,
-      shiftTickets: snapshot.shift_tickets_json,
+      techniciansChart: snapshot.technician_chart,
+      shiftTickets: shiftTickets || [],
+      ticketsPage: {
+        page,
+        pageSize,
+        total: Number(shiftTickets?.[0]?.total_count || 0),
+      },
       version: snapshot.snapshot_version,
       lastSyncedAt: snapshot.last_synced_at,
       integrationStatus: snapshot.integration_status,

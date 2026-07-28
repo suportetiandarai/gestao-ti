@@ -1,5 +1,8 @@
 # Integração Supabase e GLPI
 
+> Destino: Supabase `cctygrudsyoowuotlyfo`. A sincronização ocorre somente no
+> back-end; o dashboard público lê snapshot e páginas autorizadas.
+
 ## Segurança e fluxo
 
 A integração é somente leitura no GLPI:

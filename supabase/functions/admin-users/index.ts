@@ -57,9 +57,9 @@ Deno.serve(async (request) => {
     if (userError || !user) return json({ error: 'Sessão inválida.' }, 401);
 
     const { data: requester } = await adminClient
-      .from('profiles')
+      .from('user_profiles')
       .select('role')
-      .eq('id', user.id)
+      .eq('auth_user_id', user.id)
       .single();
     if (normalizeRole(requester?.role) !== 'admin') return json({ error: 'Acesso restrito a administradores.' }, 403);
 
@@ -76,15 +76,15 @@ Deno.serve(async (request) => {
       });
       if (error) throw error;
 
-      const { error: profileError } = await adminClient.from('profiles').upsert({
-        id: data.user.id,
+      const { error: profileError } = await adminClient.from('user_profiles').upsert({
+        auth_user_id: data.user.id,
         email: body.email,
-        nome: body.nome,
-        turno: body.turno,
-        celular: body.celular || null,
+        full_name: body.nome,
+        shift: body.turno,
+        phone: body.celular || null,
         cpf: body.cpf || null,
         role,
-      });
+      }, { onConflict: 'auth_user_id' });
       if (profileError) {
         await adminClient.auth.admin.deleteUser(data.user.id);
         throw profileError;
@@ -101,10 +101,10 @@ Deno.serve(async (request) => {
       const role = normalizeRole(body.role);
       if (!['admin', 'operacional'].includes(role)) return json({ error: 'Perfil inválido.' }, 400);
       const { data: updatedProfile, error } = await userScopedClient
-        .from('profiles')
+        .from('user_profiles')
         .update({ role })
-        .eq('id', userId)
-        .select('id, role')
+        .eq('auth_user_id', userId)
+        .select('auth_user_id, role')
         .maybeSingle();
       if (error) return json({ error: formatError(error) }, 500);
       if (!updatedProfile) return json({ error: 'Perfil do usuário não encontrado para atualizar.' }, 404);
@@ -112,10 +112,10 @@ Deno.serve(async (request) => {
     }
 
     if (action === 'update-profile') {
-      const profile = { nome: body.nome, turno: body.turno, celular: body.celular || null, cpf: body.cpf || null, email: body.email };
+      const profile = { full_name: body.nome, shift: body.turno, phone: body.celular || null, cpf: body.cpf || null, email: body.email };
       const { error: authError } = await adminClient.auth.admin.updateUserById(userId, { email: body.email });
       if (authError) throw authError;
-      const { error } = await adminClient.from('profiles').update(profile).eq('id', userId);
+      const { error } = await adminClient.from('user_profiles').update(profile).eq('auth_user_id', userId);
       if (error) throw error;
       return json({ ok: true });
     }

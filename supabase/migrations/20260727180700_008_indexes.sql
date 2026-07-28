@@ -1,0 +1,20 @@
+create unique index inventario_codigo_barras_uidx on public.inventario(lower(btrim(codigo_barras))) where codigo_barras is not null;
+create unique index inventario_numero_serie_uidx on public.inventario(lower(btrim(numero_serie))) where numero_serie is not null;
+create unique index inventario_patrimonio_uidx on public.inventario(lower(btrim(patrimonio))) where patrimonio is not null;
+create index inventario_historico_equipamento_idx on public.inventario_historico(equipamento_id,created_at desc);
+create index inventario_historico_tecnico_idx on public.inventario_historico(tecnico_id,created_at desc);
+create index movimentacao_chaves_created_idx on public.movimentacao_chaves(data_hora desc);
+create index ocorrencias_status_idx on public.ocorrencias(status,created_at desc);
+create index treinamentos_status_data_idx on public.treinamentos(status,data_hora);
+
+create index glpi_tickets_group_opened_idx on public.glpi_tickets(group_id,opened_at desc);
+create index glpi_tickets_group_solved_idx on public.glpi_tickets(group_id,solved_at desc) where solved_at is not null;
+create index glpi_tickets_group_status_idx on public.glpi_tickets(group_id,dashboard_status);
+create index glpi_tickets_group_overdue_idx on public.glpi_tickets(group_id,is_overdue) where is_overdue;
+create index glpi_tickets_modified_idx on public.glpi_tickets(last_glpi_update desc);
+create index glpi_ticket_technicians_current_idx on public.glpi_ticket_technicians(ticket_id,is_current) where is_current;
+create index glpi_ticket_solutions_solved_idx on public.glpi_ticket_solutions(ticket_id,solved_at desc);
+create index glpi_ticket_events_occurred_idx on public.glpi_ticket_events(ticket_id,occurred_at desc);
+create index glpi_sync_logs_started_idx on public.glpi_sync_logs(started_at desc);
+create index dashboard_shift_snapshots_group_idx on public.dashboard_shift_snapshots(group_id,shift_start desc);
+create index raw_payload_expiry_idx on private.glpi_ticket_raw_payloads(expires_at);

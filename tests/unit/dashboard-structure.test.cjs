@@ -10,15 +10,15 @@ const coreSource = readFileSync(join(root, 'glpi-dashboard-core.js'), 'utf8');
 const edgeSource = readFileSync(join(root, 'supabase', 'functions', 'glpi-dashboard', 'index.ts'), 'utf8');
 const publicEdgeSource = readFileSync(join(root, 'supabase', 'functions', 'glpi-dashboard-public', 'index.ts'), 'utf8');
 const snapshotSource = readFileSync(join(root, 'supabase', 'functions', '_shared', 'dashboard-snapshot.ts'), 'utf8');
-const snapshotMigration = readFileSync(join(root, 'supabase', 'migrations', '20260727150000_glpi_dashboard_snapshot.sql'), 'utf8');
+const snapshotMigration = readFileSync(join(root, 'supabase', 'migrations', '20260727180500_006_dashboard.sql'), 'utf8');
 const authSource = readFileSync(join(root, 'auth.js'), 'utf8');
 const appSource = readFileSync(join(root, 'app.js'), 'utf8');
 const serveSource = readFileSync(join(root, 'scripts', 'serve.mjs'), 'utf8');
 const buildSource = readFileSync(join(root, 'scripts', 'build.mjs'), 'utf8');
 const publicRouteSource = readFileSync(join(root, 'dashboard-diario', 'index.html'), 'utf8');
 const styles = readFileSync(join(root, 'styles.css'), 'utf8');
-const assignmentsMigration = readFileSync(join(root, 'supabase', 'migrations', '20260722110000_glpi_ticket_assignments.sql'), 'utf8');
-const schedulerMigration = readFileSync(join(root, 'supabase', 'migrations', '20260727090000_glpi_backend_scheduler_stable.sql'), 'utf8');
+const assignmentsMigration = readFileSync(join(root, 'supabase', 'migrations', '20260727180300_004_glpi_core.sql'), 'utf8');
+const schedulerMigration = readFileSync(join(root, 'supabase', 'migrations', '20260727180900_010_cron.sql'), 'utf8');
 const dailyView = html.match(/<div id="glpi-view-diario"[\s\S]*?<div id="glpi-view-geral"/)?.[0] || '';
 const dailyRenderer = source.match(/function renderDailyDashboard\(\)[\s\S]*?function renderBarChart/)?.[0] || '';
 
@@ -118,7 +118,7 @@ test('atribuição real usa relações e histórico quando date_assign não é e
   assert.match(edgeSource, /String\(left\.date_mod\)\.localeCompare\(String\(right\.date_mod\)\)/);
   assert.match(edgeSource, /_dashboard_first_assigned_at/);
   assert.match(edgeSource, /Number\(relation\.type\) === 2/);
-  assert.match(assignmentsMigration, /primary key \(ticket_glpi_id, technician_id\)/i);
+  assert.match(assignmentsMigration, /unique nulls not distinct \(ticket_id, technician_id, relation_type, assigned_at\)/i);
   assert.match(source, /glpi_ticket_assignments_dashboard/);
 });
 
@@ -131,11 +131,11 @@ test('rota pública é exclusiva, não exige usuário e recebe somente payload s
   assert.match(buildSource, /dashboard-diario/);
   assert.doesNotMatch(edgeSource, /action === 'public-dashboard'/);
   assert.match(publicEdgeSource, /PUBLIC_DASHBOARD_ENABLED/);
-  assert.match(publicEdgeSource, /gestao_ti_dashboard_snapshot/);
+  assert.match(publicEdgeSource, /dashboard_shift_snapshots/);
   assert.doesNotMatch(publicEdgeSource, /GLPI_(?:APP|USER)_TOKEN|initSession|raw_payload/);
   assert.match(source, /async function fetchPublicDashboard/);
   assert.match(source, /functions\/v1\/glpi-dashboard-public/);
-  assert.match(source, /Authorization: `Bearer \$\{publicKey\}`/);
+  assert.doesNotMatch(source.match(/async function fetchPublicDashboard[\s\S]*?function safeExternalUrl/)?.[0] || '', /Authorization|apikey/);
   assert.doesNotMatch(source.match(/if \(state\.publicMode\)[\s\S]*?\n {8}\}/)?.[0] || '', /supabase\.functions\.invoke/);
   assert.match(authSource, /SUPABASE_CONFIGURADO && !ROTA_DASHBOARD_PUBLICO/);
   assert.doesNotMatch(publicEdgeSource, /requester|description|followup|session-token/i);
@@ -197,7 +197,7 @@ test('dashboard público libera somente título e técnico completos', () => {
   assert.match(coreSource, /title: ticket\.title/);
   assert.match(coreSource, /technician: ticket\.technician/);
   assert.doesNotMatch(source, /Título restrito/);
-  assert.match(source, /title: row\.title \|\| row\.name \|\| `Chamado #\$\{row\.glpi_id \|\| row\.id\}`/);
+  assert.match(source, /title: row\.title \|\| row\.name \|\| `Chamado #\$\{row\.glpi_id \|\| row\.ticket_id \|\| row\.id\}`/);
 });
 
 test('grupo técnico e responsável pela solução usam as relações reais do GLPI', () => {
@@ -217,22 +217,22 @@ test('nome do técnico usa firstname antes de realname', () => {
 
 test('Edge Function aceita chamada operacional validada pelo gateway sem liberar acesso anônimo', () => {
   assert.match(edgeSource, /trustedOperationalCall/);
-  assert.match(edgeSource, /\['service_role', 'postgres'\]\.includes\(operationalRole\)/);
+  assert.match(edgeSource, /\['service_role', 'postgres'\]\.includes\(jwtRole\(token\)\)/);
   assert.match(edgeSource, /if \(!supabaseUrl \|\| !serviceKey \|\| !auth\).*401/);
   assert.match(edgeSource, /Acesso restrito a administradores e gestores/);
 });
 
 test('snapshot público lê uma linha com todos os chamados do plantão, possui ETag e não carrega payload bruto', () => {
-  assert.match(snapshotMigration, /create table if not exists public\.gestao_ti_dashboard_snapshot/i);
-  assert.match(snapshotMigration, /unique \(scope, group_id\)/i);
-  assert.doesNotMatch(snapshotMigration, /jsonb_array_length\(shift_tickets_json\)\s*<=/i);
+  assert.match(snapshotMigration, /create table public\.dashboard_shift_snapshots/i);
+  assert.match(snapshotMigration, /unique\(group_id, shift_start, shift_end\)/i);
+  assert.doesNotMatch(snapshotMigration, /shift_tickets_json/i);
   assert.doesNotMatch(snapshotSource, /operationalSort\(openedInShift[\s\S]{0,120}\.slice\(/);
   assert.doesNotMatch(source, /createdInShift\.slice\(0,\s*10\)/);
-  assert.match(snapshotMigration, /enable row level security/i);
-  assert.match(snapshotMigration, /to anon[\s\S]*scope = 'daily_public'/i);
+  assert.match(snapshotMigration, /create view public\.glpi_tickets_dashboard/i);
   assert.match(publicEdgeSource, /\.maybeSingle\(\)/);
   assert.match(publicEdgeSource, /If-None-Match/);
   assert.match(publicEdgeSource, /status: 304/);
+  assert.match(publicEdgeSource, /replace\(\/\^W\\\/\/i,\s*''\)/);
   assert.match(publicEdgeSource, /Cache-Control': 'public, max-age=15, stale-while-revalidate=45'/);
   assert.doesNotMatch(publicEdgeSource, /select\(['"]\*['"]\)|raw_payload|limit\(2000\)/);
   assert.match(source, /If-None-Match/);
@@ -240,28 +240,21 @@ test('snapshot público lê uma linha com todos os chamados do plantão, possui 
 });
 
 test('sincronização gera o snapshot antes de registrar sucesso', () => {
-  const refreshPosition = edgeSource.lastIndexOf("stage = 'refresh-dashboard-snapshot'");
-  const successPosition = edgeSource.lastIndexOf("stage = 'update-sync-state'");
+  const refreshPosition = edgeSource.lastIndexOf("stage = 'rebuild-snapshot'");
+  const successPosition = edgeSource.lastIndexOf("stage = 'finish-sync'");
   assert.ok(refreshPosition > 0 && successPosition > refreshPosition);
-  assert.match(edgeSource, /\.select\(SNAPSHOT_TICKET_COLUMNS\)[\s\S]*\.eq\('group_id', groupId\)/);
-  assert.match(edgeSource, /\.in\('status_id', \[1, 2, 3, 4\]\)/);
-  assert.match(edgeSource, /opened_at\.gte[\s\S]*solved_at\.gte/);
-  assert.doesNotMatch(SNAPSHOT_TICKET_COLUMNS_FOR_TEST(edgeSource), /raw_payload/);
+  assert.match(edgeSource, /rpc\('rebuild_shift_snapshot'/);
+  assert.match(edgeSource, /from\('glpi_tickets'\)/);
+  assert.doesNotMatch(edgeSource, /raw_payload/);
 });
 
-function SNAPSHOT_TICKET_COLUMNS_FOR_TEST(value) {
-  return value.match(/const SNAPSHOT_TICKET_COLUMNS[\s\S]*?\.join\(','\)/)?.[0]
-    || snapshotSource.match(/export const SNAPSHOT_TICKET_COLUMNS[\s\S]*?\.join\(','\)/)?.[0]
-    || '';
-}
-
 test('sincronização centralizada usa cron único de um minuto e lock expirável', () => {
-  assert.match(schedulerMigration, /where jobname = 'gestao-ti-glpi-sync'/);
-  assert.match(schedulerMigration, /cron\.unschedule\(existing_job\.jobid\)/);
+  assert.match(schedulerMigration, /jobname in \('gestao-ti-glpi-sync','gestao-ti-maintenance'\)/);
+  assert.match(schedulerMigration, /cron\.unschedule\(job\.jobid\)/);
   assert.match(schedulerMigration, /'\* \* \* \* \*'/);
-  assert.match(schedulerMigration, /drop function if exists private\.invoke_glpi_scheduled_sync\(integer\)/);
-  assert.match(schedulerMigration, /'expectedIntervalSeconds', 60/);
-  assert.match(schedulerMigration, /timeout_milliseconds := 50000/);
+  assert.match(schedulerMigration, /private\.invoke_glpi_scheduled_sync/);
+  assert.match(schedulerMigration, /'sync-incremental'/);
+  assert.match(schedulerMigration, /timeout_milliseconds\s*:=\s*50000/);
   assert.match(edgeSource, /GLPI_SYNC_OVERLAP_SECONDS/);
   assert.match(edgeSource, /Sessão GLPI expirada; autenticação renovada/);
 });
@@ -272,5 +265,5 @@ test('bootstrap limita a carga inicial e informa a etapa de falha sem expor cred
   assert.match(edgeSource, /trustedOperationalCall \? \{ diagnostic: message \}/);
   assert.match(edgeSource, /safeError\(error\)/);
   assert.match(edgeSource, /cache: \{/);
-  assert.match(edgeSource, /technicians: technicianIds\.size/);
+  assert.match(edgeSource, /technicians: technicians \|\| 0/);
 });
