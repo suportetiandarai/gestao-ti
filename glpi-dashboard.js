@@ -663,7 +663,13 @@
         return resolvedStatus && Boolean(parseDate(ticket?.solvedAt));
     }
 
-    function renderDailyTimers(reference = new Date()) {
+    function synchronizedNow() {
+        return state.serverTimeVerified
+            ? new Date(Date.now() + state.serverTimeOffsetMs)
+            : new Date();
+    }
+
+    function renderDailyTimers(reference = synchronizedNow()) {
         document.querySelectorAll('.glpi-ticket-time[data-ticket-id][data-time-kind]').forEach((element) => {
             const ticket = state.tickets.find((item) => String(item.id) === element.dataset.ticketId);
             const valueElement = element.querySelector('.glpi-ticket-time-value') || element;
@@ -1064,9 +1070,7 @@
 
     function renderStatus() {
         const status = getField('glpi-connection-status');
-        const reference = state.serverTimeVerified
-            ? new Date(Date.now() + state.serverTimeOffsetMs)
-            : new Date();
+        const reference = synchronizedNow();
         const health = CORE.calculateSyncHealth(
             state.integrationState,
             reference,

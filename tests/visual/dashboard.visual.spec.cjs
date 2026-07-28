@@ -49,46 +49,47 @@ async function preparePublicDashboard(
     body: 'window.GESTAO_TI_CONFIG={SUPABASE_URL:"https://example.supabase.co",SUPABASE_PUBLIC_KEY:"sb_publishable_visual"};',
   }));
   const now = Date.now();
+  const serverNow = now + 300000;
   const baseTicket = {
     title: 'Título operacional completo do chamado', group_id: 1, group_name: 'SUPORTE TI',
-    opened_at: new Date(now - 65000).toISOString(),
+    opened_at: new Date(serverNow - 65000).toISOString(),
     sla_due_at: null, attention_due_at: null,
     internal_sla_due_at: null, internal_attention_due_at: null,
     source_environment: 'real',
   };
   const tickets = [
-    { ...baseTicket, ticket_id: 9006, dashboard_status: 'Em atendimento', glpi_status_name: 'Atribuído', technician_id: 21, technician_name: 'Técnico Atrasado', first_assigned_at: new Date(now - 60000).toISOString(), solved_at: null, closed_at: null, sla_deadline: new Date(now - 300000).toISOString(), is_pending: false, is_overdue: true },
+    { ...baseTicket, ticket_id: 9006, dashboard_status: 'Em atendimento', glpi_status_name: 'Atribuído', technician_id: 21, technician_name: 'Técnico Atrasado', first_assigned_at: new Date(serverNow - 60000).toISOString(), solved_at: null, closed_at: null, sla_deadline: new Date(serverNow - 300000).toISOString(), is_pending: false, is_overdue: true },
     { ...baseTicket, ticket_id: 9001, dashboard_status: 'Aguardando Atribuição', glpi_status_name: 'Novo', technician_id: null, technician_name: null, first_assigned_at: null, solved_at: null, closed_at: null, is_pending: false, is_overdue: false },
-    { ...baseTicket, ticket_id: 9002, dashboard_status: 'Em atendimento', glpi_status_name: 'Atribuído', technician_id: 20, technician_name: 'VINICIUS SILVA PASCOAL MANOEL', first_assigned_at: new Date(now - 50000).toISOString(), solved_at: null, closed_at: null, is_pending: false, is_overdue: false },
-    { ...baseTicket, ticket_id: 9003, dashboard_status: 'Pendente', glpi_status_name: 'Pendente', technician_id: 20, technician_name: 'Técnico Teste', first_assigned_at: new Date(now - 50000).toISOString(), solved_at: null, closed_at: null, sla_deadline: new Date(now - 300000).toISOString(), is_pending: true, is_overdue: false },
-    { ...baseTicket, ticket_id: 9004, dashboard_status: 'Solucionado', glpi_status_name: 'Solucionado', technician_id: 20, technician_name: 'Técnico Teste', first_assigned_at: new Date(now - 50000).toISOString(), solved_at: new Date(now - 30000).toISOString(), closed_at: null, is_pending: false, is_overdue: false },
-    { ...baseTicket, ticket_id: 9005, dashboard_status: 'Solucionado', glpi_status_name: 'Fechado', technician_id: 20, technician_name: 'Técnico Teste', first_assigned_at: new Date(now - 50000).toISOString(), solved_at: new Date(now - 30000).toISOString(), closed_at: new Date(now - 10000).toISOString(), is_pending: false, is_overdue: false },
+    { ...baseTicket, ticket_id: 9002, dashboard_status: 'Em atendimento', glpi_status_name: 'Atribuído', technician_id: 20, technician_name: 'VINICIUS SILVA PASCOAL MANOEL', first_assigned_at: new Date(serverNow - 50000).toISOString(), solved_at: null, closed_at: null, is_pending: false, is_overdue: false },
+    { ...baseTicket, ticket_id: 9003, dashboard_status: 'Pendente', glpi_status_name: 'Pendente', technician_id: 20, technician_name: 'Técnico Teste', first_assigned_at: new Date(serverNow - 50000).toISOString(), solved_at: null, closed_at: null, sla_deadline: new Date(serverNow - 300000).toISOString(), is_pending: true, is_overdue: false },
+    { ...baseTicket, ticket_id: 9004, dashboard_status: 'Solucionado', glpi_status_name: 'Solucionado', technician_id: 20, technician_name: 'Técnico Teste', first_assigned_at: new Date(serverNow - 50000).toISOString(), solved_at: new Date(serverNow - 30000).toISOString(), closed_at: null, is_pending: false, is_overdue: false },
+    { ...baseTicket, ticket_id: 9005, dashboard_status: 'Solucionado', glpi_status_name: 'Fechado', technician_id: 20, technician_name: 'Técnico Teste', first_assigned_at: new Date(serverNow - 50000).toISOString(), solved_at: new Date(serverNow - 30000).toISOString(), closed_at: new Date(serverNow - 10000).toISOString(), is_pending: false, is_overdue: false },
   ];
   await page.route('https://example.supabase.co/functions/v1/glpi-dashboard-public**', (route) => route.fulfill({
     contentType: 'application/json',
     headers: {
       ETag: '"visual-snapshot"',
       'Access-Control-Expose-Headers': 'ETag, X-Snapshot-Synced-At, X-Snapshot-Status, X-Snapshot-Checked-At',
-      'X-Snapshot-Synced-At': new Date(now).toISOString(),
+      'X-Snapshot-Synced-At': new Date(serverNow).toISOString(),
       'X-Snapshot-Status': 'online',
-      'X-Snapshot-Checked-At': new Date(now).toISOString(),
+      'X-Snapshot-Checked-At': new Date(serverNow).toISOString(),
     },
     body: JSON.stringify({
       ok: true,
       snapshot: {
         scope: 'daily_public',
         groupId: 1,
-        shiftStart: new Date(now - 3600000).toISOString(),
-        shiftEnd: new Date(now + 3600000).toISOString(),
+        shiftStart: new Date(serverNow - 3600000).toISOString(),
+        shiftEnd: new Date(serverNow + 3600000).toISOString(),
         shiftType: 'Diurno',
         counts: { open: 6, inProgress: 2, waiting: 1, pending: 1, overdue: 1 },
         techniciansChart: [{ technician_id: 20, label: 'Técnico Teste', value: 2 }],
         shiftTickets: tickets,
         version: 1,
-        lastSyncedAt: new Date(now).toISOString(),
+        lastSyncedAt: new Date(serverNow).toISOString(),
         integrationStatus: 'online',
       },
-      checkedAt: new Date(now).toISOString(),
+      checkedAt: new Date(serverNow).toISOString(),
     }),
   }));
   await page.route('https://cdn.jsdelivr.net/**', (route) => route.fulfill({
@@ -227,6 +228,8 @@ test('rota pública abre sem login, fica travada no Diário e atualiza contadore
   await page.waitForTimeout(1100);
   const updated = await runningAssignment.textContent();
   expect(updated).not.toBe(initial);
+  await expect(page.locator('[data-ticket-id="9002"][data-time-kind="solution"]')).not.toHaveText('00:00:00');
+  await expect(page.locator('[data-ticket-id="9002"][data-time-kind="total"] .glpi-ticket-time-value')).not.toHaveText('00:00:00');
   await expect(page.locator('.ticket-solved-label')).toHaveCount(2);
   await expect(page.locator('[data-ticket-id="9002"] .ticket-solved-label')).toHaveCount(0);
   await expect(page.locator('[data-ticket-id="9003"] .ticket-solved-label')).toHaveCount(0);
