@@ -11,9 +11,9 @@ const syncFunction = readFileSync(join(root, 'supabase', 'functions', 'glpi-dash
 const publicFunction = readFileSync(join(root, 'supabase', 'functions', 'glpi-dashboard-public', 'index.ts'), 'utf8');
 
 test('bootstrap novo possui migrações ordenadas por responsabilidade e reparos remotos', () => {
-  assert.equal(migrationFiles.length, 15);
+  assert.equal(migrationFiles.length, 16);
   assert.deepEqual(migrationFiles.map((name) => name.match(/_(\d{3})_/)[1]), [
-    '001', '002', '003', '004', '005', '006', '007', '008', '009', '010', '011', '012', '013', '014', '015'
+    '001', '002', '003', '004', '005', '006', '007', '008', '009', '010', '011', '012', '013', '014', '015', '016'
   ]);
 });
 
