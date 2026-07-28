@@ -174,8 +174,7 @@ test('cards centralizam conteúdo e Tempo total sinaliza somente solução regis
   assert.match(styles, /\.glpi-daily-kpi\s*\{[\s\S]*align-items:\s*center/);
   assert.match(styles, /\.glpi-daily-kpi\s*\{[\s\S]*justify-content:\s*center/);
   assert.match(styles, /\.glpi-daily-kpi\s*\{[\s\S]*text-align:\s*center/);
-  assert.match(source, /statusId === CORE\.STATUS_CODE\.SOLVED/);
-  assert.match(source, /statusId === CORE\.STATUS_CODE\.CLOSED/);
+  assert.match(source, /CORE\.calculateTicketFlags\(ticket\)\.isResolved/);
   assert.match(source, /resolvedStatus && Boolean\(parseDate\(ticket\?\.solvedAt\)\)/);
   assert.match(source, /className = 'ticket-solved-label'/);
   assert.match(styles, /\.ticket-solved-label\s*\{[\s\S]*color:\s*var\(--glpi-success\)/);

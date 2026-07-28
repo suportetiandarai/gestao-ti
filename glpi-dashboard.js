@@ -659,10 +659,7 @@
     }
 
     function hasRecordedSolution(ticket) {
-        const statusId = Number(ticket?.statusId);
-        const resolvedStatus =
-            statusId === CORE.STATUS_CODE.SOLVED
-            || statusId === CORE.STATUS_CODE.CLOSED;
+        const resolvedStatus = CORE.calculateTicketFlags(ticket).isResolved;
         return resolvedStatus && Boolean(parseDate(ticket?.solvedAt));
     }
 
