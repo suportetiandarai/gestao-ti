@@ -67,6 +67,8 @@ test('HTML não contém IDs duplicados', () => {
 
 test('atualização é manual/automática, exclusiva e preserva o último estado', () => {
   assert.match(source, /const DAILY_REFRESH_SECONDS = 30/);
+  assert.match(source, /const BACKEND_SYNC_INTERVAL_SECONDS = 60/);
+  assert.match(source, /SYNC_STALE_TOLERANCE_SECONDS = BACKEND_SYNC_INTERVAL_SECONDS \* 3/);
   assert.match(source, /state\.subtab === 'diario'\s*\? DAILY_REFRESH_SECONDS \* 1000/);
   assert.match(source, /if \(state\.refreshing\) return false/);
   assert.match(source, /window\.glpiAtualizarAgora = async function/);
@@ -259,8 +261,12 @@ test('sincronização centralizada usa cron único de um minuto e lock expiráve
   assert.match(edgeSource, /Sessão GLPI expirada; autenticação renovada/);
 });
 
-test('bootstrap limita a carga inicial e informa a etapa de falha sem expor credenciais', () => {
+test('bootstrap reconcilia o grupo e o incremental limita páginas sem expor credenciais', () => {
   assert.match(edgeSource, /GLPI_SYNC_INITIAL_MAX_PAGES/);
+  assert.match(edgeSource, /technicalGroupTicketIds/);
+  assert.match(edgeSource, /getRelevantGroupTickets/);
+  assert.match(edgeSource, /getMultipleItems/);
+  assert.match(edgeSource, /action === 'sync-current-shift' \|\| !previousCursor/);
   assert.match(edgeSource, /stage = 'fetch-tickets'/);
   assert.match(edgeSource, /trustedOperationalCall \? \{ diagnostic: message \}/);
   assert.match(edgeSource, /safeError\(error\)/);

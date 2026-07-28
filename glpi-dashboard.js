@@ -5,7 +5,8 @@
     const TZ = CORE.TIME_ZONE;
     const GLPI_VERSION = '10.0.18';
     const DAILY_REFRESH_SECONDS = 30;
-    const SYNC_STALE_TOLERANCE_SECONDS = DAILY_REFRESH_SECONDS * 3;
+    const BACKEND_SYNC_INTERVAL_SECONDS = 60;
+    const SYNC_STALE_TOLERANCE_SECONDS = BACKEND_SYNC_INTERVAL_SECONDS * 3;
     const GLPI_STATUS = Object.freeze({
         1: 'Novo',
         2: 'Atribuído',
