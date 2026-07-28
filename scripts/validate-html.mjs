@@ -17,6 +17,19 @@ if ((dailyView.match(/class="glpi-chart"/g) || []).length !== 1) errors.push('Da
 if (!dailyView.includes('Últimos chamados registrados')) errors.push('Seção de últimos chamados ausente.');
 if (/Ranking diário dos técnicos|Chamados antigos ainda abertos/.test(dailyView)) errors.push('Componente removido reapareceu no Dashboard Diário.');
 
+for (const route of ['dashboard-timed', 'dashboard-treinamentos', 'dashboard-ad']) {
+  const routeHtml = await readFile(new URL(`../${route}/index.html`, import.meta.url), 'utf8');
+  if (!/<meta\s+name="robots"\s+content="noindex, nofollow"/i.test(routeHtml)) {
+    errors.push(`${route}: proteção contra indexação ausente.`);
+  }
+  if (!routeHtml.includes('sheets-dashboard.js') || !routeHtml.includes('sheets-dashboard.css')) {
+    errors.push(`${route}: assets do dashboard ausentes.`);
+  }
+  if (/auth\.js|service_role|private_key|GLPI_.*TOKEN/i.test(routeHtml)) {
+    errors.push(`${route}: referência sensível ou autenticação administrativa indevida.`);
+  }
+}
+
 if (errors.length) {
   errors.forEach((error) => console.error(error));
   process.exitCode = 1;

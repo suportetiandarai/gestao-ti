@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="robots" content="noindex, nofollow">
+    <base href="../">
+    <title>Solicitações TIMED — GESTÃO TI</title>
+    <link rel="stylesheet" href="sheets-dashboard.css">
+</head>
+<body class="sheet-dashboard" data-dashboard="timed">
+    <main class="sheet-dashboard-shell">
+        <header class="sheet-dashboard-header">
+            <div>
+                <h1>Solicitações TIMED</h1>
+                <p>Solicitações recebidas a partir de 28/07/2026</p>
+            </div>
+            <div class="sheet-dashboard-actions">
+                <button id="refresh-button" class="sheet-button" type="button">Atualizar dados</button>
+                <button id="fullscreen-button" class="sheet-button" type="button">Tela cheia</button>
+            </div>
+        </header>
+        <div class="sheet-status-line">
+            <span id="connection-status" class="sheet-connection">Carregando</span>
+            <span id="last-sync" class="sheet-sync-line">Última sincronização: aguardando</span>
+            <span id="dashboard-message" class="sheet-message" role="status"></span>
+        </div>
+        <section class="sheet-summary" aria-label="Resumo das solicitações TIMED">
+            <article class="sheet-summary-card"><span>Total</span><strong id="summary-total">0</strong></article>
+            <article class="sheet-summary-card"><span>Realizados</span><strong id="summary-completed">0</strong></article>
+            <article class="sheet-summary-card"><span>Pendentes</span><strong id="summary-pending">0</strong></article>
+            <article class="sheet-summary-card"><span>Não realizados</span><strong id="summary-not-started">0</strong></article>
+        </section>
+        <section class="sheet-table-panel">
+            <h2>Solicitações</h2>
+            <div class="sheet-table-scroll">
+                <table class="sheet-table">
+                    <thead><tr><th>Data e hora</th><th>Nome</th><th>Cargo</th><th>Setor</th><th>Status</th></tr></thead>
+                    <tbody id="sheet-dashboard-rows"></tbody>
+                </table>
+            </div>
+            <nav class="sheet-pagination" aria-label="Paginação">
+                <button id="previous-page" class="sheet-button" type="button">Anterior</button>
+                <span id="page-info">Página 1</span>
+                <button id="next-page" class="sheet-button" type="button">Próxima</button>
+            </nav>
+        </section>
+    </main>
+    <script src="config.js"></script>
+    <script src="sheets-dashboard.js"></script>
+</body>
+</html>

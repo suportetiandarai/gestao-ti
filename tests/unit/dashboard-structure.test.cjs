@@ -69,6 +69,8 @@ test('atualização é manual/automática, exclusiva e preserva o último estado
   assert.match(source, /const DAILY_REFRESH_SECONDS = 30/);
   assert.match(source, /const BACKEND_SYNC_INTERVAL_SECONDS = 60/);
   assert.match(source, /SYNC_STALE_TOLERANCE_SECONDS = BACKEND_SYNC_INTERVAL_SECONDS \* 3/);
+  assert.match(source, /function synchronizedNow\(\)/);
+  assert.match(source, /renderDailyTimers\(reference = synchronizedNow\(\)\)/);
   assert.match(source, /state\.subtab === 'diario'\s*\? DAILY_REFRESH_SECONDS \* 1000/);
   assert.match(source, /if \(state\.refreshing\) return false/);
   assert.match(source, /window\.glpiAtualizarAgora = async function/);
