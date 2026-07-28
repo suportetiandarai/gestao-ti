@@ -7,7 +7,7 @@
     "dev": "node scripts/serve.mjs --host 0.0.0.0 --port 8000",
     "serve": "node scripts/serve.mjs --root dist --host 0.0.0.0 --port 4173",
     "lint:js": "eslint . --max-warnings 0",
-    "lint:css": "stylelint \"styles.css\"",
+    "lint:css": "stylelint \"styles.css\" \"sheets-dashboard.css\"",
     "lint:html": "node scripts/validate-html.mjs",
     "lint": "npm run lint:js && npm run lint:css && npm run lint:html",
     "typecheck": "tsc -p tsconfig.edge.json",

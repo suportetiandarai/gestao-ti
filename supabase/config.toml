@@ -3,3 +3,12 @@ verify_jwt = false
 
 [functions.glpi-dashboard-public]
 verify_jwt = false
+
+[functions.google-sheets-sync]
+verify_jwt = false
+
+[functions.google-sheets-dashboard-public]
+verify_jwt = false
+
+[functions.google-sheets-intake]
+verify_jwt = false

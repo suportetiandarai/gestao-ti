@@ -13,6 +13,8 @@ const assets = [
   'config.example.js',
   'glpi-dashboard-core.js',
   'glpi-dashboard.js',
+  'sheets-dashboard.js',
+  'sheets-dashboard.css',
   'inventory-scanner.js',
   'inventory-transfer.js',
   'signature.js',
@@ -30,7 +32,10 @@ for (const asset of assets) {
 }
 
 const html = await readFile(join(dist, 'index.html'), 'utf8');
-for (const asset of assets.filter((name) => /\.(?:js|css|png)$/.test(name) && name !== 'config.example.js')) {
+for (const asset of assets.filter((name) =>
+  /\.(?:js|css|png)$/.test(name) &&
+  !['config.example.js', 'sheets-dashboard.js', 'sheets-dashboard.css'].includes(name)
+)) {
   if (!html.includes(asset) && !['fundo.png'].includes(asset)) {
     throw new Error(`Artefato não referenciado no HTML: ${asset}`);
   }
@@ -44,4 +49,10 @@ await writeFile(
   'utf8',
 );
 
-console.log(`Build estático criado em dist/ com ${assets.length + 1} arquivos, incluindo /dashboard-diario.`);
+for (const route of ['dashboard-timed', 'dashboard-treinamentos', 'dashboard-ad']) {
+  const target = join(dist, route);
+  await mkdir(target, { recursive: true });
+  await cp(join(root, route, 'index.html'), join(target, 'index.html'));
+}
+
+console.log(`Build estático criado em dist/ com ${assets.length + 4} arquivos e quatro rotas públicas.`);
