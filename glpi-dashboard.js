@@ -77,14 +77,11 @@
     }
 
     async function fetchPublicDashboard() {
-        const { url, publicKey } = publicSupabaseConfig();
-        if (!url || !publicKey) throw new Error('Back-end público não configurado.');
-        const headers = {
-            apikey: publicKey,
-            Authorization: `Bearer ${publicKey}`
-        };
+        const { url } = publicSupabaseConfig();
+        if (!url) throw new Error('Back-end público não configurado.');
+        const headers = {};
         if (state.publicSnapshotEtag) headers['If-None-Match'] = state.publicSnapshotEtag;
-        const response = await fetch(`${url}/functions/v1/glpi-dashboard-public`, {
+        const response = await fetch(`${url}/functions/v1/glpi-dashboard-public?page=1&page_size=100`, {
             method: 'GET',
             headers: {
                 ...headers
@@ -104,7 +101,28 @@
                 ? 'Dados ainda não sincronizados.'
                 : 'Dashboard público indisponível.');
         }
-        return { ...data, ...metadata, notModified: false };
+        const snapshot = data.snapshot || {};
+        const total = Number(snapshot.ticketsPage?.total) || 0;
+        const pageSize = Number(snapshot.ticketsPage?.pageSize) || 100;
+        const pages = Math.ceil(total / pageSize);
+        if (pages > 1) {
+            const additionalPages = await Promise.all(
+                Array.from({ length: pages - 1 }, (_, index) => index + 2).map(async page => {
+                    const pageResponse = await fetch(
+                        `${url}/functions/v1/glpi-dashboard-public?page=${page}&page_size=${pageSize}`,
+                        { method: 'GET', cache: 'no-cache' }
+                    );
+                    const pageData = await pageResponse.json().catch(() => ({}));
+                    if (!pageResponse.ok || !pageData?.ok) throw new Error('Não foi possível carregar todos os chamados do plantão.');
+                    return pageData.snapshot?.shiftTickets || [];
+                })
+            );
+            snapshot.shiftTickets = [
+                ...(snapshot.shiftTickets || []),
+                ...additionalPages.flat()
+            ];
+        }
+        return { ...data, snapshot, ...metadata, notModified: false };
     }
 
     function safeExternalUrl(value) {
@@ -257,17 +275,18 @@
             id: row.solution_technician_id,
             name: row.solution_technician_name
         };
-        const status = GLPI_STATUS[row.status_id] || row.status || 'Não disponível';
+        const status = row.dashboard_status || GLPI_STATUS[row.status_id || row.glpi_status_id]
+            || row.status || row.glpi_status_name || 'Não disponível';
         const openedAt = row.opened_at || row.date || row.created_at;
         const solvedAt = row.solved_at || row.solvedate;
         const closedAt = row.closed_at || row.closedate;
-        const assignedAt = row.assigned_at || row.date_assign;
+        const assignedAt = row.assigned_at || row.first_assigned_at || row.date_assign;
         const firstResponseAt = row.first_response_at;
         return {
-            id: row.glpi_id || row.id,
-            title: row.title || row.name || `Chamado #${row.glpi_id || row.id}`,
+            id: row.glpi_id || row.ticket_id || row.id,
+            title: row.title || row.name || `Chamado #${row.glpi_id || row.ticket_id || row.id}`,
             status,
-            statusId: row.status_id,
+            statusId: row.status_id || row.glpi_status_id,
             technician: row.technician_name || row.technician || 'Não disponível',
             technicianId: row.technician_id || null,
             currentTechnicians,
@@ -296,9 +315,9 @@
             solvedAt,
             closedAt,
             modifiedAt: row.modified_at || row.date_mod || openedAt,
-            slaDueAt: row.sla_due_at || row.time_to_resolve,
+            slaDueAt: row.sla_due_at || row.sla_deadline || row.time_to_resolve,
             attentionDueAt: row.attention_due_at || row.time_to_own,
-            internalSlaDueAt: row.internal_sla_due_at || row.internal_time_to_resolve,
+            internalSlaDueAt: row.internal_sla_due_at || row.ola_deadline || row.internal_time_to_resolve,
             internalAttentionDueAt: row.internal_attention_due_at || row.internal_time_to_own,
             slaStatus: row.sla_status || calculateSlaStatus(row),
             pendingReason: row.pending_reason || 'Não disponível',
@@ -461,15 +480,21 @@
 
             const { data: logs } = await supabase
                 .from('glpi_sync_logs')
-                .select('level, message, records_processed, created_at')
+                .select('status, error_message, records_processed, created_at')
                 .order('created_at', { ascending: false })
                 .limit(20);
-            state.syncLogs = logs || [];
+            state.syncLogs = (logs || []).map(log => ({
+                ...log,
+                level: log.status === 'error' ? 'erro' : 'info',
+                message: log.error_message || (log.status === 'success'
+                    ? 'Sincronização concluída.'
+                    : 'Execução da sincronização registrada.')
+            }));
 
             const { data: integrationState } = await supabase
                 .from('glpi_sync_state')
-                .select('status, last_started_at, last_success_at, last_error_at, last_cursor, last_records_processed, updated_at')
-                .eq('id', 1)
+                .select('status, last_attempt_at, last_success_at, last_error_at, last_cursor, records_processed, updated_at')
+                .eq('sync_name', 'glpi_incremental')
                 .maybeSingle();
             if (integrationState) state.integrationState = integrationState;
 

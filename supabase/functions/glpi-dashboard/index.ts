@@ -1,10 +1,4 @@
 import { createClient } from 'npm:@supabase/supabase-js@2';
-import {
-  buildDashboardSnapshot,
-  currentShiftWindow,
-  SNAPSHOT_TICKET_COLUMNS,
-  snapshotHash,
-} from '../_shared/dashboard-snapshot.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -120,114 +114,38 @@ function formatTechnicianName(user: JsonRecord) {
     || clean(user.name);
 }
 
-function priorityName(value: unknown) {
-  const map: Record<number, string> = {
-    1: 'Muito baixa',
-    2: 'Baixa',
-    3: 'Média',
-    4: 'Alta',
-    5: 'Muito alta',
-    6: 'Maior',
-  };
-  return map[Number(value)] || label(value);
-}
-
-function slaStatus(ticket: JsonRecord) {
-  const due = normalizeDate(ticket.time_to_resolve || ticket.sla_due_at);
-  if (!due) return 'unavailable';
-  if (normalizeDate(ticket.solvedate) || normalizeDate(ticket.closedate)) return 'ok';
-  const minutes = (new Date(due).getTime() - Date.now()) / 60000;
-  if (minutes < 0) return 'breached';
-  if (minutes <= Number(env('GLPI_SLA_WARNING_MINUTES') || 240)) return 'warning';
-  return 'ok';
-}
-
-async function logSync(client: ReturnType<typeof createClient>, level: string, message: string, records = 0, detail = '', cursor: string | null = null) {
-  await client.from('glpi_sync_logs').insert({
-    level,
-    message,
+async function logSync(
+  client: ReturnType<typeof createClient>,
+  executionId: string,
+  startedAt: string,
+  status: 'running' | 'success' | 'error' | 'skipped',
+  records: number,
+  detail = '',
+) {
+  await client.from('glpi_sync_logs').upsert({
+    execution_id: executionId,
+    started_at: startedAt,
+    finished_at: status === 'running' ? null : new Date().toISOString(),
+    status,
+    records_requested: records,
     records_processed: records,
-    technical_detail: detail.slice(0, 4000),
-    last_cursor: cursor,
-  });
-}
-
-async function updateSyncState(client: ReturnType<typeof createClient>, values: JsonRecord, strict = true) {
-  const { error } = await client.from('glpi_sync_state').update({ ...values, updated_at: new Date().toISOString() }).eq('id', 1);
-  if (!error) return;
-  if (strict) throw error;
-  console.warn('Falha ao atualizar estado da sincronização:', safeError(error));
+    error_code: status === 'error' ? 'GLPI_SYNC_FAILED' : null,
+    error_message: status === 'error' ? detail.slice(0, 500) : null,
+    duration_ms: Math.max(0, Date.now() - new Date(startedAt).getTime()),
+  }, { onConflict: 'execution_id' });
 }
 
 async function refreshDashboardSnapshot(
   client: ReturnType<typeof createClient>,
-  groupId: number,
+  groupId: string,
   syncedAt: string,
 ) {
-  const reference = new Date(syncedAt);
-  const shift = currentShiftWindow(reference);
-  const activeRequest = client
-    .from('glpi_tickets_dashboard')
-    .select(SNAPSHOT_TICKET_COLUMNS)
-    .eq('group_id', groupId)
-    .in('status_id', [1, 2, 3, 4])
-    .limit(5000);
-  const shiftRequest = client
-    .from('glpi_tickets_dashboard')
-    .select(SNAPSHOT_TICKET_COLUMNS)
-    .eq('group_id', groupId)
-    .or([
-      `and(opened_at.gte.${shift.start.toISOString()},opened_at.lt.${shift.end.toISOString()})`,
-      `and(solved_at.gte.${shift.start.toISOString()},solved_at.lt.${shift.end.toISOString()})`,
-    ].join(','))
-    .limit(5000);
-  const [
-    { data: activeTickets, error: activeError },
-    { data: shiftTickets, error: shiftError },
-    { data: previous, error: previousError },
-  ] = await Promise.all([
-    activeRequest,
-    shiftRequest,
-    client
-      .from('gestao_ti_dashboard_snapshot')
-      .select('snapshot_hash,snapshot_version')
-      .eq('scope', 'daily_public')
-      .eq('group_id', groupId)
-      .maybeSingle(),
-  ]);
-  if (activeError) throw activeError;
-  if (shiftError) throw shiftError;
-  if (previousError) throw previousError;
-
-  const snapshot = buildDashboardSnapshot(
-    [...(activeTickets || []), ...(shiftTickets || [])],
-    groupId,
-    syncedAt,
-    reference,
-  );
-  const hash = await snapshotHash(snapshot);
-  const previousVersion = Number(previous?.snapshot_version) || 0;
-  const version = previous?.snapshot_hash === hash
-    ? Math.max(previousVersion, 1)
-    : previousVersion + 1;
-  const { error: upsertError } = await client
-    .from('gestao_ti_dashboard_snapshot')
-    .upsert({
-      ...snapshot,
-      snapshot_hash: hash,
-      snapshot_version: version,
-      updated_at: syncedAt,
-    }, { onConflict: 'scope,group_id' });
-  if (upsertError) throw upsertError;
-  return {
-    version,
-    hash,
-    sourceRows: new Set([
-      ...(activeTickets || []).map((ticket: JsonRecord) => numberOrNull(ticket.glpi_id)),
-      ...(shiftTickets || []).map((ticket: JsonRecord) => numberOrNull(ticket.glpi_id)),
-    ].filter(Boolean)).size,
-    publicRows: snapshot.shift_tickets_json.length,
-  };
+  const { data, error } = await client.rpc('rebuild_shift_snapshot', {
+    p_group_id: groupId,
+    p_synced_at: syncedAt,
+  });
+  if (error) throw error;
+  return data;
 }
 
 class GlpiClient {
@@ -508,6 +426,7 @@ class GlpiClient {
     const solutionTechnicianId = numberOrNull(latestSolution?.users_id);
     const solutionTechnician = solutionTechnicianId
       ? {
+          solution_id: numberOrNull(latestSolution?.id),
           id: solutionTechnicianId,
           name: await this.technicianName(solutionTechnicianId),
           resolved_at: normalizeDate(latestSolution?.date_creation || latestSolution?.date_mod || ticket.solvedate || ticket.closedate),
@@ -561,181 +480,180 @@ class GlpiClient {
   }
 }
 
-function mapTicket(ticket: JsonRecord) {
-  const id = numberOrNull(ticket.id);
-  const base = env('GLPI_BASE_URL').replace(/\/+$/, '');
-  const solutionTechnician = ticket._dashboard_solution_technician
-    && typeof ticket._dashboard_solution_technician === 'object'
-    ? ticket._dashboard_solution_technician as JsonRecord
-    : {};
+function normalizedTicket(ticket: JsonRecord, groupUuid: string) {
   return {
-    glpi_id: id,
+    glpi_ticket_id: numberOrNull(ticket.id),
     title: label(ticket.name),
-    status_id: numberOrNull(ticket.status),
-    status: statusName(ticket.status),
-    technician_id: numberOrNull(ticket.technician_id || ticket.users_id_assign),
-    technician_name: label(ticket.technician_name || ticket.users_id_assign || ticket._users_id_assign),
-    group_id: numberOrNull(ticket.groups_id_assign || ticket.group_id),
-    group_name: label(ticket.groups_id_assign || ticket.group_name || ticket._groups_id_assign),
-    requester_id: numberOrNull(ticket.users_id_recipient),
-    requester_name: label(ticket.users_id_recipient || ticket.requester_name),
+    glpi_status_id: Number(ticket.status),
+    glpi_status_name: statusName(ticket.status),
+    group_id: groupUuid,
     category_id: numberOrNull(ticket.itilcategories_id),
     category_name: label(ticket.itilcategories_id),
-    priority: numberOrNull(ticket.priority),
-    priority_name: priorityName(ticket.priority),
-    urgency: numberOrNull(ticket.urgency),
-    urgency_name: priorityName(ticket.urgency),
-    impact: numberOrNull(ticket.impact),
-    impact_name: priorityName(ticket.impact),
     entity_id: numberOrNull(ticket.entities_id),
     entity_name: label(ticket.entities_id),
-    unit_name: label(ticket.locations_id),
     location_id: numberOrNull(ticket.locations_id),
     location_name: label(ticket.locations_id),
-    type_id: numberOrNull(ticket.type),
-    type_name: Number(ticket.type) === 2 ? 'Requisição' : 'Incidente',
+    priority: numberOrNull(ticket.priority),
+    urgency: numberOrNull(ticket.urgency),
+    impact: numberOrNull(ticket.impact),
     opened_at: normalizeDate(ticket.date),
-    assigned_at: normalizeDate(ticket._dashboard_first_assigned_at || ticket.date_assign),
+    first_assigned_at: normalizeDate(ticket._dashboard_first_assigned_at || ticket.date_assign),
     first_response_at: datePlusSeconds(ticket.date, ticket.takeintoaccount_delay_stat),
     solved_at: normalizeDate(ticket.solvedate),
     closed_at: normalizeDate(ticket.closedate),
-    modified_at: normalizeDate(ticket.date_mod),
-    sla_due_at: normalizeDate(ticket.time_to_resolve),
-    attention_due_at: normalizeDate(ticket.time_to_own),
-    internal_sla_due_at: normalizeDate(ticket.internal_time_to_resolve),
-    internal_attention_due_at: normalizeDate(ticket.internal_time_to_own),
-    solving_technician_id: numberOrNull(solutionTechnician.id),
-    solving_technician_name: label(solutionTechnician.name),
-    sla_status: slaStatus(ticket),
-    pending_reason: label(ticket.pending_reason),
-    glpi_url: id ? `${base}/front/ticket.form.php?id=${id}` : null,
-    raw_payload: ticket,
+    sla_attention_deadline: normalizeDate(ticket.time_to_own),
+    sla_solution_deadline: normalizeDate(ticket.time_to_resolve),
+    ola_attention_deadline: normalizeDate(ticket.internal_time_to_own),
+    ola_solution_deadline: normalizeDate(ticket.internal_time_to_resolve),
+    is_pending: Number(ticket.status) === 4,
+    requester_count: 0,
+    last_glpi_update: normalizeDate(ticket.date_mod) || new Date().toISOString(),
     source_environment: 'real',
-    synced_at: new Date().toISOString(),
   };
 }
 
-function mapTicketAssignments(ticket: JsonRecord) {
-  const ticketId = numberOrNull(ticket.id);
+async function upsertTechnician(
+  admin: ReturnType<typeof createClient>,
+  glpiUserId: number,
+  fullName: string,
+  syncedAt: string,
+) {
+  const { data, error } = await admin.from('glpi_technicians').upsert({
+    glpi_user_id: glpiUserId,
+    full_name: fullName,
+    is_active: true,
+    last_synced_at: syncedAt,
+  }, { onConflict: 'glpi_user_id' }).select('id').single();
+  if (error) throw error;
+  return String(data.id);
+}
+
+async function persistTicket(
+  admin: ReturnType<typeof createClient>,
+  ticket: JsonRecord,
+  groupUuid: string,
+  syncedAt: string,
+) {
+  const mapped = normalizedTicket(ticket, groupUuid);
+  if (!mapped.glpi_ticket_id || !mapped.opened_at) return null;
+  const { data: stored, error: ticketError } = await admin
+    .from('glpi_tickets')
+    .upsert(mapped, { onConflict: 'glpi_ticket_id' })
+    .select('id,glpi_ticket_id,last_glpi_update')
+    .single();
+  if (ticketError) throw ticketError;
+  const ticketUuid = String(stored.id);
+
   const technicians = Array.isArray(ticket._dashboard_technicians)
     ? ticket._dashboard_technicians as JsonRecord[]
     : [];
-  return technicians.flatMap((technician) => {
-    const technicianId = numberOrNull(technician.id);
-    if (!ticketId || !technicianId) return [];
-    return [{
-      ticket_glpi_id: ticketId,
-      technician_id: technicianId,
-      technician_name: label(technician.name),
+  const currentTechnicianIds: string[] = [];
+  for (const technician of technicians) {
+    const glpiUserId = numberOrNull(technician.id);
+    const fullName = label(technician.name);
+    if (!glpiUserId || !fullName) continue;
+    const technicianUuid = await upsertTechnician(admin, glpiUserId, fullName, syncedAt);
+    currentTechnicianIds.push(technicianUuid);
+    const { error } = await admin.from('glpi_ticket_technicians').upsert({
+      ticket_id: ticketUuid,
+      technician_id: technicianUuid,
+      relation_type: 'assigned',
       assigned_at: normalizeDate(technician.assigned_at),
-      assignment_source: label(technician.source) || 'history',
-      synced_at: new Date().toISOString(),
-    }];
+      removed_at: null,
+      is_current: true,
+    }, { onConflict: 'ticket_id,technician_id,relation_type,assigned_at' });
+    if (error) throw error;
+  }
+  let staleAssignments = admin.from('glpi_ticket_technicians')
+    .update({ is_current: false, removed_at: syncedAt })
+    .eq('ticket_id', ticketUuid)
+    .eq('relation_type', 'assigned')
+    .eq('is_current', true);
+  if (currentTechnicianIds.length) staleAssignments = staleAssignments.not('technician_id', 'in', `(${currentTechnicianIds.join(',')})`);
+  const { error: staleError } = await staleAssignments;
+  if (staleError) throw staleError;
+
+  const solution = ticket._dashboard_solution_technician
+    && typeof ticket._dashboard_solution_technician === 'object'
+    ? ticket._dashboard_solution_technician as JsonRecord
+    : null;
+  const solutionUserId = numberOrNull(solution?.id);
+  const solutionId = numberOrNull(solution?.solution_id);
+  const solvedAt = normalizeDate(ticket.solvedate);
+  if (solution && solutionUserId && solutionId && solvedAt) {
+    const solutionTechUuid = await upsertTechnician(
+      admin,
+      solutionUserId,
+      label(solution.name) || `Técnico ${solutionUserId}`,
+      syncedAt,
+    );
+    const { error: solutionError } = await admin.from('glpi_ticket_solutions').upsert({
+      ticket_id: ticketUuid,
+      glpi_solution_id: solutionId,
+      solved_at: solvedAt,
+      solved_by_technician_id: solutionTechUuid,
+      solution_type: 'itil_solution_author',
+    }, { onConflict: 'ticket_id,glpi_solution_id' });
+    if (solutionError) throw solutionError;
+  }
+  const { error: classificationError } = await admin.rpc('refresh_ticket_classification', {
+    p_ticket_id: ticketUuid,
+    p_reference: syncedAt,
   });
+  if (classificationError) throw classificationError;
+  return { glpiId: Number(stored.glpi_ticket_id), modifiedAt: String(stored.last_glpi_update) };
 }
 
 Deno.serve(async (request) => {
   if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: corsHeaders });
   if (request.method !== 'POST') return json({ error: 'Método não permitido.' }, 405);
-
   const supabaseUrl = env('SUPABASE_URL');
   const serviceKey = env('SUPABASE_SERVICE_ROLE_KEY');
   const auth = request.headers.get('Authorization') || '';
   if (!supabaseUrl || !serviceKey || !auth) return json({ error: 'Não autorizado.' }, 401);
 
-  const admin = createClient(supabaseUrl, serviceKey, {
-    auth: { autoRefreshToken: false, persistSession: false },
-  });
+  const admin = createClient(supabaseUrl, serviceKey, { auth: { autoRefreshToken: false, persistSession: false } });
   const startedAt = Date.now();
+  const startedAtIso = new Date(startedAt).toISOString();
   let glpi: GlpiClient | null = null;
-  let lockAcquired = false;
-  let action = '';
+  let executionId = '';
+  let action: string;
   let stage = 'authorize';
   let trustedOperationalCall = false;
+  let cursor: string | null = null;
+  let records = 0;
 
   try {
     const token = auth.replace(/^Bearer\s+/i, '');
-    const operationalRole = jwtRole(token);
-    trustedOperationalCall = token === serviceKey || ['service_role', 'postgres'].includes(operationalRole);
+    trustedOperationalCall = token === serviceKey || ['service_role', 'postgres'].includes(jwtRole(token));
     const body = await request.json().catch(() => ({})) as JsonRecord;
     action = String(body.action || '');
-
     if (!trustedOperationalCall) {
-      const { data: { user }, error: userError } = await admin.auth.getUser(token);
-      if (userError || !user) return json({ error: 'Sessão inválida.' }, 401);
-      const { data: profile } = await admin.from('profiles').select('role').eq('id', user.id).single();
-      const role = String(profile?.role || '').toLowerCase();
-      if (!['admin', 'gestor'].includes(role)) return json({ error: 'Acesso restrito a administradores e gestores.' }, 403);
+      const { data: { user }, error } = await admin.auth.getUser(token);
+      if (error || !user) return json({ error: 'Sessão inválida.' }, 401);
+      const { data: profile } = await admin.from('user_profiles').select('role,is_active').eq('auth_user_id', user.id).single();
+      if (!profile?.is_active || !['admin', 'gestor'].includes(String(profile.role).toLowerCase())) {
+        return json({ error: 'Acesso restrito a administradores e gestores.' }, 403);
+      }
     }
-
-    if (!['configuration-status', 'sync-incremental', 'sync-current-shift', 'backfill-group-cache', 'test-connection'].includes(action)) return json({ error: 'Ação inválida.' }, 400);
+    if (!['configuration-status', 'sync-incremental', 'sync-current-shift', 'test-connection'].includes(action)) {
+      return json({ error: 'Ação inválida.' }, 400);
+    }
 
     if (action === 'configuration-status') {
-      const baseUrl = env('GLPI_BASE_URL').replace(/\/+$/, '');
-      const apiUrl = (env('GLPI_API_URL') || (baseUrl ? `${baseUrl}/apirest.php` : '')).replace(/\/+$/, '');
-      const [ticketsResult, assignmentsResult, syncStateResult] = await Promise.all([
-        admin.from('glpi_tickets_dashboard').select('glpi_id', { count: 'exact', head: true }),
-        admin.from('glpi_ticket_assignments_dashboard').select('technician_id').limit(5000),
-        admin
-          .from('glpi_sync_state')
-          .select('status, last_success_at, last_cursor, last_records_processed, last_error_at')
-          .eq('id', 1)
-          .maybeSingle(),
+      const [{ count: tickets }, { count: technicians }, { data: syncState }] = await Promise.all([
+        admin.from('glpi_tickets').select('id', { count: 'exact', head: true }),
+        admin.from('glpi_technicians').select('id', { count: 'exact', head: true }),
+        admin.from('glpi_sync_state').select('*').eq('sync_name', 'glpi_incremental').maybeSingle(),
       ]);
-      if (ticketsResult.error) throw ticketsResult.error;
-      if (assignmentsResult.error) throw assignmentsResult.error;
-      if (syncStateResult.error) throw syncStateResult.error;
-      const technicianIds = new Set(
-        (assignmentsResult.data || [])
-          .map((row: { technician_id: unknown }) => row.technician_id)
-          .filter(Boolean),
-      );
       return json({
         ok: true,
-        configured: Boolean(baseUrl && env('GLPI_APP_TOKEN') && (env('GLPI_USER_TOKEN') || (env('GLPI_LOGIN') && env('GLPI_PASSWORD')))),
-        baseUrl: baseUrl || null,
-        apiUrl: apiUrl || null,
-        apiRest: 'not-tested',
-        credentials: {
-          appToken: Boolean(env('GLPI_APP_TOKEN')),
-          userToken: Boolean(env('GLPI_USER_TOKEN')),
-          loginFallback: Boolean(env('GLPI_LOGIN') && env('GLPI_PASSWORD')),
-        },
-        cache: {
-          tickets: ticketsResult.count || 0,
-          technicians: technicianIds.size,
-          assignments: assignmentsResult.data?.length || 0,
-        },
-        syncState: syncStateResult.data || null,
+        configured: Boolean(env('GLPI_BASE_URL') && env('GLPI_APP_TOKEN') && env('GLPI_USER_TOKEN')),
+        credentials: { appToken: Boolean(env('GLPI_APP_TOKEN')), userToken: Boolean(env('GLPI_USER_TOKEN')) },
+        cache: { tickets: tickets || 0, technicians: technicians || 0 },
+        syncState,
         timezone: env('GLPI_TIMEZONE') || 'America/Sao_Paulo',
-        technicalGroup: {
-          configuredId: numberOrNull(env('GLPI_TECH_GROUP_ID')),
-          configuredName: env('GLPI_TECH_GROUP_NAME') || 'Suporte TI',
-        },
         checkedAt: new Date().toISOString(),
-      });
-    }
-
-    if (['sync-incremental', 'sync-current-shift', 'backfill-group-cache'].includes(action)) {
-      stage = 'acquire-lock';
-      const { data: acquired, error: lockError } = await admin.rpc('acquire_glpi_sync_lock', {
-        lock_seconds: boundedNumber('GLPI_SYNC_LOCK_SECONDS', 120, 30, 600),
-      });
-      if (lockError) throw lockError;
-      lockAcquired = Boolean(acquired);
-      if (!lockAcquired) return json({ error: 'Sincronização GLPI já está em andamento.' }, 409);
-      const requestedOrigin = String(body.origin || '');
-      const syncOrigin = trustedOperationalCall && requestedOrigin === 'supabase_cron'
-        ? 'supabase_cron'
-        : 'manual_admin';
-      const requestedInterval = Number(body.expectedIntervalSeconds || 60);
-      const expectedIntervalSeconds = Number.isFinite(requestedInterval)
-        ? Math.max(60, Math.min(requestedInterval, 300))
-        : 60;
-      await updateSyncState(admin, {
-        sync_origin: syncOrigin,
-        scheduler_interval_seconds: expectedIntervalSeconds,
-        next_run_at: new Date(Date.now() + expectedIntervalSeconds * 1000).toISOString(),
       });
     }
 
@@ -743,182 +661,100 @@ Deno.serve(async (request) => {
     glpi = new GlpiClient();
     await glpi.initSession();
     const technicalGroup = await glpi.resolveTechnicalGroup();
-    if (action === 'backfill-group-cache') {
-      stage = 'search-technical-group';
-      const groupTicketIds = await glpi.technicalGroupTicketIds(technicalGroup.id);
-      stage = 'read-cache';
-      const [{ data: cachedTickets, error: cacheError }, { data: assignments, error: assignmentsError }] = await Promise.all([
-        admin.from('glpi_tickets_dashboard').select('glpi_id, technician_id').limit(10000),
-        admin.from('glpi_ticket_assignments_dashboard').select('technician_id').limit(10000),
-      ]);
-      if (cacheError) throw cacheError;
-      if (assignmentsError) throw assignmentsError;
-      const matchingIds = (cachedTickets || [])
-        .map((ticket: { glpi_id: unknown }) => numberOrNull(ticket.glpi_id))
-        .filter((id: number | null): id is number => Boolean(id && groupTicketIds.has(id)));
-      stage = 'update-group-cache';
-      for (let index = 0; index < matchingIds.length; index += 200) {
-        const { error } = await admin
-          .from('glpi_tickets_dashboard')
-          .update({ group_id: technicalGroup.id, group_name: technicalGroup.name })
-          .in('glpi_id', matchingIds.slice(index, index + 200));
-        if (error) throw error;
-      }
-      const technicianIds = [...new Set([
-        ...(cachedTickets || []).map((ticket: { technician_id: unknown }) => numberOrNull(ticket.technician_id)),
-        ...(assignments || []).map((assignment: { technician_id: unknown }) => numberOrNull(assignment.technician_id)),
-      ].filter((id): id is number => Boolean(id)))];
-      stage = 'normalize-technician-names';
-      for (const technicianId of technicianIds) {
-        const name = await glpi.technicianName(technicianId);
-        const [{ error: ticketError }, { error: assignmentError }] = await Promise.all([
-          admin.from('glpi_tickets_dashboard').update({ technician_name: name }).eq('technician_id', technicianId),
-          admin.from('glpi_ticket_assignments_dashboard').update({ technician_name: name }).eq('technician_id', technicianId),
-        ]);
-        if (ticketError) throw ticketError;
-        if (assignmentError) throw assignmentError;
-      }
-      stage = 'refresh-dashboard-snapshot';
-      const syncedAt = new Date().toISOString();
-      const snapshot = await refreshDashboardSnapshot(admin, technicalGroup.id, syncedAt);
-      await updateSyncState(admin, {
-        status: 'online',
-        locked_until: null,
-        last_success_at: syncedAt,
-        last_records_processed: matchingIds.length,
-        last_records_changed: matchingIds.length,
-        last_duration_ms: Date.now() - startedAt,
-        last_error_at: null,
-        last_error: null,
-      });
-      await logSync(admin, 'info', 'Cache do grupo técnico e nomes normalizado.', matchingIds.length);
-      return json({
-        ok: true,
-        group: technicalGroup,
-        groupTicketsFound: groupTicketIds.size,
-        cacheTicketsMatched: matchingIds.length,
-        techniciansNormalized: technicianIds.length,
-        snapshot,
-        elapsedMs: Date.now() - startedAt,
-      });
-    }
     if (action === 'test-connection') {
       const [rawSample, usersCount, groupsCount, categoriesCount] = await Promise.all([
-        glpi.sampleTickets(),
-        glpi.countItems('User'),
-        glpi.countItems('Group'),
-        glpi.countItems('ITILCategory'),
+        glpi.sampleTickets(), glpi.countItems('User'), glpi.countItems('Group'), glpi.countItems('ITILCategory'),
       ]);
       const sample = await glpi.enrichTickets(rawSample);
-      const fields = Object.fromEntries(REQUIRED_TICKET_FIELDS.map((field) => [
-        field,
-        rawSample.some((ticket) => Object.hasOwn(ticket, field)),
-      ]));
-      const statuses = [...new Map(sample.map((ticket) => [
-        Number(ticket.status),
-        statusName(ticket.status),
-      ])).entries()].filter(([code]) => Number.isFinite(code)).map(([code, name]) => ({ code, name }));
-      await logSync(admin, 'info', 'Conexão somente leitura com GLPI validada.', sample.length);
       return json({
         ok: true,
         glpiVersion: glpi.glpiVersion,
-        baseUrl: env('GLPI_BASE_URL').replace(/\/+$/, '') || null,
-        apiUrl: (env('GLPI_API_URL') || `${env('GLPI_BASE_URL').replace(/\/+$/, '')}/apirest.php`).replace(/\/+$/, '') || null,
         apiRest: 'online',
-        credentials: { appToken: Boolean(env('GLPI_APP_TOKEN')), userToken: Boolean(env('GLPI_USER_TOKEN')) },
         tickets: sample.length,
         technicians: usersCount,
         access: { tickets: true, users: usersCount >= 0, groups: groupsCount >= 0, categories: categoriesCount >= 0 },
-        fields,
-        statuses,
+        fields: Object.fromEntries(REQUIRED_TICKET_FIELDS.map((field) => [field, rawSample.some((ticket) => Object.hasOwn(ticket, field))])),
         technicalGroup,
-        sampleTechnicalGroupMatches: sample.filter((ticket) => ticket._dashboard_in_tech_group === true).length,
-        assignmentFallback: {
-          required: !fields.date_assign,
-          currentTechnicianSource: 'Ticket_User.type=2',
-          assignedAtSource: fields.date_assign ? 'Ticket.date_assign' : 'Log.date_mod where id_search_option=5',
-          techniciansFound: sample.reduce((total, ticket) => total + (Array.isArray(ticket._dashboard_technicians) ? ticket._dashboard_technicians.length : 0), 0),
-        },
         elapsedMs: Date.now() - startedAt,
       });
     }
 
-    stage = 'read-sync-state';
-    const { data: syncState, error: syncStateError } = await admin.from('glpi_sync_state').select('last_cursor').eq('id', 1).maybeSingle();
-    if (syncStateError) throw syncStateError;
-    const previousCursor = syncState?.last_cursor ? String(syncState.last_cursor) : null;
-    stage = 'fetch-tickets';
-    const rawTickets = await glpi.getTickets(action === 'sync-current-shift' ? null : previousCursor);
-    stage = 'enrich-tickets';
-    const tickets = await glpi.enrichTickets(rawTickets);
-    const mapped = tickets.map(mapTicket).filter((ticket) => ticket.glpi_id);
-    if (mapped.length) {
-      stage = 'upsert-tickets';
-      const { error } = await admin.from('glpi_tickets_dashboard').upsert(mapped, { onConflict: 'glpi_id' });
-      if (error) throw error;
-    }
-    const ticketIds = mapped.map((ticket) => ticket.glpi_id);
-    if (ticketIds.length) {
-      stage = 'replace-assignments';
-      const assignments = tickets.flatMap(mapTicketAssignments);
-      const { error: deleteAssignmentsError } = await admin
-        .from('glpi_ticket_assignments_dashboard')
-        .delete()
-        .in('ticket_glpi_id', ticketIds);
-      if (deleteAssignmentsError) throw deleteAssignmentsError;
-      if (assignments.length) {
-        const { error: assignmentError } = await admin
-          .from('glpi_ticket_assignments_dashboard')
-          .upsert(assignments, { onConflict: 'ticket_glpi_id,technician_id' });
-        if (assignmentError) throw assignmentError;
-      }
-    }
-    const cursor = mapped.reduce<string | null>((latest, ticket) => {
-      if (!ticket.modified_at) return latest;
-      return !latest || ticket.modified_at > latest ? ticket.modified_at : latest;
-    }, previousCursor);
-    stage = 'refresh-dashboard-snapshot';
-    const syncedAt = new Date().toISOString();
-    const snapshot = await refreshDashboardSnapshot(admin, technicalGroup.id, syncedAt);
-    stage = 'update-sync-state';
-    await updateSyncState(admin, {
-      status: 'online',
-      locked_until: null,
-      last_success_at: syncedAt,
-      last_cursor: cursor,
-      last_records_processed: mapped.length,
-      last_records_changed: mapped.length,
-      last_duration_ms: Date.now() - startedAt,
-      last_error_at: null,
-      last_error: null,
+    stage = 'acquire-lock';
+    const { data: acquired, error: lockError } = await admin.rpc('acquire_glpi_sync_lock', {
+      p_sync_name: 'glpi_incremental',
+      p_lock_seconds: boundedNumber('GLPI_SYNC_LOCK_SECONDS', 120, 30, 600),
     });
-    stage = 'write-sync-log';
-    await logSync(admin, 'info', action === 'sync-current-shift'
-      ? 'Sincronização do período operacional concluída.'
-      : 'Sincronização incremental concluída.', mapped.length, '', cursor);
+    if (lockError) throw lockError;
+    executionId = String(acquired || '');
+    if (!executionId) return json({ error: 'Sincronização GLPI já está em andamento.' }, 409);
+    await logSync(admin, executionId, startedAtIso, 'running', 0);
+
+    stage = 'upsert-group';
+    const { data: group, error: groupError } = await admin.from('glpi_groups').upsert({
+      glpi_group_id: technicalGroup.id,
+      name: technicalGroup.name,
+      is_active: true,
+      is_dashboard_group: true,
+    }, { onConflict: 'glpi_group_id' }).select('id').single();
+    if (groupError) throw groupError;
+
+    stage = 'read-sync-state';
+    const { data: syncState, error: syncStateError } = await admin
+      .from('glpi_sync_state').select('last_cursor').eq('sync_name', 'glpi_incremental').single();
+    if (syncStateError) throw syncStateError;
+    const previousCursor = action === 'sync-current-shift' ? null : (syncState.last_cursor ? String(syncState.last_cursor) : null);
+    stage = 'fetch-tickets';
+    const rawTickets = await glpi.getTickets(previousCursor);
+    stage = 'enrich-tickets';
+    const enriched = await glpi.enrichTickets(rawTickets);
+    const targetTickets = enriched.filter((ticket) => ticket._dashboard_in_tech_group === true);
+    records = targetTickets.length;
+    cursor = previousCursor;
+    stage = 'persist-normalized-cache';
+    for (const ticket of targetTickets) {
+      const persisted = await persistTicket(admin, ticket, String(group.id), new Date().toISOString());
+      if (persisted?.modifiedAt && (!cursor || persisted.modifiedAt > cursor)) cursor = persisted.modifiedAt;
+    }
+    const syncedAt = new Date().toISOString();
+    stage = 'rebuild-snapshot';
+    const snapshot = await refreshDashboardSnapshot(admin, String(group.id), syncedAt);
+    stage = 'finish-sync';
+    const duration = Date.now() - startedAt;
+    const { error: finishError } = await admin.rpc('finish_glpi_sync', {
+      p_execution_id: executionId,
+      p_success: true,
+      p_cursor: cursor,
+      p_processed: records,
+      p_inserted: 0,
+      p_updated: records,
+      p_duration_ms: duration,
+      p_error: null,
+    });
+    if (finishError) throw finishError;
+    await logSync(admin, executionId, startedAtIso, 'success', records);
+    executionId = '';
     return json({
       ok: true,
-      records: mapped.length,
+      records,
       lastCursor: cursor,
-      snapshot: {
-        version: snapshot.version,
-        sourceRows: snapshot.sourceRows,
-        publicRows: snapshot.publicRows,
-      },
-      elapsedMs: Date.now() - startedAt,
+      snapshotVersion: snapshot?.snapshot_version || null,
+      elapsedMs: duration,
     });
   } catch (error) {
     const message = safeError(error);
-    if (lockAcquired || ['sync-incremental', 'sync-current-shift', 'backfill-group-cache'].includes(action)) {
-      await updateSyncState(admin, {
-        status: 'offline',
-        locked_until: null,
-        last_error_at: new Date().toISOString(),
-        last_error: message,
-        last_duration_ms: Date.now() - startedAt,
-      }, false);
+    if (executionId) {
+      await admin.rpc('finish_glpi_sync', {
+        p_execution_id: executionId,
+        p_success: false,
+        p_cursor: cursor,
+        p_processed: records,
+        p_inserted: 0,
+        p_updated: 0,
+        p_duration_ms: Date.now() - startedAt,
+        p_error: message,
+      }).catch(() => undefined);
+      await logSync(admin, executionId, startedAtIso, 'error', records, message).catch(() => undefined);
     }
-    await logSync(admin, 'erro', 'Falha na sincronização com o GLPI.', 0, message);
     console.error('glpi-dashboard failed:', message);
     return json({
       error: 'Falha na integração com o GLPI. Detalhes registrados nos logs.',

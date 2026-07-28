@@ -13,4 +13,5 @@ playwright-report/
 test-results/
 supabase/.temp/
 supabase/.env.secrets.local
+backups/
 debug.log

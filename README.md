@@ -1,5 +1,11 @@
 # GESTÃO TI
 
+O ambiente Supabase de destino é o projeto **GestaoTI**
+(`cctygrudsyoowuotlyfo`). A reconstrução limpa do banco está documentada em
+[`docs/ARQUITETURA_SUPABASE_GESTAOTI.md`](docs/ARQUITETURA_SUPABASE_GESTAOTI.md)
+e o procedimento de implantação em
+[`docs/SUPABASE_CLI_MANUAL.md`](docs/SUPABASE_CLI_MANUAL.md).
+
 Portal estático em HTML, CSS e JavaScript, integrado ao Supabase Auth/PostgreSQL e a Edge Functions TypeScript/Deno. O GLPI nunca é consultado diretamente pelo navegador: a função `glpi-dashboard` sincroniza dados somente leitura para o cache `glpi_tickets_dashboard`.
 
 ## Requisitos

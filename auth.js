@@ -1,4 +1,4 @@
-const SUPABASE_URL = window.GESTAO_TI_CONFIG?.SUPABASE_URL || 'https://ditygnxttjvlfrdpvaxe.supabase.co';
+const SUPABASE_URL = window.GESTAO_TI_CONFIG?.SUPABASE_URL || 'https://cctygrudsyoowuotlyfo.supabase.co';
 const SUPABASE_PUBLIC_KEY = window.GESTAO_TI_CONFIG?.SUPABASE_PUBLIC_KEY || '';
 const PERFIS_VALIDOS = Object.freeze(['admin', 'gestor', 'supervisor', 'tecnico', 'operacional']);
 const ROTA_DASHBOARD_PUBLICO = /\/dashboard-diario\/?$/.test(window.location.pathname);
@@ -146,14 +146,22 @@ async function realizarLogin() {
     botao.textContent = 'Entrando...';
 
     try {
-        const { data, error } = await supabase.auth.signInWithPassword({ email, password: senha });
+        const timeout = new Promise((_, reject) => {
+            setTimeout(() => reject(new Error('AUTH_TIMEOUT')), 15000);
+        });
+        const { data, error } = await Promise.race([
+            supabase.auth.signInWithPassword({ email, password: senha }),
+            timeout
+        ]);
         if (error) throw error;
         await carregarPerfil(data.user);
     } catch (error) {
-        await supabase.auth.signOut();
+        supabase.auth.signOut().catch(() => undefined);
         const mensagem = error.message === 'Invalid login credentials'
             ? 'E-mail ou senha incorretos. Confira os dados ou use “Esqueci minha senha”.'
-            : `Não foi possível entrar: ${error.message}`;
+            : error.message === 'AUTH_TIMEOUT'
+                ? 'Não foi possível concluir o acesso. Verifique sua conexão e tente novamente.'
+                : 'Não foi possível concluir o acesso. Tente novamente em instantes.';
         mostrarAviso(mensagem, 'erro');
     } finally {
         botao.disabled = false;

@@ -64,7 +64,7 @@ async function preparePublicDashboard(
     { ...baseTicket, id: 9004, status_id: 5, status: 'Solucionado', technician_id: 20, technician_name: 'Técnico Teste', assigned_at: new Date(now - 50000).toISOString(), solved_at: new Date(now - 30000).toISOString(), closed_at: null, is_pending: false, is_overdue: false, is_resolved: true },
     { ...baseTicket, id: 9005, status_id: 6, status: 'Fechado', technician_id: 20, technician_name: 'Técnico Teste', assigned_at: new Date(now - 50000).toISOString(), solved_at: new Date(now - 30000).toISOString(), closed_at: new Date(now - 10000).toISOString(), is_pending: false, is_overdue: false, is_resolved: true },
   ];
-  await page.route('https://example.supabase.co/functions/v1/glpi-dashboard-public', (route) => route.fulfill({
+  await page.route('https://example.supabase.co/functions/v1/glpi-dashboard-public**', (route) => route.fulfill({
     contentType: 'application/json',
     headers: {
       ETag: '"visual-snapshot"',
@@ -300,8 +300,8 @@ test('dashboard público envia ETag e preserva a tela ao receber 304', async ({ 
   await preparePublicDashboard(page);
   const initialCards = await page.locator('#glpi-daily-kpis').textContent();
   let receivedEtag = '';
-  await page.unroute('https://example.supabase.co/functions/v1/glpi-dashboard-public');
-  await page.route('https://example.supabase.co/functions/v1/glpi-dashboard-public', (route) => {
+  await page.unroute('https://example.supabase.co/functions/v1/glpi-dashboard-public**');
+  await page.route('https://example.supabase.co/functions/v1/glpi-dashboard-public**', (route) => {
     receivedEtag = route.request().headers()['if-none-match'] || '';
     return route.fulfill({
       status: 304,
