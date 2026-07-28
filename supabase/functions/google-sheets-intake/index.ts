@@ -129,7 +129,7 @@ Deno.serve(async (request) => {
       redirect: 'follow',
       headers: { 'Content-Type': 'text/plain;charset=utf-8' },
       body: JSON.stringify({ secret: sharedSecret, payload }),
-      signal: AbortSignal.timeout(25000),
+      signal: AbortSignal.timeout(60000),
     });
     if (!response.ok) throw new Error(`APPS_SCRIPT_HTTP_${response.status}`);
     const result = await response.json();
