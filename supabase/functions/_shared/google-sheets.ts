@@ -8,6 +8,7 @@ export type NormalizedSheetRequest = {
   sector: string | null;
   job_title: string | null;
   training_topic: string | null;
+  pending_reason: string | null;
   source_status: string | null;
   normalized_status: string;
   dashboard_status: DashboardSheetStatus;
@@ -51,15 +52,35 @@ export function parseSheetDate(value: unknown) {
   return Number.isNaN(parsed.getTime()) ? null : parsed.toISOString();
 }
 
-export function normalizeStatus(value: unknown) {
-  return String(value || '')
+export function normalizeRequestStatus(value: unknown) {
+  const normalized = String(value || '')
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')
     .trim()
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, '_')
     .replace(/^_+|_+$/g, '');
+  const aliases: Record<string, string> = {
+    realizados: 'realizado',
+    realizada: 'realizado',
+    realizadas: 'realizado',
+    concluidos: 'concluido',
+    concluidas: 'concluido',
+    pendentes: 'pendente',
+    nao_realizados: 'nao_realizado',
+    nao_realizada: 'nao_realizado',
+    nao_realizadas: 'nao_realizado',
+    agendados: 'agendado',
+    agendada: 'agendado',
+    agendadas: 'agendado',
+    nao_agendados: 'nao_agendado',
+    nao_agendada: 'nao_agendado',
+    nao_agendadas: 'nao_agendado',
+  };
+  return aliases[normalized] || normalized;
 }
+
+export const normalizeStatus = normalizeRequestStatus;
 
 export function classifyTimedStatus(value: unknown) {
   const normalized = normalizeStatus(value);
@@ -72,7 +93,8 @@ export function classifyAdStatus(value: unknown): DashboardSheetStatus {
   const normalized = normalizeStatus(value);
   if (normalized === 'realizado') return 'completed';
   if (normalized === 'ja_existente') return 'already_exists';
-  return normalized ? 'pending' : 'not_completed';
+  if (normalized === 'pendente') return 'pending';
+  return 'not_completed';
 }
 
 export function classifyTrainingStatus(value: unknown): DashboardSheetStatus {
@@ -82,7 +104,8 @@ export function classifyTrainingStatus(value: unknown): DashboardSheetStatus {
   if (normalized === 'sem_contato') return 'no_contact';
   if (normalized === 'duplicado') return 'duplicate';
   if (['outro', 'outros'].includes(normalized)) return 'other';
-  return normalized ? 'pending' : 'not_scheduled';
+  if (normalized === 'pendente') return 'pending';
+  return 'not_scheduled';
 }
 
 export function isTerminalStatus(source: SheetSource, status: DashboardSheetStatus) {

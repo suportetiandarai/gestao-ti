@@ -21,9 +21,11 @@ test('sincronizador aplica o corte e usa o texto normalizado como fonte do statu
   assert.match(sync, /2026-07-28T00:00:00-03:00/);
   assert.doesNotMatch(sync, /trainingColors|backgroundColor/);
   assert.match(shared, /classifyTrainingStatus/);
-  assert.match(shared, /normalizeStatus/);
+  assert.match(shared, /normalizeRequestStatus/);
   assert.match(shared, /already_exists/);
   assert.match(shared, /no_contact/);
+  assert.match(shared, /normalized === 'pendente'/);
+  assert.match(shared, /return 'not_completed'/);
 });
 
 test('endpoint público usa paginação, ETag e seleção explícita sem payload bruto', () => {
@@ -77,10 +79,10 @@ test('banco impede leitura anônima direta e agenda uma sincronização única',
 
 test('somente os campos públicos autorizados são renderizados', () => {
   const client = read('sheets-dashboard.js');
-  for (const allowed of ['requested_at', 'requester_name', 'sector', 'job_title', 'training_topic']) {
+  for (const allowed of ['requested_at', 'requester_name', 'sector', 'job_title', 'training_topic', 'pending_reason']) {
     assert.match(client, new RegExp(allowed));
   }
-  assert.doesNotMatch(client, /email|telefone|cpf|cns|motivo|private_key|access_token/i);
+  assert.doesNotMatch(client, /email|telefone|cpf|cns|private_key|access_token/i);
 });
 
 test('dashboard AD expõe somente data, nome e status operacional', () => {
@@ -98,4 +100,46 @@ test('entrada pública encaminha formulários sem expor segredo ou permitir orig
   assert.match(intake, /GOOGLE_APPS_SCRIPT_SHARED_SECRET/);
   assert.match(intake, /DUPLICATE_/);
   assert.doesNotMatch(intake, /Access-Control-Allow-Origin': '\*'/);
+});
+
+test('dashboards removem Total e mantêm exatamente os três cards operacionais', () => {
+  const expectations = {
+    'dashboard-timed/index.html': ['Realizados', 'Pendentes', 'Não realizados'],
+    'dashboard-ad/index.html': ['Realizadas', 'Pendentes', 'Não realizadas'],
+    'dashboard-treinamentos/index.html': ['Realizados', 'Agendados', 'Não agendados'],
+  };
+  for (const [file, labels] of Object.entries(expectations)) {
+    const html = read(file);
+    assert.doesNotMatch(html, /id="summary-total"|<span>Total<\/span>/);
+    assert.equal((html.match(/class="sheet-summary-card"/g) || []).length, 3);
+    for (const label of labels) assert.match(html, new RegExp(`<span>${label}</span>`));
+  }
+});
+
+test('TIMED lê o motivo exclusivamente da coluna R e o expõe apenas na resposta autorizada', () => {
+  const sync = read('supabase/functions/google-sheets-sync/index.ts');
+  const endpoint = read('supabase/functions/google-sheets-dashboard-public/index.ts');
+  const client = read('sheets-dashboard.js');
+  assert.match(sync, /'Q:Q', 'R:R', 'T:T', 'U:U'/);
+  assert.match(sync, /pendingReason = sanitizeText\(columns\[5\]/);
+  assert.match(endpoint, /dashboard_status,pending_reason/);
+  assert.match(client, /item\.dashboard_status === 'pending'/);
+  assert.match(client, /Motivo não informado/);
+});
+
+test('migração adiciona motivo da pendência sem liberar leitura pública direta', () => {
+  const migration = read('supabase/migrations/20260729123000_017_timed_pending_reason.sql');
+  assert.match(migration, /add column if not exists pending_reason text/);
+  assert.doesNotMatch(migration, /\bgrant\b[\s\S]*\banon\b/i);
+});
+
+test('badges aplicam cor ao status sem criar cor de linha', () => {
+  const css = read('sheets-dashboard.css');
+  const client = read('sheets-dashboard.js');
+  assert.match(css, /\.sheet-status-badge/);
+  assert.match(css, /\.status-not_completed,[\s\S]*background: #fee2e2/);
+  assert.match(css, /\.status-pending,[\s\S]*background: #fef3c7/);
+  assert.match(css, /\.status-completed[\s\S]*background: #dcfce7/);
+  assert.match(client, /sheet-status-badge/);
+  assert.doesNotMatch(client, /row\.className\s*=\s*.*status/);
 });

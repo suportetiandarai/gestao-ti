@@ -138,7 +138,7 @@ body.sheet-dashboard {
 
 .sheet-summary {
     display: grid;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 14px;
 }
 
@@ -228,23 +228,65 @@ body.sheet-dashboard {
     white-space: nowrap;
 }
 
-.sheet-status {
-    font-weight: 700;
+.sheet-status-cell {
+    min-width: 160px;
+}
+
+.sheet-status-badge {
+    display: inline-flex;
+    align-items: center;
+    width: fit-content;
+    padding: 4px 9px;
+    border: 1px solid currentColor;
+    border-radius: 999px;
+    font-size: 0.78rem;
+    font-weight: 800;
+    line-height: 1.2;
     white-space: nowrap;
 }
 
 .status-completed {
+    background: #dcfce7;
     color: var(--sheet-success);
 }
 
 .status-pending,
 .status-scheduled {
+    background: #fef3c7;
     color: var(--sheet-warning);
 }
 
 .status-not_completed,
 .status-not_scheduled {
+    background: #fee2e2;
+    color: var(--sheet-danger);
+}
+
+.status-already_exists,
+.status-duplicate {
+    background: #fee2e2;
+    color: #991b1b;
+}
+
+.status-no_contact {
+    background: #fce7f3;
+    color: #9d174d;
+}
+
+.status-other {
+    background: #171717;
+    color: #fff;
+}
+
+.sheet-pending-reason {
+    display: block;
+    max-width: 320px;
+    margin-top: 6px;
     color: var(--sheet-neutral);
+    font-size: 0.78rem;
+    font-weight: 500;
+    line-height: 1.35;
+    overflow-wrap: anywhere;
 }
 
 .sheet-empty {

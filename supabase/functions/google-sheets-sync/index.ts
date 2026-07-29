@@ -18,7 +18,7 @@ const CONFIG = {
   timed: {
     spreadsheetId: Deno.env.get('GOOGLE_TIMED_SPREADSHEET_ID') || '1EVGXL_NUV_koXR1mH_X4z_YqVmsaLytCX84ONYTzD9I',
     sheetName: Deno.env.get('GOOGLE_TIMED_SHEET_NAME') || 'Respostas ao formulário 1',
-    columns: ['A:A', 'D:D', 'J:J', 'N:N', 'Q:Q', 'T:T', 'U:U'],
+    columns: ['A:A', 'D:D', 'J:J', 'N:N', 'Q:Q', 'R:R', 'T:T', 'U:U'],
   },
   training: {
     spreadsheetId: Deno.env.get('GOOGLE_TRAINING_SPREADSHEET_ID') || '1vcNxK3VQ4TwIxdHWWPCQcyYY6nS1MfRLFw9c8lxza_U',
@@ -120,11 +120,13 @@ async function normalize(
     let sector: string;
     let jobTitle: string;
     let trainingTopic: string | null = null;
+    let pendingReason: string | null = null;
 
     if (source === 'timed') {
       jobTitle = sanitizeText(columns[2]?.[index], 120);
       sector = sanitizeText(columns[3]?.[index], 140);
       sourceStatus = sanitizeText(columns[4]?.[index], 80);
+      pendingReason = sanitizeText(columns[5]?.[index], 300) || null;
       dashboardStatus = classifyTimedStatus(sourceStatus);
     } else if (source === 'training') {
       sector = sanitizeText(columns[2]?.[index], 140);
@@ -159,6 +161,7 @@ async function normalize(
       sector: sector || null,
       job_title: jobTitle || null,
       training_topic: trainingTopic,
+      pending_reason: pendingReason,
       source_status: sourceStatus || null,
       normalized_status: normalized,
       dashboard_status: dashboardStatus,
@@ -226,6 +229,7 @@ async function synchronize(source: SheetSource, accessToken: string) {
       sector: row.sector,
       job_title: row.job_title,
       training_topic: row.training_topic,
+      pending_reason: row.pending_reason,
       source_status: row.source_status,
       dashboard_status: row.dashboard_status,
       status_updated_at: row.status_updated_at,
