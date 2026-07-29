@@ -58,6 +58,22 @@
         row.appendChild(cell);
     }
 
+    function createStatusCell(row, item) {
+        const cell = document.createElement('td');
+        cell.className = 'sheet-status-cell';
+        const badge = document.createElement('span');
+        badge.className = `sheet-status-badge status-${item.dashboard_status}`;
+        badge.textContent = statusLabel(item.dashboard_status);
+        cell.appendChild(badge);
+        if (source === 'timed' && item.dashboard_status === 'pending') {
+            const reason = document.createElement('span');
+            reason.className = 'sheet-pending-reason';
+            reason.textContent = `Motivo: ${String(item.pending_reason || '').trim() || 'Motivo não informado'}`;
+            cell.appendChild(reason);
+        }
+        row.appendChild(cell);
+    }
+
     function renderRows(rows) {
         const body = get('sheet-dashboard-rows');
         body.replaceChildren();
@@ -83,13 +99,12 @@
                 createCell(row, item.job_title);
                 createCell(row, item.sector);
             }
-            createCell(row, statusLabel(item.dashboard_status), `sheet-status status-${item.dashboard_status}`);
+            createStatusCell(row, item);
             body.appendChild(row);
         }
     }
 
     function render(data) {
-        get('summary-total').textContent = String(data.summary.total);
         get('summary-completed').textContent = String(data.summary.completed);
         get('summary-pending').textContent = String(data.summary.pending);
         get('summary-not-started').textContent = String(data.summary.notStarted);

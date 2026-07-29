@@ -87,7 +87,7 @@ Deno.serve(async (request) => {
     const fields = source === 'training'
       ? 'source_row,requested_at,requester_name,sector,job_title,training_topic,dashboard_status'
       : source === 'timed'
-        ? 'source_row,requested_at,requester_name,sector,job_title,dashboard_status'
+        ? 'source_row,requested_at,requester_name,sector,job_title,dashboard_status,pending_reason'
         : 'source_row,requested_at,requester_name,dashboard_status';
     const now = encodeURIComponent(new Date().toISOString());
     const rowsResponse = await database(
