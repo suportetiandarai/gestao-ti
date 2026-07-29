@@ -51,10 +51,10 @@ test('títulos públicos contêm somente os textos operacionais solicitados', ()
   const timed = read('dashboard-timed/index.html');
   const training = read('dashboard-treinamentos/index.html');
   const ad = read('dashboard-ad/index.html');
-  assert.match(timed, /<h1>Solicitações TIMED<\/h1>[\s\S]*Solicitações recebidas a partir de 28\/07\/2026/);
-  assert.match(training, /<h1>Solicitações de Treinamento<\/h1>[\s\S]*Solicitações recebidas a partir de 28\/07\/2026/);
+  assert.match(timed, /<h1>SOLICITAÇÕES TIMED<\/h1>[\s\S]*Solicitações recebidas a partir de 28\/07\/2026/);
+  assert.match(training, /<h1>SOLICITAÇÕES DE TREINAMENTO<\/h1>[\s\S]*Solicitações recebidas a partir de 28\/07\/2026/);
   assert.doesNotMatch(training, /registros antigos|são ignorados/i);
-  assert.match(ad, /<h1>Solicitações AD<\/h1>[\s\S]*Solicitações AD recebidas a partir de 28\/07\/2026/);
+  assert.match(ad, /<h1>SOLICITAÇÕES AD<\/h1>[\s\S]*Solicitações AD recebidas a partir de 28\/07\/2026/);
   assert.doesNotMatch(ad, /Acompanhamento operacional/);
 });
 
