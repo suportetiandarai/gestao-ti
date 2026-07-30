@@ -111,19 +111,30 @@ async function valuesFor(source: SheetSource, accessToken: string) {
     if (!headerResponse.ok) throw new Error(`Cabeçalhos Google Sheets ${source} HTTP ${headerResponse.status}`);
     const headerValues = (await headerResponse.json()).values?.[0] || [];
     const normalizedHeaders = headerValues.map((value: unknown) => normalizeStatus(value));
-    columns = config.headers.map((aliases) => {
+    const columnIndexes = config.headers.map((aliases) => {
       const headerAliases = aliases as readonly string[];
       const index = normalizedHeaders.findIndex((header: string) => headerAliases.includes(header));
       if (index < 0) throw new Error(`Cabeçalho obrigatório ausente em ${source}: ${aliases[0]}`);
-      let value = index + 1;
-      let letter = '';
-      while (value > 0) {
-        value -= 1;
-        letter = String.fromCharCode(65 + (value % 26)) + letter;
-        value = Math.floor(value / 26);
-      }
-      return `${letter}:${letter}`;
+      return index;
     });
+    let lastColumn = Math.max(...columnIndexes) + 1;
+    let lastColumnLetter = '';
+    while (lastColumn > 0) {
+      lastColumn -= 1;
+      lastColumnLetter = String.fromCharCode(65 + (lastColumn % 26)) + lastColumnLetter;
+      lastColumn = Math.floor(lastColumn / 26);
+    }
+    const dataRange = encodeURIComponent(`'${config.sheetName}'!A:${lastColumnLetter}`);
+    const dataResponse = await fetch(
+      `https://sheets.googleapis.com/v4/spreadsheets/${config.spreadsheetId}/values/${dataRange}` +
+      '?majorDimension=ROWS',
+      { headers: { Authorization: `Bearer ${accessToken}` } },
+    );
+    if (!dataResponse.ok) throw new Error(`Google Sheets ${source} HTTP ${dataResponse.status}`);
+    const rows = (await dataResponse.json()).values || [];
+    return columnIndexes.map((columnIndex) => ({
+      values: rows.map((row: unknown[]) => [row?.[columnIndex] ?? '']),
+    }));
   } else {
     columns = config.columns;
   }

@@ -127,6 +127,9 @@ test('AD resolve e valida o layout atual por cabeçalhos sem expor dados pessoai
   assert.match(sync, /function validateAdRow/);
   assert.match(sync, /cargo_looks_numeric/);
   assert.match(sync, /sector_looks_numeric/);
+  assert.match(sync, /const columnIndexes = config\.headers\.map/);
+  assert.match(sync, /values\/\$\{dataRange\}[\s\S]*majorDimension=ROWS/);
+  assert.match(sync, /rows\.map\(\(row: unknown\[\]\) => \[row\?\.\[columnIndex\] \?\? ''\]\)/);
   assert.doesNotMatch(endpoint, /\bcpf\b|\bphone\b|\bemail\b|\bobservations\b/);
 });
 
