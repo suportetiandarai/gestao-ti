@@ -39,6 +39,17 @@ test('endpoint público usa paginação, ETag e seleção explícita sem payload
   assert.doesNotMatch(endpoint, /raw_payload|select=\*/);
 });
 
+test('cards e listagem usam a mesma visibilidade operacional após a troca de plantão', () => {
+  const endpoint = read('supabase/functions/google-sheets-dashboard-public/index.ts');
+  const migration = read('supabase/migrations/20260729160000_018_google_sheets_columns_sorting.sql');
+  assert.match(endpoint, /rpc\/get_google_sheet_dashboard_summary/);
+  assert.match(endpoint, /operationalSummary\.completed_count/);
+  assert.doesNotMatch(endpoint, /completed: snapshot\.completed_count/);
+  assert.match(migration, /request\.hidden_after_shift is null or request\.hidden_after_shift > p_now/);
+  assert.match(migration, /request\.is_source_present=true/);
+  assert.match(migration, /revoke all on function public\.get_google_sheet_dashboard_summary/);
+});
+
 test('migração preserva histórico e registra os horários de status e conclusão', () => {
   const migration = read('supabase/migrations/20260728190000_016_google_sheets_status_shifts.sql');
   assert.match(migration, /status_updated_at timestamptz/);
@@ -106,15 +117,17 @@ test('entrada pública encaminha formulários sem expor segredo ou permitir orig
 
 test('dashboards removem Total e mantêm exatamente os três cards operacionais', () => {
   const expectations = {
-    'dashboard-timed/index.html': ['Realizados', 'Pendentes', 'Não realizados'],
-    'dashboard-ad/index.html': ['Realizadas', 'Pendentes', 'Não realizadas'],
-    'dashboard-treinamentos/index.html': ['Realizados', 'Agendados', 'Não agendados'],
+    'dashboard-timed/index.html': ['Realizados', 'Não realizados', 'Pendentes'],
+    'dashboard-ad/index.html': ['Realizadas', 'Não realizadas', 'Pendentes'],
+    'dashboard-treinamentos/index.html': ['Agendados', 'Não agendados', 'Realizados'],
   };
   for (const [file, labels] of Object.entries(expectations)) {
     const html = read(file);
     assert.doesNotMatch(html, /id="summary-total"|<span>Total<\/span>/);
     assert.equal((html.match(/class="sheet-summary-card"/g) || []).length, 3);
     for (const label of labels) assert.match(html, new RegExp(`<span>${label}</span>`));
+    const positions = labels.map((label) => html.indexOf(`<span>${label}</span>`));
+    assert.deepEqual(positions, [...positions].sort((left, right) => left - right), file);
   }
 });
 
@@ -176,5 +189,6 @@ test('migração adiciona agendamento e ordenação paginada sem liberar dados p
   assert.match(migration, /'withdrawal'/);
   assert.match(migration, /coalesce\(completed_at,requested_at\)/);
   assert.match(migration, /google_sheet_requests_operational_idx/);
+  assert.match(migration, /get_google_sheet_dashboard_summary/);
   assert.doesNotMatch(migration, /\bgrant\b[\s\S]*\banon\b/i);
 });

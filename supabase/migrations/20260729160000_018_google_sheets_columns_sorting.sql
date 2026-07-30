@@ -52,4 +52,46 @@ comment on column public.google_sheet_requests.scheduled_at is
 comment on column public.google_sheet_requests.sort_key is
   'Chave numérica para ordenação operacional estável e paginada.';
 
+create or replace function public.get_google_sheet_dashboard_summary(
+  p_source text,
+  p_now timestamptz default now()
+) returns table(
+  total_count bigint,
+  completed_count bigint,
+  pending_count bigint,
+  not_started_count bigint
+)
+language sql
+stable
+security definer
+set search_path=public,pg_temp
+as $$
+  select
+    count(*) as total_count,
+    count(*) filter (where request.dashboard_status='completed') as completed_count,
+    count(*) filter (
+      where case
+        when p_source='training' then request.dashboard_status='scheduled'
+        else request.dashboard_status='pending'
+      end
+    ) as pending_count,
+    count(*) filter (
+      where case
+        when p_source='training' then request.dashboard_status in (
+          'not_scheduled','pending','no_contact','duplicate','other'
+        )
+        else request.dashboard_status='not_completed'
+      end
+    ) as not_started_count
+  from public.google_sheet_requests request
+  where request.source=p_source
+    and request.is_source_present=true
+    and (request.hidden_after_shift is null or request.hidden_after_shift > p_now);
+$$;
+
+revoke all on function public.get_google_sheet_dashboard_summary(text,timestamptz)
+  from public,anon,authenticated;
+grant execute on function public.get_google_sheet_dashboard_summary(text,timestamptz)
+  to service_role;
+
 notify pgrst,'reload schema';
