@@ -46,7 +46,8 @@ export function parseSheetDate(value: unknown) {
   const brazilian = text.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})(?:\s+(\d{1,2}):(\d{2})(?::(\d{2}))?)?$/);
   if (brazilian) {
     const [, day, month, year, hour = '0', minute = '0', second = '0'] = brazilian;
-    const iso = `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}T${hour.padStart(2, '0')}:${minute}:${second}-03:00`;
+    const iso = `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}` +
+      `T${hour.padStart(2, '0')}:${minute.padStart(2, '0')}:${second.padStart(2, '0')}-03:00`;
     const parsed = new Date(iso);
     return Number.isNaN(parsed.getTime()) ? null : parsed.toISOString();
   }

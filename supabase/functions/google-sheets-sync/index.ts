@@ -211,12 +211,22 @@ async function normalize(
   const columns = ranges.map((_: unknown, index: number) => columnValues(ranges, index));
   const rowCount = Math.max(...columns.map((column: unknown[]) => column.length), 0);
   const records: NormalizedSheetRequest[] = [];
+  let recordsInvalidDate = 0;
+  let recordsMissingName = 0;
+  let recordsBeforeCutoff = 0;
 
   for (let sourceRow = 2; sourceRow <= rowCount; sourceRow += 1) {
     const index = sourceRow - 1;
     const requestedAt = parseSheetDate(columns[0]?.[index]);
     const name = sanitizeText(columns[1]?.[index], 160);
-    if (!requestedAt || !name) continue;
+    if (!requestedAt) {
+      recordsInvalidDate += 1;
+      continue;
+    }
+    if (!name) {
+      recordsMissingName += 1;
+      continue;
+    }
     const timedLegacyPending = source === 'timed' &&
       classifyTimedStatus(columns[4]?.[index]) === 'pending';
     const legacyTrainingRequest = source === 'training' &&
@@ -226,7 +236,10 @@ async function normalize(
       new Date(requestedAt) < new Date(cutoff) &&
       !legacyTrainingRequest &&
       !timedLegacyPending
-    ) continue;
+    ) {
+      recordsBeforeCutoff += 1;
+      continue;
+    }
     let dashboardStatus: NormalizedSheetRequest['dashboard_status'];
     let sourceStatus: string;
     let sector: string;
@@ -306,7 +319,13 @@ async function normalize(
     record.row_hash = await sha256({ ...record, sync_marker: undefined });
     records.push(record);
   }
-  return records;
+  return {
+    records,
+    recordsRequested: Math.max(0, rowCount - 1),
+    recordsInvalidDate,
+    recordsMissingName,
+    recordsBeforeCutoff,
+  };
 }
 
 async function synchronize(source: SheetSource, accessToken: string) {
@@ -326,9 +345,18 @@ async function synchronize(source: SheetSource, accessToken: string) {
   });
 
   let processed = 0;
+  let requested = 0;
+  let invalidDate = 0;
+  let missingName = 0;
+  let beforeCutoff = 0;
   try {
     const existing = await existingStatuses(source);
-    const records = await normalize(source, accessToken, marker, existing);
+    const normalized = await normalize(source, accessToken, marker, existing);
+    const { records } = normalized;
+    requested = normalized.recordsRequested;
+    invalidDate = normalized.recordsInvalidDate;
+    missingName = normalized.recordsMissingName;
+    beforeCutoff = normalized.recordsBeforeCutoff;
     processed = records.length;
     if (records.length) {
       await database('google_sheet_requests?on_conflict=source,source_row', {
@@ -400,6 +428,10 @@ async function synchronize(source: SheetSource, accessToken: string) {
       body: JSON.stringify({
         finished_at: new Date().toISOString(),
         status: 'success',
+        records_requested: requested,
+        records_invalid_date: invalidDate,
+        records_missing_name: missingName,
+        records_before_cutoff: beforeCutoff,
         records_processed: processed,
         duration_ms: duration,
       }),
@@ -424,6 +456,10 @@ async function synchronize(source: SheetSource, accessToken: string) {
       body: JSON.stringify({
         finished_at: new Date().toISOString(),
         status: 'error',
+        records_requested: requested,
+        records_invalid_date: invalidDate,
+        records_missing_name: missingName,
+        records_before_cutoff: beforeCutoff,
         records_processed: processed,
         error_message: message,
         duration_ms: duration,

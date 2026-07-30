@@ -26,6 +26,8 @@ test('sincronizador aplica o corte e usa o texto normalizado como fonte do statu
   assert.match(shared, /no_contact/);
   assert.match(shared, /normalized === 'pendente'/);
   assert.match(shared, /return 'not_completed'/);
+  assert.match(shared, /minute\.padStart\(2, '0'\)/);
+  assert.match(shared, /second\.padStart\(2, '0'\)/);
   assert.match(sync, /timedLegacyPending/);
   assert.match(sync, /!timedLegacyPending/);
 });
@@ -130,6 +132,11 @@ test('AD resolve e valida o layout atual por cabeçalhos sem expor dados pessoai
   assert.match(sync, /const columnIndexes = config\.headers\.map/);
   assert.match(sync, /values\/\$\{dataRange\}[\s\S]*majorDimension=ROWS/);
   assert.match(sync, /rows\.map\(\(row: unknown\[\]\) => \[row\?\.\[columnIndex\] \?\? ''\]\)/);
+  assert.match(sync, /recordsRequested: Math\.max\(0, rowCount - 1\)/);
+  assert.match(sync, /records_requested: requested/);
+  assert.match(sync, /records_invalid_date: invalidDate/);
+  assert.match(sync, /records_missing_name: missingName/);
+  assert.match(sync, /records_before_cutoff: beforeCutoff/);
   assert.doesNotMatch(endpoint, /\bcpf\b|\bphone\b|\bemail\b|\bobservations\b/);
 });
 
