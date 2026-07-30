@@ -44,6 +44,13 @@ test('cards e listagem usam a mesma visibilidade operacional após a troca de pl
   const migration = read('supabase/migrations/20260729160000_018_google_sheets_columns_sorting.sql');
   assert.match(endpoint, /rpc\/get_google_sheet_dashboard_summary/);
   assert.match(endpoint, /operationalSummary\.completed_count/);
+  assert.match(endpoint, /const summaryVersion = \[/);
+  assert.match(endpoint, /`"v2-\$\{snapshot\.snapshot_hash\}-\$\{summaryVersion\}/);
+  assert.ok(
+    endpoint.indexOf('rpc/get_google_sheet_dashboard_summary') <
+      endpoint.indexOf("matchesEtag(request.headers.get('If-None-Match')"),
+    'o resumo operacional deve participar do ETag antes de responder 304',
+  );
   assert.doesNotMatch(endpoint, /completed: snapshot\.completed_count/);
   assert.match(migration, /request\.hidden_after_shift is null or request\.hidden_after_shift > p_now/);
   assert.match(migration, /request\.is_source_present=true/);
@@ -75,7 +82,8 @@ test('estado público usa o último sucesso e participa do ETag', () => {
   const endpoint = read('supabase/functions/google-sheets-dashboard-public/index.ts');
   assert.match(endpoint, /age <= 180_000/);
   assert.match(endpoint, /age <= 900_000/);
-  assert.match(endpoint, /snapshot\.snapshot_hash}-\$\{status}/);
+  assert.match(endpoint, /snapshot\.snapshot_hash/);
+  assert.match(endpoint, /summaryVersion}-\$\{status}/);
   assert.match(endpoint, /google_sheet_sync_state\?source=eq/);
 });
 
