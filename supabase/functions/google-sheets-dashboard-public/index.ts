@@ -68,18 +68,6 @@ Deno.serve(async (request) => {
     if (!syncStateResponse.ok) throw new Error(`Sincronização HTTP ${syncStateResponse.status}`);
     const syncState = (await syncStateResponse.json())?.[0];
     const status = synchronizationStatus(syncState?.last_success_at || snapshot.last_synced_at);
-    const shiftEnd = getShiftEnd(new Date()).toISOString();
-    const etag = `"${snapshot.snapshot_hash}-${status}-${shiftEnd}-${page}-${pageSize}"`;
-    const responseHeaders: Record<string, string> = {
-      'Cache-Control': 'public, max-age=15, stale-while-revalidate=45',
-      ETag: etag,
-      Vary: 'If-None-Match',
-      'X-Snapshot-Version': String(snapshot.snapshot_version),
-      'X-Total-Count': String(snapshot.total_count),
-    };
-    if (matchesEtag(request.headers.get('If-None-Match'), etag)) {
-      return new Response(null, { status: 304, headers: { ...corsHeaders, ...responseHeaders } });
-    }
     const nowValue = new Date().toISOString();
     const summaryResponse = await database(
       `rpc/get_google_sheet_dashboard_summary?p_source=${source}&p_now=${encodeURIComponent(nowValue)}`,
@@ -87,7 +75,24 @@ Deno.serve(async (request) => {
     if (!summaryResponse.ok) throw new Error(`Resumo operacional HTTP ${summaryResponse.status}`);
     const operationalSummary = (await summaryResponse.json())?.[0];
     if (!operationalSummary) throw new Error('Resumo operacional ausente.');
-    responseHeaders['X-Total-Count'] = String(operationalSummary.total_count);
+    const shiftEnd = getShiftEnd(new Date()).toISOString();
+    const summaryVersion = [
+      operationalSummary.total_count,
+      operationalSummary.completed_count,
+      operationalSummary.pending_count,
+      operationalSummary.not_started_count,
+    ].join('-');
+    const etag = `"v2-${snapshot.snapshot_hash}-${summaryVersion}-${status}-${shiftEnd}-${page}-${pageSize}"`;
+    const responseHeaders: Record<string, string> = {
+      'Cache-Control': 'public, max-age=15, stale-while-revalidate=45',
+      ETag: etag,
+      Vary: 'If-None-Match',
+      'X-Snapshot-Version': String(snapshot.snapshot_version),
+      'X-Total-Count': String(operationalSummary.total_count),
+    };
+    if (matchesEtag(request.headers.get('If-None-Match'), etag)) {
+      return new Response(null, { status: 304, headers: { ...corsHeaders, ...responseHeaders } });
+    }
     if (request.method === 'HEAD') {
       return new Response(null, { status: 200, headers: { ...corsHeaders, ...responseHeaders } });
     }
