@@ -185,7 +185,8 @@ test('cards centralizam conteúdo e Tempo total sinaliza somente solução regis
 test('listagem diária prioriza atraso e usa indicadores exclusivos no Tempo total', () => {
   assert.match(source, /CORE\.sortDailyDashboardTickets\(createdInShift, reference\)/);
   assert.match(source, /className = 'ticket-overdue-label'/);
-  assert.match(source, /label\.textContent = 'CHAMADO ATRASADO'/);
+  assert.match(source, /label\.textContent = 'CHAMADO ESTOURADO'/);
+  assert.doesNotMatch(source, /label\.textContent = 'CHAMADO ATRASADO'/);
   assert.match(styles, /\.ticket-overdue-label\s*\{[\s\S]*color:\s*var\(--glpi-danger\)/);
   assert.match(coreSource, /function sortDailyDashboardTickets/);
   assert.match(coreSource, /if \(flags\.isOverdue\) return 1/);

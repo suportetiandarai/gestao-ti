@@ -698,7 +698,7 @@
                 if (overdueLabel) return;
                 const label = document.createElement('span');
                 label.className = 'ticket-overdue-label';
-                label.textContent = 'CHAMADO ATRASADO';
+                label.textContent = 'CHAMADO ESTOURADO';
                 element.append(label);
                 return;
             }
