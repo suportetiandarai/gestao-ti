@@ -85,15 +85,15 @@ Deno.serve(async (request) => {
     }
 
     const fields = source === 'training'
-      ? 'source_row,requested_at,requester_name,sector,job_title,training_topic,dashboard_status'
+      ? 'source_row,requested_at,requester_name,sector,job_title,training_topic,scheduled_at,dashboard_status'
       : source === 'timed'
         ? 'source_row,requested_at,requester_name,sector,job_title,dashboard_status,pending_reason'
-        : 'source_row,requested_at,requester_name,dashboard_status';
+        : 'source_row,requested_at,requester_name,job_title,sector,dashboard_status';
     const now = encodeURIComponent(new Date().toISOString());
     const rowsResponse = await database(
       `google_sheet_requests?source=eq.${source}&is_source_present=eq.true` +
       `&or=(hidden_after_shift.is.null,hidden_after_shift.gt.${now})` +
-      `&select=${fields}&order=sort_priority.asc,requested_at.desc&offset=${offset}&limit=${pageSize}`,
+      `&select=${fields}&order=sort_priority.asc,sort_key.asc,source_row.asc&offset=${offset}&limit=${pageSize}`,
     );
     if (!rowsResponse.ok) throw new Error(`Listagem HTTP ${rowsResponse.status}`);
     const rows = await rowsResponse.json();

@@ -19,9 +19,10 @@
         };
     }
 
-    function formatDate(value) {
+    function formatDate(value, unavailable = 'Não disponível') {
+        if (!value) return unavailable;
         const date = new Date(value);
-        if (Number.isNaN(date.getTime())) return 'Não disponível';
+        if (Number.isNaN(date.getTime())) return unavailable;
         return new Intl.DateTimeFormat('pt-BR', {
             timeZone: 'America/Sao_Paulo',
             dateStyle: 'short',
@@ -38,6 +39,7 @@
                 no_contact: 'Sem contato',
                 duplicate: 'Duplicado',
                 other: 'Outros',
+                withdrawal: 'Desistência',
                 pending: 'Pendente de tratamento'
             }
             : isAd
@@ -80,14 +82,19 @@
         if (!rows.length) {
             const row = document.createElement('tr');
             const cell = document.createElement('td');
-            cell.colSpan = isTraining ? 6 : isAd ? 3 : 5;
+            cell.colSpan = isTraining ? 7 : isAd ? 5 : 5;
             cell.className = 'sheet-empty';
             cell.textContent = 'Nenhuma solicitação nova encontrada desde 28/07/2026.';
             row.appendChild(cell);
             body.appendChild(row);
             return;
         }
-        for (const item of rows) {
+        const orderedRows = isTraining
+            ? core.sortTrainingRequests(rows)
+            : isAd
+                ? core.sortAdRequests(rows)
+                : core.sortTimedRequests(rows);
+        for (const item of orderedRows) {
             const row = document.createElement('tr');
             createCell(row, formatDate(item.requested_at), 'sheet-date');
             createCell(row, item.requester_name);
@@ -95,6 +102,10 @@
                 createCell(row, item.sector);
                 createCell(row, item.job_title);
                 createCell(row, item.training_topic);
+                createCell(row, formatDate(item.scheduled_at, '—'), 'sheet-date');
+            } else if (isAd) {
+                createCell(row, item.job_title);
+                createCell(row, item.sector);
             } else if (!isAd) {
                 createCell(row, item.job_title);
                 createCell(row, item.sector);

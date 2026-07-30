@@ -8,6 +8,7 @@ export type NormalizedSheetRequest = {
   sector: string | null;
   job_title: string | null;
   training_topic: string | null;
+  scheduled_at: string | null;
   pending_reason: string | null;
   source_status: string | null;
   normalized_status: string;
@@ -17,13 +18,14 @@ export type NormalizedSheetRequest = {
   hidden_after_shift: string | null;
   is_source_present: boolean;
   sort_priority: number;
+  sort_key: number;
   row_hash: string;
   sync_marker: string;
 };
 
 export type DashboardSheetStatus =
   'completed' | 'pending' | 'not_completed' | 'scheduled' | 'not_scheduled' |
-  'already_exists' | 'no_contact' | 'duplicate' | 'other';
+  'already_exists' | 'no_contact' | 'duplicate' | 'other' | 'withdrawal';
 
 const encoder = new TextEncoder();
 
@@ -76,6 +78,7 @@ export function normalizeRequestStatus(value: unknown) {
     nao_agendados: 'nao_agendado',
     nao_agendada: 'nao_agendado',
     nao_agendadas: 'nao_agendado',
+    desistencias: 'desistencia',
   };
   return aliases[normalized] || normalized;
 }
@@ -104,8 +107,42 @@ export function classifyTrainingStatus(value: unknown): DashboardSheetStatus {
   if (normalized === 'sem_contato') return 'no_contact';
   if (normalized === 'duplicado') return 'duplicate';
   if (['outro', 'outros'].includes(normalized)) return 'other';
+  if (normalized === 'desistencia') return 'withdrawal';
   if (normalized === 'pendente') return 'pending';
   return 'not_scheduled';
+}
+
+export function requestSortPriority(source: SheetSource, status: DashboardSheetStatus) {
+  if (source === 'training') {
+    const priorities: Partial<Record<DashboardSheetStatus, number>> = {
+      not_scheduled: 1,
+      pending: 1,
+      no_contact: 2,
+      duplicate: 3,
+      other: 4,
+      withdrawal: 5,
+      scheduled: 6,
+      completed: 7,
+    };
+    return priorities[status] || 5;
+  }
+  if (status === 'not_completed') return 1;
+  if (status === 'pending') return 2;
+  return 3;
+}
+
+export function requestSortKey(
+  status: DashboardSheetStatus,
+  requestedAt: string,
+  completedAt: string | null = null,
+) {
+  const timestamp = new Date(
+    ['completed', 'already_exists'].includes(status) && completedAt
+      ? completedAt
+      : requestedAt,
+  ).getTime();
+  if (!Number.isFinite(timestamp)) return 0;
+  return ['completed', 'already_exists'].includes(status) ? -timestamp : timestamp;
 }
 
 export function isTerminalStatus(source: SheetSource, status: DashboardSheetStatus) {

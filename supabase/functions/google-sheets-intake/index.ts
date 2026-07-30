@@ -73,8 +73,12 @@ function normalize(raw: Record<string, unknown>) {
 
   if (type === 'ad') {
     const cpf = digits(raw.cpf, 11);
-    if (cpf.length !== 11 || !common.email || common.phone.length < 10) throw new Error('INVALID_REQUEST');
-    return { ...common, cpf };
+    const jobTitle = text(raw.jobTitle, 120);
+    const sector = text(raw.sector, 140);
+    if (cpf.length !== 11 || !common.email || common.phone.length < 10 || !jobTitle || !sector) {
+      throw new Error('INVALID_REQUEST');
+    }
+    return { ...common, cpf, jobTitle, sector };
   }
   if (type === 'training') {
     if (!common.email || common.phone.length < 10) throw new Error('INVALID_REQUEST');

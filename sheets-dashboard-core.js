@@ -96,6 +96,49 @@
             completedBeforeCurrentShift(request, now);
     }
 
+    const STANDARD_PRIORITY = Object.freeze({
+        not_completed: 1,
+        pending: 2,
+        already_exists: 3,
+        completed: 3
+    });
+    const TRAINING_PRIORITY = Object.freeze({
+        not_scheduled: 1,
+        pending: 1,
+        no_contact: 2,
+        duplicate: 3,
+        other: 4,
+        withdrawal: 5,
+        scheduled: 6,
+        completed: 7
+    });
+
+    function sortByPriority(requests, priorities) {
+        return [...requests].sort((left, right) => {
+            const leftStatus = normalizeStatus(left?.dashboard_status);
+            const rightStatus = normalizeStatus(right?.dashboard_status);
+            const priorityDifference = (priorities[leftStatus] || 99) - (priorities[rightStatus] || 99);
+            if (priorityDifference) return priorityDifference;
+            const terminal = ['completed', 'already_exists'].includes(leftStatus);
+            const leftTime = new Date(terminal && left?.completed_at ? left.completed_at : left?.requested_at).getTime() || 0;
+            const rightTime = new Date(terminal && right?.completed_at ? right.completed_at : right?.requested_at).getTime() || 0;
+            if (leftTime !== rightTime) return terminal ? rightTime - leftTime : leftTime - rightTime;
+            return Number(left?.source_row || 0) - Number(right?.source_row || 0);
+        });
+    }
+
+    function sortTimedRequests(requests) {
+        return sortByPriority(requests, STANDARD_PRIORITY);
+    }
+
+    function sortAdRequests(requests) {
+        return sortByPriority(requests, STANDARD_PRIORITY);
+    }
+
+    function sortTrainingRequests(requests) {
+        return sortByPriority(requests, TRAINING_PRIORITY);
+    }
+
     return {
         TIME_ZONE,
         normalizeStatus,
@@ -103,6 +146,9 @@
         getShiftEnd,
         shouldHideTimedRequest,
         shouldHideAdRequest,
-        shouldHideTrainingRequest
+        shouldHideTrainingRequest,
+        sortTimedRequests,
+        sortAdRequests,
+        sortTrainingRequests
     };
 }));
