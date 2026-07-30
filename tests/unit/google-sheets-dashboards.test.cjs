@@ -118,7 +118,7 @@ test('entrada pública encaminha formulários sem expor segredo ou permitir orig
 test('dashboards removem Total e mantêm exatamente os três cards operacionais', () => {
   const expectations = {
     'dashboard-timed/index.html': ['Realizados', 'Não realizados', 'Pendentes'],
-    'dashboard-ad/index.html': ['Realizadas', 'Não realizadas', 'Pendentes'],
+    'dashboard-ad/index.html': ['Realizados', 'Não realizados', 'Pendentes'],
     'dashboard-treinamentos/index.html': ['Agendados', 'Não agendados', 'Realizados'],
   };
   for (const [file, labels] of Object.entries(expectations)) {
