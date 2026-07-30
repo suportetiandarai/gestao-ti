@@ -10,6 +10,7 @@ test('normaliza status ignorando caixa, espaços e acentos', () => {
   assert.equal(core.normalizeStatus(' REALIZADO '), 'realizado');
   assert.equal(core.normalizeStatus('Já Existente'), 'ja_existente');
   assert.equal(core.normalizeStatus('SEM CONTATO'), 'sem_contato');
+  assert.equal(core.normalizeStatus(' DESISTÊNCIA '), 'desistencia');
 });
 
 test('seleciona plantões exatamente às 07:00 e 19:00 em São Paulo', () => {
@@ -50,4 +51,31 @@ test('AD e Treinamento respeitam estados conclusivos e persistentes', () => {
   for (const status of ['scheduled', 'not_scheduled', 'no_contact', 'duplicate', 'other']) {
     assert.equal(core.shouldHideTrainingRequest({ dashboard_status: status, completed_at: completedAt }, nextShift), false, status);
   }
+});
+
+test('ordena AD e TIMED por prioridade operacional e conclusão mais recente', () => {
+  const rows = [
+    { source_row: 4, dashboard_status: 'completed', requested_at: '2026-07-28T10:00:00Z', completed_at: '2026-07-28T13:00:00Z' },
+    { source_row: 2, dashboard_status: 'pending', requested_at: '2026-07-28T09:00:00Z' },
+    { source_row: 1, dashboard_status: 'not_completed', requested_at: '2026-07-28T11:00:00Z' },
+    { source_row: 5, dashboard_status: 'completed', requested_at: '2026-07-28T08:00:00Z', completed_at: '2026-07-28T15:00:00Z' },
+    { source_row: 3, dashboard_status: 'not_completed', requested_at: '2026-07-28T07:00:00Z' }
+  ];
+  assert.deepEqual(core.sortAdRequests(rows).map((row) => row.source_row), [3, 1, 2, 5, 4]);
+  assert.deepEqual(core.sortTimedRequests(rows).map((row) => row.source_row), [3, 1, 2, 5, 4]);
+});
+
+test('ordena treinamento e mantém Desistência fora dos três grupos principais', () => {
+  const rows = [
+    { source_row: 7, dashboard_status: 'completed', requested_at: '2026-07-28T10:00:00Z' },
+    { source_row: 6, dashboard_status: 'scheduled', requested_at: '2026-07-28T10:00:00Z' },
+    { source_row: 5, dashboard_status: 'withdrawal', requested_at: '2026-07-28T10:00:00Z' },
+    { source_row: 4, dashboard_status: 'other', requested_at: '2026-07-28T10:00:00Z' },
+    { source_row: 3, dashboard_status: 'duplicate', requested_at: '2026-07-28T10:00:00Z' },
+    { source_row: 2, dashboard_status: 'no_contact', requested_at: '2026-07-28T10:00:00Z' },
+    { source_row: 1, dashboard_status: 'not_scheduled', requested_at: '2026-07-28T10:00:00Z' }
+  ];
+  assert.deepEqual(core.sortTrainingRequests(rows).map((row) => row.dashboard_status), [
+    'not_scheduled', 'no_contact', 'duplicate', 'other', 'withdrawal', 'scheduled', 'completed'
+  ]);
 });

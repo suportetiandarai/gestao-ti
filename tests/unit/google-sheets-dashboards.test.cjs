@@ -39,6 +39,17 @@ test('endpoint público usa paginação, ETag e seleção explícita sem payload
   assert.doesNotMatch(endpoint, /raw_payload|select=\*/);
 });
 
+test('cards e listagem usam a mesma visibilidade operacional após a troca de plantão', () => {
+  const endpoint = read('supabase/functions/google-sheets-dashboard-public/index.ts');
+  const migration = read('supabase/migrations/20260729160000_018_google_sheets_columns_sorting.sql');
+  assert.match(endpoint, /rpc\/get_google_sheet_dashboard_summary/);
+  assert.match(endpoint, /operationalSummary\.completed_count/);
+  assert.doesNotMatch(endpoint, /completed: snapshot\.completed_count/);
+  assert.match(migration, /request\.hidden_after_shift is null or request\.hidden_after_shift > p_now/);
+  assert.match(migration, /request\.is_source_present=true/);
+  assert.match(migration, /revoke all on function public\.get_google_sheet_dashboard_summary/);
+});
+
 test('migração preserva histórico e registra os horários de status e conclusão', () => {
   const migration = read('supabase/migrations/20260728190000_016_google_sheets_status_shifts.sql');
   assert.match(migration, /status_updated_at timestamptz/);
@@ -79,19 +90,21 @@ test('banco impede leitura anônima direta e agenda uma sincronização única',
 
 test('somente os campos públicos autorizados são renderizados', () => {
   const client = read('sheets-dashboard.js');
-  for (const allowed of ['requested_at', 'requester_name', 'sector', 'job_title', 'training_topic', 'pending_reason']) {
+  for (const allowed of ['requested_at', 'requester_name', 'sector', 'job_title', 'training_topic', 'scheduled_at', 'pending_reason']) {
     assert.match(client, new RegExp(allowed));
   }
   assert.doesNotMatch(client, /email|telefone|cpf|cns|private_key|access_token/i);
 });
 
-test('dashboard AD expõe somente data, nome e status operacional', () => {
+test('dashboard AD expõe data, nome, cargo, setor e status operacional', () => {
   const html = read('dashboard-ad/index.html');
   const endpoint = read('supabase/functions/google-sheets-dashboard-public/index.ts');
   assert.match(html, /Data da solicitação/);
   assert.match(html, /<th>Nome<\/th>/);
+  assert.match(html, /<th>Cargo<\/th>/);
+  assert.match(html, /<th>Setor<\/th>/);
   assert.doesNotMatch(html, /CPF|Celular|E-mail|Observações/i);
-  assert.match(endpoint, /source === 'timed'[\s\S]*requester_name,dashboard_status/);
+  assert.match(endpoint, /source_row,requested_at,requester_name,job_title,sector,dashboard_status/);
 });
 
 test('entrada pública encaminha formulários sem expor segredo ou permitir origens arbitrárias', () => {
@@ -104,15 +117,17 @@ test('entrada pública encaminha formulários sem expor segredo ou permitir orig
 
 test('dashboards removem Total e mantêm exatamente os três cards operacionais', () => {
   const expectations = {
-    'dashboard-timed/index.html': ['Realizados', 'Pendentes', 'Não realizados'],
-    'dashboard-ad/index.html': ['Realizadas', 'Pendentes', 'Não realizadas'],
-    'dashboard-treinamentos/index.html': ['Realizados', 'Agendados', 'Não agendados'],
+    'dashboard-timed/index.html': ['Realizados', 'Não realizados', 'Pendentes'],
+    'dashboard-ad/index.html': ['Realizados', 'Não realizados', 'Pendentes'],
+    'dashboard-treinamentos/index.html': ['Agendados', 'Não agendados', 'Realizados'],
   };
   for (const [file, labels] of Object.entries(expectations)) {
     const html = read(file);
     assert.doesNotMatch(html, /id="summary-total"|<span>Total<\/span>/);
     assert.equal((html.match(/class="sheet-summary-card"/g) || []).length, 3);
     for (const label of labels) assert.match(html, new RegExp(`<span>${label}</span>`));
+    const positions = labels.map((label) => html.indexOf(`<span>${label}</span>`));
+    assert.deepEqual(positions, [...positions].sort((left, right) => left - right), file);
   }
 });
 
@@ -142,4 +157,38 @@ test('badges aplicam cor ao status sem criar cor de linha', () => {
   assert.match(css, /\.status-completed[\s\S]*background: #dcfce7/);
   assert.match(client, /sheet-status-badge/);
   assert.doesNotMatch(client, /row\.className\s*=\s*.*status/);
+});
+
+test('treinamento usa agendamento da coluna M e libera somente a exceção estável da linha 121', () => {
+  const sync = read('supabase/functions/google-sheets-sync/index.ts');
+  const html = read('dashboard-treinamentos/index.html');
+  assert.match(sync, /data_do_agendamento/);
+  assert.match(sync, /Luciana Nunes de Sousa/);
+  assert.match(sync, /2026-07-27T13:06:21\.000Z/);
+  assert.match(sync, /new Date\(requestedAt\) < new Date\(cutoff\) && !legacyTrainingRequest/);
+  assert.doesNotMatch(sync, /sourceRow\s*===\s*121/);
+  assert.match(html, /Data e Hora da Solicitação/);
+  assert.match(html, /Data e Hora do Agendamento/);
+});
+
+test('Desistência é normalizada, estilizada em cinza e excluída dos três indicadores', () => {
+  const shared = read('supabase/functions/_shared/google-sheets.ts');
+  const sync = read('supabase/functions/google-sheets-sync/index.ts');
+  const css = read('sheets-dashboard.css');
+  assert.match(shared, /desistencias: 'desistencia'/);
+  assert.match(shared, /normalized === 'desistencia'\) return 'withdrawal'/);
+  assert.match(css, /\.status-withdrawal/);
+  assert.match(sync, /not_scheduled', 'pending', 'no_contact', 'duplicate', 'other'/);
+  assert.doesNotMatch(sync, /\['not_scheduled', 'pending', 'no_contact', 'duplicate', 'other', 'withdrawal'\]/);
+});
+
+test('migração adiciona agendamento e ordenação paginada sem liberar dados privados', () => {
+  const migration = read('supabase/migrations/20260729160000_018_google_sheets_columns_sorting.sql');
+  assert.match(migration, /scheduled_at timestamptz/);
+  assert.match(migration, /sort_key bigint/);
+  assert.match(migration, /'withdrawal'/);
+  assert.match(migration, /coalesce\(completed_at,requested_at\)/);
+  assert.match(migration, /google_sheet_requests_operational_idx/);
+  assert.match(migration, /get_google_sheet_dashboard_summary/);
+  assert.doesNotMatch(migration, /\bgrant\b[\s\S]*\banon\b/i);
 });

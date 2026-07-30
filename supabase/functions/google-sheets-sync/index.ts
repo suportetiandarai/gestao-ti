@@ -8,6 +8,8 @@ import {
   isTerminalStatus,
   normalizeStatus,
   parseSheetDate,
+  requestSortKey,
+  requestSortPriority,
   sanitizeText,
   sha256,
   type NormalizedSheetRequest,
@@ -23,16 +25,38 @@ const CONFIG = {
   training: {
     spreadsheetId: Deno.env.get('GOOGLE_TRAINING_SPREADSHEET_ID') || '1vcNxK3VQ4TwIxdHWWPCQcyYY6nS1MfRLFw9c8lxza_U',
     sheetName: Deno.env.get('GOOGLE_TRAINING_SHEET_NAME') || 'Respostas ao formulário 1',
-    columns: ['A:A', 'C:C', 'D:D', 'E:E', 'I:I', 'K:K', 'O:O', 'P:P'],
+    headers: [
+      ['carimbo_de_data_hora'],
+      ['nome_do_solicitante'],
+      ['setor_andar'],
+      ['cargo'],
+      ['tema_do_treinamento'],
+      ['situacao'],
+      ['data_do_agendamento'],
+      ['status_updated_at'],
+      ['completed_at'],
+    ],
   },
   ad: {
     spreadsheetId: Deno.env.get('GOOGLE_AD_SPREADSHEET_ID') || '1_j13tglIFAWDcvLx2dsMGLugThdrrzbjKHYNt9H5Qj4',
     sheetName: Deno.env.get('GOOGLE_AD_SHEET_NAME') || 'SOLICITACÕES AD',
-    columns: ['A:A', 'B:B', 'F:F', 'H:H', 'I:I'],
+    headers: [
+      ['data_da_solicitacao'],
+      ['nome'],
+      ['cargo'],
+      ['setor'],
+      ['status'],
+      ['status_updated_at'],
+      ['completed_at'],
+    ],
   },
 } as const;
 
 const cutoff = Deno.env.get('GOOGLE_SHEETS_CUTOFF') || '2026-07-28T00:00:00-03:00';
+const TRAINING_LEGACY_EXCEPTION = {
+  requestedAt: '2026-07-27T13:06:21.000Z',
+  requesterName: 'Luciana Nunes de Sousa',
+};
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
@@ -72,8 +96,35 @@ async function database(path: string, init: RequestInit = {}) {
 
 async function valuesFor(source: SheetSource, accessToken: string) {
   const config = CONFIG[source];
+  let columns: readonly string[];
+  if ('headers' in config) {
+    const headerRange = encodeURIComponent(`'${config.sheetName}'!1:1`);
+    const headerResponse = await fetch(
+      `https://sheets.googleapis.com/v4/spreadsheets/${config.spreadsheetId}/values/${headerRange}` +
+      '?majorDimension=ROWS',
+      { headers: { Authorization: `Bearer ${accessToken}` } },
+    );
+    if (!headerResponse.ok) throw new Error(`Cabeçalhos Google Sheets ${source} HTTP ${headerResponse.status}`);
+    const headerValues = (await headerResponse.json()).values?.[0] || [];
+    const normalizedHeaders = headerValues.map((value: unknown) => normalizeStatus(value));
+    columns = config.headers.map((aliases) => {
+      const headerAliases = aliases as readonly string[];
+      const index = normalizedHeaders.findIndex((header: string) => headerAliases.includes(header));
+      if (index < 0) throw new Error(`Cabeçalho obrigatório ausente em ${source}: ${aliases[0]}`);
+      let value = index + 1;
+      let letter = '';
+      while (value > 0) {
+        value -= 1;
+        letter = String.fromCharCode(65 + (value % 26)) + letter;
+        value = Math.floor(value / 26);
+      }
+      return `${letter}:${letter}`;
+    });
+  } else {
+    columns = config.columns;
+  }
   const query = new URLSearchParams({ majorDimension: 'ROWS' });
-  for (const column of config.columns) query.append('ranges', `'${config.sheetName}'!${column}`);
+  for (const column of columns) query.append('ranges', `'${config.sheetName}'!${column}`);
   const response = await fetch(
     `https://sheets.googleapis.com/v4/spreadsheets/${config.spreadsheetId}/values:batchGet?${query}`,
     { headers: { Authorization: `Bearer ${accessToken}` } },
@@ -111,15 +162,18 @@ async function normalize(
   for (let sourceRow = 2; sourceRow <= rowCount; sourceRow += 1) {
     const index = sourceRow - 1;
     const requestedAt = parseSheetDate(columns[0]?.[index]);
-    if (!requestedAt || new Date(requestedAt) < new Date(cutoff)) continue;
-
     const name = sanitizeText(columns[1]?.[index], 160);
-    if (!name) continue;
+    if (!requestedAt || !name) continue;
+    const legacyTrainingRequest = source === 'training' &&
+      requestedAt === TRAINING_LEGACY_EXCEPTION.requestedAt &&
+      name === TRAINING_LEGACY_EXCEPTION.requesterName;
+    if (new Date(requestedAt) < new Date(cutoff) && !legacyTrainingRequest) continue;
     let dashboardStatus: NormalizedSheetRequest['dashboard_status'];
     let sourceStatus: string;
     let sector: string;
     let jobTitle: string;
     let trainingTopic: string | null = null;
+    let scheduledAt: string | null = null;
     let pendingReason: string | null = null;
 
     if (source === 'timed') {
@@ -133,11 +187,12 @@ async function normalize(
       jobTitle = sanitizeText(columns[3]?.[index], 120);
       trainingTopic = sanitizeText(columns[4]?.[index], 180) || null;
       sourceStatus = sanitizeText(columns[5]?.[index], 80);
+      scheduledAt = parseSheetDate(columns[6]?.[index]);
       dashboardStatus = classifyTrainingStatus(sourceStatus);
     } else {
-      sector = '';
-      jobTitle = '';
-      sourceStatus = sanitizeText(columns[2]?.[index], 80);
+      jobTitle = sanitizeText(columns[2]?.[index], 120);
+      sector = sanitizeText(columns[3]?.[index], 140);
+      sourceStatus = sanitizeText(columns[4]?.[index], 80);
       dashboardStatus = classifyAdStatus(sourceStatus);
     }
 
@@ -145,7 +200,7 @@ async function normalize(
     const previous = existing.get(sourceRow);
     const sheetStatusUpdatedAt = parseSheetDate(columns[columns.length - 2]?.[index]);
     const sheetCompletedAt = parseSheetDate(columns[columns.length - 1]?.[index]);
-    const statusChanged = !previous || previous.normalized_status !== normalized;
+    const statusChanged = Boolean(previous && previous.normalized_status !== normalized);
     const statusUpdatedAt = sheetStatusUpdatedAt ||
       (statusChanged ? new Date().toISOString() : previous?.status_updated_at || null);
     const terminal = isTerminalStatus(source, dashboardStatus);
@@ -161,6 +216,7 @@ async function normalize(
       sector: sector || null,
       job_title: jobTitle || null,
       training_topic: trainingTopic,
+      scheduled_at: scheduledAt,
       pending_reason: pendingReason,
       source_status: sourceStatus || null,
       normalized_status: normalized,
@@ -169,9 +225,8 @@ async function normalize(
       completed_at: completedAt,
       hidden_after_shift: hiddenAfterShift,
       is_source_present: true,
-      sort_priority: ['pending', 'no_contact', 'duplicate', 'other'].includes(dashboardStatus) ? 1 :
-        dashboardStatus === 'scheduled' ? 2 :
-        dashboardStatus === 'not_completed' || dashboardStatus === 'not_scheduled' ? 3 : 4,
+      sort_priority: requestSortPriority(source, dashboardStatus),
+      sort_key: requestSortKey(dashboardStatus, requestedAt, completedAt),
       row_hash: '',
       sync_marker: marker,
     };
@@ -216,9 +271,12 @@ async function synchronize(source: SheetSource, accessToken: string) {
 
     const counts = {
       completed: records.filter((row) => row.dashboard_status === 'completed').length,
-      pending: records.filter((row) => ['pending', 'scheduled'].includes(row.dashboard_status)).length,
-      notStarted: records.filter((row) =>
-        ['not_completed', 'not_scheduled', 'no_contact', 'duplicate', 'other'].includes(row.dashboard_status)
+      pending: records.filter((row) =>
+        source === 'training' ? row.dashboard_status === 'scheduled' : row.dashboard_status === 'pending'
+      ).length,
+      notStarted: records.filter((row) => source === 'training'
+        ? ['not_scheduled', 'pending', 'no_contact', 'duplicate', 'other'].includes(row.dashboard_status)
+        : row.dashboard_status === 'not_completed'
       ).length,
     };
     const snapshotHash = await sha256(records.map((row) => ({
@@ -229,12 +287,14 @@ async function synchronize(source: SheetSource, accessToken: string) {
       sector: row.sector,
       job_title: row.job_title,
       training_topic: row.training_topic,
+      scheduled_at: row.scheduled_at,
       pending_reason: row.pending_reason,
       source_status: row.source_status,
       dashboard_status: row.dashboard_status,
       status_updated_at: row.status_updated_at,
       completed_at: row.completed_at,
       sort_priority: row.sort_priority,
+      sort_key: row.sort_key,
       row_hash: row.row_hash,
     })));
     const currentResponse = await database(

@@ -278,6 +278,11 @@ body.sheet-dashboard {
     color: #fff;
 }
 
+.status-withdrawal {
+    background: #e5e7eb;
+    color: #4b5563;
+}
+
 .sheet-pending-reason {
     display: block;
     max-width: 320px;

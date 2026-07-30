@@ -70,7 +70,7 @@ Deno.serve(async (request) => {
     const status = synchronizationStatus(syncState?.last_success_at || snapshot.last_synced_at);
     const shiftEnd = getShiftEnd(new Date()).toISOString();
     const etag = `"${snapshot.snapshot_hash}-${status}-${shiftEnd}-${page}-${pageSize}"`;
-    const responseHeaders = {
+    const responseHeaders: Record<string, string> = {
       'Cache-Control': 'public, max-age=15, stale-while-revalidate=45',
       ETag: etag,
       Vary: 'If-None-Match',
@@ -80,20 +80,28 @@ Deno.serve(async (request) => {
     if (matchesEtag(request.headers.get('If-None-Match'), etag)) {
       return new Response(null, { status: 304, headers: { ...corsHeaders, ...responseHeaders } });
     }
+    const nowValue = new Date().toISOString();
+    const summaryResponse = await database(
+      `rpc/get_google_sheet_dashboard_summary?p_source=${source}&p_now=${encodeURIComponent(nowValue)}`,
+    );
+    if (!summaryResponse.ok) throw new Error(`Resumo operacional HTTP ${summaryResponse.status}`);
+    const operationalSummary = (await summaryResponse.json())?.[0];
+    if (!operationalSummary) throw new Error('Resumo operacional ausente.');
+    responseHeaders['X-Total-Count'] = String(operationalSummary.total_count);
     if (request.method === 'HEAD') {
       return new Response(null, { status: 200, headers: { ...corsHeaders, ...responseHeaders } });
     }
 
     const fields = source === 'training'
-      ? 'source_row,requested_at,requester_name,sector,job_title,training_topic,dashboard_status'
+      ? 'source_row,requested_at,requester_name,sector,job_title,training_topic,scheduled_at,dashboard_status'
       : source === 'timed'
         ? 'source_row,requested_at,requester_name,sector,job_title,dashboard_status,pending_reason'
-        : 'source_row,requested_at,requester_name,dashboard_status';
-    const now = encodeURIComponent(new Date().toISOString());
+        : 'source_row,requested_at,requester_name,job_title,sector,dashboard_status';
+    const now = encodeURIComponent(nowValue);
     const rowsResponse = await database(
       `google_sheet_requests?source=eq.${source}&is_source_present=eq.true` +
       `&or=(hidden_after_shift.is.null,hidden_after_shift.gt.${now})` +
-      `&select=${fields}&order=sort_priority.asc,requested_at.desc&offset=${offset}&limit=${pageSize}`,
+      `&select=${fields}&order=sort_priority.asc,sort_key.asc,source_row.asc&offset=${offset}&limit=${pageSize}`,
     );
     if (!rowsResponse.ok) throw new Error(`Listagem HTTP ${rowsResponse.status}`);
     const rows = await rowsResponse.json();
@@ -104,10 +112,10 @@ Deno.serve(async (request) => {
       ok: true,
       dashboard: source,
       summary: {
-        total: snapshot.total_count,
-        completed: snapshot.completed_count,
-        pending: snapshot.pending_count,
-        notStarted: snapshot.not_started_count,
+        total: Number(operationalSummary.total_count),
+        completed: Number(operationalSummary.completed_count),
+        pending: Number(operationalSummary.pending_count),
+        notStarted: Number(operationalSummary.not_started_count),
       },
       rows,
       page: { current: page, pageSize, total },
