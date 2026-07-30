@@ -45,7 +45,11 @@ const CONFIG = {
       ['nome'],
       ['cargo'],
       ['setor'],
+      ['cpf'],
+      ['celular', 'telefone'],
+      ['e_mail', 'email'],
       ['status'],
+      ['observacoes', 'observacao'],
       ['status_updated_at'],
       ['completed_at'],
     ],
@@ -140,6 +144,44 @@ type ExistingStatus = {
   completed_at: string | null;
 };
 
+function digits(value: unknown) {
+  return String(value || '').replace(/\D/g, '');
+}
+
+function validateAdRow(
+  sourceRow: number,
+  values: {
+    requestedAt: string;
+    jobTitle: string;
+    sector: string;
+    cpf: string;
+    phone: string;
+    email: string;
+    status: string;
+  },
+) {
+  const issues: string[] = [];
+  const cpf = digits(values.cpf);
+  const phone = digits(values.phone);
+  const normalizedStatus = normalizeStatus(values.status);
+  if (!values.requestedAt) issues.push('invalid_date');
+  if (values.cpf && cpf.length !== 11) issues.push('invalid_cpf');
+  if (values.phone && ![10, 11].includes(phone.length)) issues.push('invalid_phone');
+  if (values.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(values.email)) issues.push('invalid_email');
+  if (values.jobTitle && /^\d[\d.\-()/\s]+$/.test(values.jobTitle)) issues.push('cargo_looks_numeric');
+  if (values.sector && /^\d[\d.\-()/\s]+$/.test(values.sector)) issues.push('sector_looks_numeric');
+  if (normalizedStatus && ![
+    'realizado', 'pendente', 'nao_realizado', 'ja_existente',
+  ].includes(normalizedStatus)) issues.push('invalid_status');
+  if (issues.length) {
+    console.warn(`Mapeamento AD inválido na linha ${sourceRow}: ${issues.join(',')}`);
+  }
+  return {
+    validJobTitle: !issues.includes('cargo_looks_numeric'),
+    validSector: !issues.includes('sector_looks_numeric'),
+  };
+}
+
 async function existingStatuses(source: SheetSource) {
   const response = await database(
     `google_sheet_requests?source=eq.${source}&select=source_row,normalized_status,status_updated_at,completed_at`,
@@ -164,10 +206,16 @@ async function normalize(
     const requestedAt = parseSheetDate(columns[0]?.[index]);
     const name = sanitizeText(columns[1]?.[index], 160);
     if (!requestedAt || !name) continue;
+    const timedLegacyPending = source === 'timed' &&
+      classifyTimedStatus(columns[4]?.[index]) === 'pending';
     const legacyTrainingRequest = source === 'training' &&
       requestedAt === TRAINING_LEGACY_EXCEPTION.requestedAt &&
       name === TRAINING_LEGACY_EXCEPTION.requesterName;
-    if (new Date(requestedAt) < new Date(cutoff) && !legacyTrainingRequest) continue;
+    if (
+      new Date(requestedAt) < new Date(cutoff) &&
+      !legacyTrainingRequest &&
+      !timedLegacyPending
+    ) continue;
     let dashboardStatus: NormalizedSheetRequest['dashboard_status'];
     let sourceStatus: string;
     let sector: string;
@@ -192,7 +240,21 @@ async function normalize(
     } else {
       jobTitle = sanitizeText(columns[2]?.[index], 120);
       sector = sanitizeText(columns[3]?.[index], 140);
-      sourceStatus = sanitizeText(columns[4]?.[index], 80);
+      const cpf = sanitizeText(columns[4]?.[index], 30);
+      const phone = sanitizeText(columns[5]?.[index], 30);
+      const email = sanitizeText(columns[6]?.[index], 180).toLowerCase();
+      sourceStatus = sanitizeText(columns[7]?.[index], 80);
+      const validation = validateAdRow(sourceRow, {
+        requestedAt,
+        jobTitle,
+        sector,
+        cpf,
+        phone,
+        email,
+        status: sourceStatus,
+      });
+      if (!validation.validJobTitle) jobTitle = '';
+      if (!validation.validSector) sector = '';
       dashboardStatus = classifyAdStatus(sourceStatus);
     }
 

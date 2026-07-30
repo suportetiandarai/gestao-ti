@@ -203,8 +203,9 @@ body.sheet-dashboard {
 .sheet-table td {
     padding: 14px 12px;
     border-top: 1px solid var(--sheet-border);
-    text-align: left;
+    text-align: center;
     vertical-align: middle;
+    overflow-wrap: anywhere;
 }
 
 .sheet-table th {
@@ -230,6 +231,7 @@ body.sheet-dashboard {
 
 .sheet-status-cell {
     min-width: 160px;
+    text-align: center;
 }
 
 .sheet-status-badge {

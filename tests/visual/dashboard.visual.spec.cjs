@@ -236,7 +236,7 @@ test('rota pública abre sem login, fica travada no Diário e atualiza contadore
   await expect(page.locator('[data-ticket-id="9004"] .ticket-solved-label')).toHaveText('SOLUCIONADO');
   await expect(page.locator('[data-ticket-id="9005"] .ticket-solved-label')).toHaveText('SOLUCIONADO');
   await expect(page.locator('.ticket-overdue-label')).toHaveCount(1);
-  await expect(page.locator('[data-ticket-id="9006"] .ticket-overdue-label')).toHaveText('CHAMADO ATRASADO');
+  await expect(page.locator('[data-ticket-id="9006"] .ticket-overdue-label')).toHaveText('CHAMADO ESTOURADO');
   await expect(page.locator('[data-ticket-id="9006"] .ticket-solved-label')).toHaveCount(0);
   await expect(page.locator('[data-ticket-id="9003"] .ticket-overdue-label')).toHaveCount(0);
   const ticketOrder = await page.locator('.glpi-daily-ticket:not(.glpi-daily-ticket-head)').evaluateAll((rows) =>

@@ -26,6 +26,8 @@ test('sincronizador aplica o corte e usa o texto normalizado como fonte do statu
   assert.match(shared, /no_contact/);
   assert.match(shared, /normalized === 'pendente'/);
   assert.match(shared, /return 'not_completed'/);
+  assert.match(sync, /timedLegacyPending/);
+  assert.match(sync, /!timedLegacyPending/);
 });
 
 test('endpoint público usa paginação, ETag e seleção explícita sem payload bruto', () => {
@@ -115,6 +117,29 @@ test('dashboard AD expõe data, nome, cargo, setor e status operacional', () => 
   assert.match(endpoint, /source_row,requested_at,requester_name,job_title,sector,dashboard_status/);
 });
 
+test('AD resolve e valida o layout atual por cabeçalhos sem expor dados pessoais', () => {
+  const sync = read('supabase/functions/google-sheets-sync/index.ts');
+  const endpoint = read('supabase/functions/google-sheets-dashboard-public/index.ts');
+  assert.match(sync, /\['cpf'\]/);
+  assert.match(sync, /\['celular', 'telefone'\]/);
+  assert.match(sync, /\['e_mail', 'email'\]/);
+  assert.match(sync, /\['observacoes', 'observacao'\]/);
+  assert.match(sync, /function validateAdRow/);
+  assert.match(sync, /cargo_looks_numeric/);
+  assert.match(sync, /sector_looks_numeric/);
+  assert.doesNotMatch(endpoint, /\bcpf\b|\bphone\b|\bemail\b|\bobservations\b/);
+});
+
+test('pendentes TIMED anteriores ao corte permanecem e saem quando o status muda', () => {
+  const sync = read('supabase/functions/google-sheets-sync/index.ts');
+  const migration = read('supabase/migrations/20260730110000_019_timed_legacy_pending.sql');
+  assert.match(sync, /classifyTimedStatus\(columns\[4\]\?\.\[index\]\) === 'pending'/);
+  assert.match(migration, /p_source='timed'/);
+  assert.match(migration, /requested_at < p_cutoff_at/);
+  assert.match(migration, /dashboard_status='pending'/);
+  assert.doesNotMatch(migration, /\bdelete\s+from\b/i);
+});
+
 test('entrada pública encaminha formulários sem expor segredo ou permitir origens arbitrárias', () => {
   const intake = read('supabase/functions/google-sheets-intake/index.ts');
   assert.match(intake, /https:\/\/suportetiandarai\.github\.io/);
@@ -173,7 +198,7 @@ test('treinamento usa agendamento da coluna M e libera somente a exceção está
   assert.match(sync, /data_do_agendamento/);
   assert.match(sync, /Luciana Nunes de Sousa/);
   assert.match(sync, /2026-07-27T13:06:21\.000Z/);
-  assert.match(sync, /new Date\(requestedAt\) < new Date\(cutoff\) && !legacyTrainingRequest/);
+  assert.match(sync, /new Date\(requestedAt\) < new Date\(cutoff\)[\s\S]*!legacyTrainingRequest[\s\S]*!timedLegacyPending/);
   assert.doesNotMatch(sync, /sourceRow\s*===\s*121/);
   assert.match(html, /Data e Hora da Solicitação/);
   assert.match(html, /Data e Hora do Agendamento/);
