@@ -1,4 +1,4 @@
-import { getShiftEnd } from '../_shared/google-sheets.ts';
+import { getCurrentShiftRange } from '../_shared/google-sheets.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -75,7 +75,8 @@ Deno.serve(async (request) => {
     if (!summaryResponse.ok) throw new Error(`Resumo operacional HTTP ${summaryResponse.status}`);
     const operationalSummary = (await summaryResponse.json())?.[0];
     if (!operationalSummary) throw new Error('Resumo operacional ausente.');
-    const shiftEnd = getShiftEnd(new Date()).toISOString();
+    const shift = getCurrentShiftRange(new Date());
+    const shiftEnd = shift.end.toISOString();
     const summaryVersion = [
       operationalSummary.total_count,
       operationalSummary.completed_count,
@@ -98,10 +99,10 @@ Deno.serve(async (request) => {
     }
 
     const fields = source === 'training'
-      ? 'source_row,requested_at,requester_name,sector,job_title,training_topic,scheduled_at,dashboard_status'
+      ? 'source_row,requested_at,requester_name,sector,job_title,training_topic,scheduled_at,completed_at,dashboard_status'
       : source === 'timed'
-        ? 'source_row,requested_at,requester_name,sector,job_title,dashboard_status,pending_reason'
-        : 'source_row,requested_at,requester_name,job_title,sector,dashboard_status';
+        ? 'source_row,requested_at,requester_name,sector,job_title,completed_at,dashboard_status,pending_reason'
+        : 'source_row,requested_at,requester_name,job_title,sector,completed_at,dashboard_status';
     const now = encodeURIComponent(nowValue);
     const rowsResponse = await database(
       `google_sheet_requests?source=eq.${source}&is_source_present=eq.true` +
@@ -121,6 +122,11 @@ Deno.serve(async (request) => {
         completed: Number(operationalSummary.completed_count),
         pending: Number(operationalSummary.pending_count),
         notStarted: Number(operationalSummary.not_started_count),
+      },
+      shift: {
+        start: shift.start.toISOString(),
+        end: shift.end.toISOString(),
+        label: shift.label,
       },
       rows,
       page: { current: page, pageSize, total },

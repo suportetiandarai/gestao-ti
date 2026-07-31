@@ -119,6 +119,7 @@
         get('summary-completed').textContent = String(data.summary.completed);
         get('summary-pending').textContent = String(data.summary.pending);
         get('summary-not-started').textContent = String(data.summary.notStarted);
+        updateShiftLabel(data.shift?.label);
         get('last-sync').textContent = `Última sincronização: ${formatDate(data.lastSyncedAt)}`;
         const connectionLabels = {
             online: 'Online',
@@ -132,6 +133,12 @@
         get('page-info').textContent = `Página ${data.page.current} de ${totalPages} • ${data.page.total} solicitações`;
         get('previous-page').disabled = state.page <= 1;
         get('next-page').disabled = state.page >= totalPages;
+    }
+
+    function updateShiftLabel(serverLabel = '') {
+        const label = get('summary-completed-shift');
+        if (!label) return;
+        label.textContent = serverLabel || core.getCurrentShiftRange(new Date()).shiftLabel;
     }
 
     async function load({ preserveEtag = true } = {}) {
@@ -190,6 +197,7 @@
         get('fullscreen-button').addEventListener('click', toggleFullscreen);
         get('previous-page').addEventListener('click', () => changePage(-1));
         get('next-page').addEventListener('click', () => changePage(1));
+        updateShiftLabel();
         load({ preserveEtag: false });
         state.timer = window.setInterval(() => load(), 30000);
         scheduleShiftRefresh();
@@ -201,6 +209,7 @@
         state.shiftTimer = window.setTimeout(() => {
             state.page = 1;
             state.etag = '';
+            updateShiftLabel();
             load({ preserveEtag: false }).finally(scheduleShiftRefresh);
         }, milliseconds);
     }

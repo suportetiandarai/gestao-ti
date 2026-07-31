@@ -111,23 +111,38 @@ async function valuesFor(source: SheetSource, accessToken: string) {
     if (!headerResponse.ok) throw new Error(`Cabeçalhos Google Sheets ${source} HTTP ${headerResponse.status}`);
     const headerValues = (await headerResponse.json()).values?.[0] || [];
     const normalizedHeaders = headerValues.map((value: unknown) => normalizeStatus(value));
-    columns = config.headers.map((aliases) => {
+    const columnIndexes = config.headers.map((aliases) => {
       const headerAliases = aliases as readonly string[];
       const index = normalizedHeaders.findIndex((header: string) => headerAliases.includes(header));
       if (index < 0) throw new Error(`Cabeçalho obrigatório ausente em ${source}: ${aliases[0]}`);
-      let value = index + 1;
-      let letter = '';
-      while (value > 0) {
-        value -= 1;
-        letter = String.fromCharCode(65 + (value % 26)) + letter;
-        value = Math.floor(value / 26);
-      }
-      return `${letter}:${letter}`;
+      return index;
     });
+    let lastColumn = Math.max(...columnIndexes) + 1;
+    let lastColumnLetter = '';
+    while (lastColumn > 0) {
+      lastColumn -= 1;
+      lastColumnLetter = String.fromCharCode(65 + (lastColumn % 26)) + lastColumnLetter;
+      lastColumn = Math.floor(lastColumn / 26);
+    }
+    const dataRange = encodeURIComponent(`'${config.sheetName}'!A:${lastColumnLetter}`);
+    const dataResponse = await fetch(
+      `https://sheets.googleapis.com/v4/spreadsheets/${config.spreadsheetId}/values/${dataRange}` +
+      '?majorDimension=ROWS&valueRenderOption=UNFORMATTED_VALUE&dateTimeRenderOption=SERIAL_NUMBER',
+      { headers: { Authorization: `Bearer ${accessToken}` } },
+    );
+    if (!dataResponse.ok) throw new Error(`Google Sheets ${source} HTTP ${dataResponse.status}`);
+    const rows = (await dataResponse.json()).values || [];
+    return columnIndexes.map((columnIndex) => ({
+      values: rows.map((row: unknown[]) => [row?.[columnIndex] ?? '']),
+    }));
   } else {
     columns = config.columns;
   }
-  const query = new URLSearchParams({ majorDimension: 'ROWS' });
+  const query = new URLSearchParams({
+    majorDimension: 'ROWS',
+    valueRenderOption: 'UNFORMATTED_VALUE',
+    dateTimeRenderOption: 'SERIAL_NUMBER',
+  });
   for (const column of columns) query.append('ranges', `'${config.sheetName}'!${column}`);
   const response = await fetch(
     `https://sheets.googleapis.com/v4/spreadsheets/${config.spreadsheetId}/values:batchGet?${query}`,
@@ -200,22 +215,45 @@ async function normalize(
   const columns = ranges.map((_: unknown, index: number) => columnValues(ranges, index));
   const rowCount = Math.max(...columns.map((column: unknown[]) => column.length), 0);
   const records: NormalizedSheetRequest[] = [];
+  let recordsInvalidDate = 0;
+  let recordsMissingName = 0;
+  let recordsBeforeCutoff = 0;
 
   for (let sourceRow = 2; sourceRow <= rowCount; sourceRow += 1) {
     const index = sourceRow - 1;
     const requestedAt = parseSheetDate(columns[0]?.[index]);
     const name = sanitizeText(columns[1]?.[index], 160);
-    if (!requestedAt || !name) continue;
-    const timedLegacyPending = source === 'timed' &&
-      classifyTimedStatus(columns[4]?.[index]) === 'pending';
+    if (!requestedAt) {
+      recordsInvalidDate += 1;
+      continue;
+    }
+    if (!name) {
+      recordsMissingName += 1;
+      continue;
+    }
+    const previous = existing.get(sourceRow);
+    const preliminaryStatus = source === 'timed'
+      ? classifyTimedStatus(columns[4]?.[index])
+      : source === 'training'
+        ? classifyTrainingStatus(columns[5]?.[index])
+        : classifyAdStatus(columns[7]?.[index]);
+    const preliminaryCompletedAt = parseSheetDate(columns[columns.length - 1]?.[index]) ||
+      previous?.completed_at || null;
+    const completedAfterCutoff = isTerminalStatus(source, preliminaryStatus) &&
+      Boolean(preliminaryCompletedAt && new Date(preliminaryCompletedAt) >= new Date(cutoff));
+    const timedLegacyPending = source === 'timed' && preliminaryStatus === 'pending';
     const legacyTrainingRequest = source === 'training' &&
       requestedAt === TRAINING_LEGACY_EXCEPTION.requestedAt &&
       name === TRAINING_LEGACY_EXCEPTION.requesterName;
     if (
       new Date(requestedAt) < new Date(cutoff) &&
       !legacyTrainingRequest &&
-      !timedLegacyPending
-    ) continue;
+      !timedLegacyPending &&
+      !completedAfterCutoff
+    ) {
+      recordsBeforeCutoff += 1;
+      continue;
+    }
     let dashboardStatus: NormalizedSheetRequest['dashboard_status'];
     let sourceStatus: string;
     let sector: string;
@@ -259,7 +297,6 @@ async function normalize(
     }
 
     const normalized = normalizeStatus(sourceStatus);
-    const previous = existing.get(sourceRow);
     const sheetStatusUpdatedAt = parseSheetDate(columns[columns.length - 2]?.[index]);
     const sheetCompletedAt = parseSheetDate(columns[columns.length - 1]?.[index]);
     const statusChanged = Boolean(previous && previous.normalized_status !== normalized);
@@ -267,7 +304,8 @@ async function normalize(
       (statusChanged ? new Date().toISOString() : previous?.status_updated_at || null);
     const terminal = isTerminalStatus(source, dashboardStatus);
     const completedAt = terminal
-      ? sheetCompletedAt || (statusChanged ? statusUpdatedAt : previous?.completed_at) || null
+      ? sheetCompletedAt || previous?.completed_at || sheetStatusUpdatedAt ||
+        (statusChanged ? statusUpdatedAt : previous?.status_updated_at) || null
       : null;
     const hiddenAfterShift = completedAt ? getShiftEnd(new Date(completedAt)).toISOString() : null;
     const record = {
@@ -288,14 +326,20 @@ async function normalize(
       hidden_after_shift: hiddenAfterShift,
       is_source_present: true,
       sort_priority: requestSortPriority(source, dashboardStatus),
-      sort_key: requestSortKey(dashboardStatus, requestedAt, completedAt),
+      sort_key: requestSortKey(dashboardStatus, requestedAt, completedAt, scheduledAt),
       row_hash: '',
       sync_marker: marker,
     };
     record.row_hash = await sha256({ ...record, sync_marker: undefined });
     records.push(record);
   }
-  return records;
+  return {
+    records,
+    recordsRequested: Math.max(0, rowCount - 1),
+    recordsInvalidDate,
+    recordsMissingName,
+    recordsBeforeCutoff,
+  };
 }
 
 async function synchronize(source: SheetSource, accessToken: string) {
@@ -315,9 +359,18 @@ async function synchronize(source: SheetSource, accessToken: string) {
   });
 
   let processed = 0;
+  let requested = 0;
+  let invalidDate = 0;
+  let missingName = 0;
+  let beforeCutoff = 0;
   try {
     const existing = await existingStatuses(source);
-    const records = await normalize(source, accessToken, marker, existing);
+    const normalized = await normalize(source, accessToken, marker, existing);
+    const { records } = normalized;
+    requested = normalized.recordsRequested;
+    invalidDate = normalized.recordsInvalidDate;
+    missingName = normalized.recordsMissingName;
+    beforeCutoff = normalized.recordsBeforeCutoff;
     processed = records.length;
     if (records.length) {
       await database('google_sheet_requests?on_conflict=source,source_row', {
@@ -389,6 +442,10 @@ async function synchronize(source: SheetSource, accessToken: string) {
       body: JSON.stringify({
         finished_at: new Date().toISOString(),
         status: 'success',
+        records_requested: requested,
+        records_invalid_date: invalidDate,
+        records_missing_name: missingName,
+        records_before_cutoff: beforeCutoff,
         records_processed: processed,
         duration_ms: duration,
       }),
@@ -413,6 +470,10 @@ async function synchronize(source: SheetSource, accessToken: string) {
       body: JSON.stringify({
         finished_at: new Date().toISOString(),
         status: 'error',
+        records_requested: requested,
+        records_invalid_date: invalidDate,
+        records_missing_name: missingName,
+        records_before_cutoff: beforeCutoff,
         records_processed: processed,
         error_message: message,
         duration_ms: duration,

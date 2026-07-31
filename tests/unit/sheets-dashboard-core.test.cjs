@@ -32,6 +32,18 @@ test('seleciona plantões exatamente às 07:00 e 19:00 em São Paulo', () => {
   }
 });
 
+test('retorna o intervalo e o subtítulo exato do plantão', () => {
+  const day = core.getCurrentShiftRange(local('2026-07-30T12:00:00'));
+  assert.equal(day.shiftStart.toISOString(), '2026-07-30T10:00:00.000Z');
+  assert.equal(day.shiftEnd.toISOString(), '2026-07-30T22:00:00.000Z');
+  assert.equal(day.shiftLabel, '30/07/2026, 07:00 até 30/07/2026, 19:00');
+
+  const night = core.getCurrentShiftRange(local('2026-07-30T23:00:00'));
+  assert.equal(night.shiftStart.toISOString(), '2026-07-30T22:00:00.000Z');
+  assert.equal(night.shiftEnd.toISOString(), '2026-07-31T10:00:00.000Z');
+  assert.equal(night.shiftLabel, '30/07/2026, 19:00 até 31/07/2026, 07:00');
+});
+
 test('oculta concluídos somente depois da troca e mantém pendentes', () => {
   const beforeDayEnd = local('2026-07-28T18:59:59');
   const atNightStart = local('2026-07-28T19:00:00');
@@ -78,4 +90,16 @@ test('ordena treinamento e mantém Desistência fora dos três grupos principais
   assert.deepEqual(core.sortTrainingRequests(rows).map((row) => row.dashboard_status), [
     'not_scheduled', 'no_contact', 'duplicate', 'other', 'withdrawal', 'scheduled', 'completed'
   ]);
+});
+
+test('ordena treinamento por agendamento crescente e realizados por conclusão decrescente', () => {
+  const rows = [
+    { source_row: 1, dashboard_status: 'not_scheduled', requested_at: '2026-08-10T10:00:00Z' },
+    { source_row: 2, dashboard_status: 'not_scheduled', requested_at: '2026-07-31T10:00:00Z' },
+    { source_row: 3, dashboard_status: 'scheduled', requested_at: '2026-07-28T10:00:00Z', scheduled_at: '2026-08-10T12:00:00Z' },
+    { source_row: 4, dashboard_status: 'scheduled', requested_at: '2026-07-29T10:00:00Z', scheduled_at: '2026-08-02T12:00:00Z' },
+    { source_row: 5, dashboard_status: 'completed', completed_at: '2026-07-30T11:00:00Z' },
+    { source_row: 6, dashboard_status: 'completed', completed_at: '2026-07-30T15:00:00Z' },
+  ];
+  assert.deepEqual(core.sortTrainingRequests(rows).map((row) => row.source_row), [2, 1, 4, 3, 6, 5]);
 });
