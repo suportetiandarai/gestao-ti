@@ -127,7 +127,7 @@ async function valuesFor(source: SheetSource, accessToken: string) {
     const dataRange = encodeURIComponent(`'${config.sheetName}'!A:${lastColumnLetter}`);
     const dataResponse = await fetch(
       `https://sheets.googleapis.com/v4/spreadsheets/${config.spreadsheetId}/values/${dataRange}` +
-      '?majorDimension=ROWS',
+      '?majorDimension=ROWS&valueRenderOption=UNFORMATTED_VALUE&dateTimeRenderOption=SERIAL_NUMBER',
       { headers: { Authorization: `Bearer ${accessToken}` } },
     );
     if (!dataResponse.ok) throw new Error(`Google Sheets ${source} HTTP ${dataResponse.status}`);
@@ -138,7 +138,11 @@ async function valuesFor(source: SheetSource, accessToken: string) {
   } else {
     columns = config.columns;
   }
-  const query = new URLSearchParams({ majorDimension: 'ROWS' });
+  const query = new URLSearchParams({
+    majorDimension: 'ROWS',
+    valueRenderOption: 'UNFORMATTED_VALUE',
+    dateTimeRenderOption: 'SERIAL_NUMBER',
+  });
   for (const column of columns) query.append('ranges', `'${config.sheetName}'!${column}`);
   const response = await fetch(
     `https://sheets.googleapis.com/v4/spreadsheets/${config.spreadsheetId}/values:batchGet?${query}`,
@@ -227,15 +231,25 @@ async function normalize(
       recordsMissingName += 1;
       continue;
     }
-    const timedLegacyPending = source === 'timed' &&
-      classifyTimedStatus(columns[4]?.[index]) === 'pending';
+    const previous = existing.get(sourceRow);
+    const preliminaryStatus = source === 'timed'
+      ? classifyTimedStatus(columns[4]?.[index])
+      : source === 'training'
+        ? classifyTrainingStatus(columns[5]?.[index])
+        : classifyAdStatus(columns[7]?.[index]);
+    const preliminaryCompletedAt = parseSheetDate(columns[columns.length - 1]?.[index]) ||
+      previous?.completed_at || null;
+    const completedAfterCutoff = isTerminalStatus(source, preliminaryStatus) &&
+      Boolean(preliminaryCompletedAt && new Date(preliminaryCompletedAt) >= new Date(cutoff));
+    const timedLegacyPending = source === 'timed' && preliminaryStatus === 'pending';
     const legacyTrainingRequest = source === 'training' &&
       requestedAt === TRAINING_LEGACY_EXCEPTION.requestedAt &&
       name === TRAINING_LEGACY_EXCEPTION.requesterName;
     if (
       new Date(requestedAt) < new Date(cutoff) &&
       !legacyTrainingRequest &&
-      !timedLegacyPending
+      !timedLegacyPending &&
+      !completedAfterCutoff
     ) {
       recordsBeforeCutoff += 1;
       continue;
@@ -283,7 +297,6 @@ async function normalize(
     }
 
     const normalized = normalizeStatus(sourceStatus);
-    const previous = existing.get(sourceRow);
     const sheetStatusUpdatedAt = parseSheetDate(columns[columns.length - 2]?.[index]);
     const sheetCompletedAt = parseSheetDate(columns[columns.length - 1]?.[index]);
     const statusChanged = Boolean(previous && previous.normalized_status !== normalized);
@@ -291,7 +304,8 @@ async function normalize(
       (statusChanged ? new Date().toISOString() : previous?.status_updated_at || null);
     const terminal = isTerminalStatus(source, dashboardStatus);
     const completedAt = terminal
-      ? sheetCompletedAt || (statusChanged ? statusUpdatedAt : previous?.completed_at) || null
+      ? sheetCompletedAt || previous?.completed_at || sheetStatusUpdatedAt ||
+        (statusChanged ? statusUpdatedAt : previous?.status_updated_at) || null
       : null;
     const hiddenAfterShift = completedAt ? getShiftEnd(new Date(completedAt)).toISOString() : null;
     const record = {
@@ -312,7 +326,7 @@ async function normalize(
       hidden_after_shift: hiddenAfterShift,
       is_source_present: true,
       sort_priority: requestSortPriority(source, dashboardStatus),
-      sort_key: requestSortKey(dashboardStatus, requestedAt, completedAt),
+      sort_key: requestSortKey(dashboardStatus, requestedAt, completedAt, scheduledAt),
       row_hash: '',
       sync_marker: marker,
     };

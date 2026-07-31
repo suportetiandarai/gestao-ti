@@ -41,6 +41,17 @@ function decodeBase64(value: string) {
 }
 
 export function parseSheetDate(value: unknown) {
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    const localClock = new Date((value - 25569) * 86_400_000);
+    return localDateTime({
+      year: localClock.getUTCFullYear(),
+      month: localClock.getUTCMonth() + 1,
+      day: localClock.getUTCDate(),
+      hour: localClock.getUTCHours(),
+      minute: localClock.getUTCMinutes(),
+      second: localClock.getUTCSeconds(),
+    }).toISOString();
+  }
   const text = String(value || '').trim();
   if (!text) return null;
   const brazilian = text.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})(?:\s+(\d{1,2}):(\d{2})(?::(\d{2}))?)?$/);
@@ -136,11 +147,12 @@ export function requestSortKey(
   status: DashboardSheetStatus,
   requestedAt: string,
   completedAt: string | null = null,
+  scheduledAt: string | null = null,
 ) {
   const timestamp = new Date(
     ['completed', 'already_exists'].includes(status) && completedAt
       ? completedAt
-      : requestedAt,
+      : scheduledAt || requestedAt,
   ).getTime();
   if (!Number.isFinite(timestamp)) return 0;
   return ['completed', 'already_exists'].includes(status) ? -timestamp : timestamp;
@@ -180,17 +192,29 @@ function localDateTime(parts: Record<string, number>) {
   return new Date(candidate);
 }
 
-export function getShiftEnd(value: Date) {
+export function getCurrentShiftRange(value: Date) {
   const parts = saoPauloParts(value);
-  const endHour = parts.hour >= 7 && parts.hour < 19 ? 19 : 7;
-  const nextDay = parts.hour >= 19;
-  const calendar = new Date(Date.UTC(parts.year, parts.month - 1, parts.day + (nextDay ? 1 : 0)));
-  return localDateTime({
-    year: calendar.getUTCFullYear(),
-    month: calendar.getUTCMonth() + 1,
-    day: calendar.getUTCDate(),
-    hour: endHour,
+  const isDay = parts.hour >= 7 && parts.hour < 19;
+  const startsPreviousDay = parts.hour < 7;
+  const startCalendar = new Date(Date.UTC(parts.year, parts.month - 1, parts.day - (startsPreviousDay ? 1 : 0)));
+  const endCalendar = new Date(Date.UTC(parts.year, parts.month - 1, parts.day + (parts.hour >= 19 ? 1 : 0)));
+  const start = localDateTime({
+    year: startCalendar.getUTCFullYear(), month: startCalendar.getUTCMonth() + 1,
+    day: startCalendar.getUTCDate(), hour: isDay ? 7 : 19,
   });
+  const end = localDateTime({
+    year: endCalendar.getUTCFullYear(), month: endCalendar.getUTCMonth() + 1,
+    day: endCalendar.getUTCDate(), hour: isDay ? 19 : 7,
+  });
+  const labelFormatter = new Intl.DateTimeFormat('pt-BR', {
+    timeZone: 'America/Sao_Paulo', day: '2-digit', month: '2-digit', year: 'numeric',
+    hour: '2-digit', minute: '2-digit', hourCycle: 'h23',
+  });
+  return { start, end, label: `${labelFormatter.format(start)} até ${labelFormatter.format(end)}` };
+}
+
+export function getShiftEnd(value: Date) {
+  return getCurrentShiftRange(value).end;
 }
 
 export async function sha256(value: unknown) {

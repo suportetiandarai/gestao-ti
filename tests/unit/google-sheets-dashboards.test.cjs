@@ -28,6 +28,9 @@ test('sincronizador aplica o corte e usa o texto normalizado como fonte do statu
   assert.match(shared, /return 'not_completed'/);
   assert.match(shared, /minute\.padStart\(2, '0'\)/);
   assert.match(shared, /second\.padStart\(2, '0'\)/);
+  assert.match(shared, /value - 25569/);
+  assert.match(sync, /valueRenderOption=UNFORMATTED_VALUE/);
+  assert.match(sync, /dateTimeRenderOption=SERIAL_NUMBER/);
   assert.match(sync, /timedLegacyPending/);
   assert.match(sync, /!timedLegacyPending/);
 });
@@ -59,6 +62,31 @@ test('cards e listagem usam a mesma visibilidade operacional após a troca de pl
   assert.match(migration, /request\.hidden_after_shift is null or request\.hidden_after_shift > p_now/);
   assert.match(migration, /request\.is_source_present=true/);
   assert.match(migration, /revoke all on function public\.get_google_sheet_dashboard_summary/);
+});
+
+test('realizados são contados por completed_at do plantão antes da ocultação visual', () => {
+  const migration = read('supabase/migrations/20260731100000_021_request_shift_completed_summary.sql');
+  const endpoint = read('supabase/functions/google-sheets-dashboard-public/index.ts');
+  assert.match(migration, /dashboard_status='completed'/);
+  assert.match(migration, /completed_at >= bounds\.shift_start/);
+  assert.match(migration, /completed_at < bounds\.shift_end/);
+  assert.match(endpoint, /getCurrentShiftRange/);
+  assert.match(endpoint, /shift:\s*\{/);
+});
+
+test('dashboards exibem o subtítulo compartilhado do plantão no card Realizados', () => {
+  const core = read('sheets-dashboard-core.js');
+  const client = read('sheets-dashboard.js');
+  assert.match(core, /function getCurrentShiftRange/);
+  assert.match(core, /shiftLabel/);
+  assert.match(client, /summary-completed-shift/);
+  for (const file of [
+    'dashboard-timed/index.html',
+    'dashboard-ad/index.html',
+    'dashboard-treinamentos/index.html',
+  ]) {
+    assert.match(read(file), /id="summary-completed-shift"/);
+  }
 });
 
 test('migração preserva histórico e registra os horários de status e conclusão', () => {
@@ -116,7 +144,7 @@ test('dashboard AD expõe data, nome, cargo, setor e status operacional', () => 
   assert.match(html, /<th>Cargo<\/th>/);
   assert.match(html, /<th>Setor<\/th>/);
   assert.doesNotMatch(html, /CPF|Celular|E-mail|Observações/i);
-  assert.match(endpoint, /source_row,requested_at,requester_name,job_title,sector,dashboard_status/);
+  assert.match(endpoint, /source_row,requested_at,requester_name,job_title,sector,completed_at,dashboard_status/);
 });
 
 test('AD resolve e valida o layout atual por cabeçalhos sem expor dados pessoais', () => {
@@ -143,7 +171,7 @@ test('AD resolve e valida o layout atual por cabeçalhos sem expor dados pessoai
 test('pendentes TIMED anteriores ao corte permanecem e saem quando o status muda', () => {
   const sync = read('supabase/functions/google-sheets-sync/index.ts');
   const migration = read('supabase/migrations/20260730110000_019_timed_legacy_pending.sql');
-  assert.match(sync, /classifyTimedStatus\(columns\[4\]\?\.\[index\]\) === 'pending'/);
+  assert.match(sync, /preliminaryStatus === 'pending'/);
   assert.match(migration, /p_source='timed'/);
   assert.match(migration, /requested_at < p_cutoff_at/);
   assert.match(migration, /dashboard_status='pending'/);

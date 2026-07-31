@@ -173,6 +173,17 @@ body.sheet-dashboard {
     line-height: 1.05;
 }
 
+.sheet-shift-label {
+    display: block;
+    min-height: 2.4em;
+    margin-top: 5px;
+    color: var(--sheet-muted);
+    font-size: clamp(0.68rem, 0.82vw, 0.78rem);
+    font-weight: 700;
+    line-height: 1.25;
+    text-transform: none;
+}
+
 .sheet-table-panel {
     overflow: hidden;
     border: 1px solid var(--sheet-border);

@@ -70,6 +70,21 @@
         };
     }
 
+    function formatShiftDate(value) {
+        const parts = zonedParts(value);
+        return `${String(parts.day).padStart(2, '0')}/${String(parts.month).padStart(2, '0')}/${parts.year}, ` +
+            `${String(parts.hour).padStart(2, '0')}:${String(parts.minute).padStart(2, '0')}`;
+    }
+
+    function getCurrentShiftRange(value = new Date()) {
+        const shift = getCurrentShift(value);
+        return {
+            shiftStart: shift.start,
+            shiftEnd: shift.end,
+            shiftLabel: `${formatShiftDate(shift.start)} até ${formatShiftDate(shift.end)}`
+        };
+    }
+
     function getShiftEnd(value = new Date()) {
         return getCurrentShift(value).end;
     }
@@ -136,13 +151,35 @@
     }
 
     function sortTrainingRequests(requests) {
-        return sortByPriority(requests, TRAINING_PRIORITY);
+        return [...requests].sort((left, right) => {
+            const leftStatus = normalizeStatus(left?.dashboard_status);
+            const rightStatus = normalizeStatus(right?.dashboard_status);
+            const priorityDifference = (TRAINING_PRIORITY[leftStatus] || 99) -
+                (TRAINING_PRIORITY[rightStatus] || 99);
+            if (priorityDifference) return priorityDifference;
+
+            const terminal = leftStatus === 'completed';
+            const leftValue = terminal
+                ? left?.completed_at
+                : left?.scheduled_at || left?.requested_at;
+            const rightValue = terminal
+                ? right?.completed_at
+                : right?.scheduled_at || right?.requested_at;
+            const leftTime = new Date(leftValue).getTime();
+            const rightTime = new Date(rightValue).getTime();
+            const leftValid = Number.isFinite(leftTime);
+            const rightValid = Number.isFinite(rightTime);
+            if (leftValid !== rightValid) return leftValid ? -1 : 1;
+            if (leftValid && leftTime !== rightTime) return terminal ? rightTime - leftTime : leftTime - rightTime;
+            return Number(left?.source_row || 0) - Number(right?.source_row || 0);
+        });
     }
 
     return {
         TIME_ZONE,
         normalizeStatus,
         getCurrentShift,
+        getCurrentShiftRange,
         getShiftEnd,
         shouldHideTimedRequest,
         shouldHideAdRequest,
