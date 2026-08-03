@@ -18,13 +18,14 @@
     });
 
     function normalizeStatus(value) {
-        return String(value || '')
+        const normalized = String(value || '')
             .normalize('NFD')
             .replace(/[\u0300-\u036f]/g, '')
             .trim()
             .toLowerCase()
             .replace(/[^a-z0-9]+/g, '_')
             .replace(/^_+|_+$/g, '');
+        return normalized === 'desisntencia' ? 'withdrawal' : normalized;
     }
 
     function zonedParts(value) {
@@ -107,8 +108,9 @@
     }
 
     function shouldHideTrainingRequest(request, now = new Date()) {
-        return normalizeStatus(request?.dashboard_status) === 'completed' &&
-            completedBeforeCurrentShift(request, now);
+        const status = normalizeStatus(request?.dashboard_status);
+        if (['withdrawal', 'desistencia'].includes(status)) return true;
+        return status === 'completed' && completedBeforeCurrentShift(request, now);
     }
 
     const STANDARD_PRIORITY = Object.freeze({

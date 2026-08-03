@@ -11,6 +11,7 @@ test('normaliza status ignorando caixa, espaços e acentos', () => {
   assert.equal(core.normalizeStatus('Já Existente'), 'ja_existente');
   assert.equal(core.normalizeStatus('SEM CONTATO'), 'sem_contato');
   assert.equal(core.normalizeStatus(' DESISTÊNCIA '), 'desistencia');
+  assert.equal(core.normalizeStatus(' desisntencia '), 'withdrawal');
 });
 
 test('seleciona plantões exatamente às 07:00 e 19:00 em São Paulo', () => {
@@ -60,6 +61,9 @@ test('AD e Treinamento respeitam estados conclusivos e persistentes', () => {
   assert.equal(core.shouldHideAdRequest({ dashboard_status: 'already_exists', completed_at: completedAt }, nextShift), true);
   assert.equal(core.shouldHideAdRequest({ dashboard_status: 'not_completed', completed_at: null }, nextShift), false);
   assert.equal(core.shouldHideTrainingRequest({ dashboard_status: 'completed', completed_at: completedAt }, nextShift), true);
+  assert.equal(core.shouldHideTrainingRequest({ dashboard_status: 'withdrawal', completed_at: null }, nextShift), true);
+  assert.equal(core.shouldHideTrainingRequest({ dashboard_status: 'desistencia', completed_at: null }, nextShift), true);
+  assert.equal(core.shouldHideTrainingRequest({ dashboard_status: 'desisntencia', completed_at: null }, nextShift), true);
   for (const status of ['scheduled', 'not_scheduled', 'no_contact', 'duplicate', 'other']) {
     assert.equal(core.shouldHideTrainingRequest({ dashboard_status: status, completed_at: completedAt }, nextShift), false, status);
   }
