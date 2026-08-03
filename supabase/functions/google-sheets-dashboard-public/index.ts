@@ -104,9 +104,13 @@ Deno.serve(async (request) => {
         ? 'source_row,requested_at,requester_name,sector,job_title,completed_at,dashboard_status,pending_reason'
         : 'source_row,requested_at,requester_name,job_title,sector,completed_at,dashboard_status';
     const now = encodeURIComponent(nowValue);
+    const operationalStatusFilter = source === 'training'
+      ? '&dashboard_status=neq.withdrawal'
+      : '';
     const rowsResponse = await database(
       `google_sheet_requests?source=eq.${source}&is_source_present=eq.true` +
       `&or=(hidden_after_shift.is.null,hidden_after_shift.gt.${now})` +
+      operationalStatusFilter +
       `&select=${fields}&order=sort_priority.asc,sort_key.asc,source_row.asc&offset=${offset}&limit=${pageSize}`,
     );
     if (!rowsResponse.ok) throw new Error(`Listagem HTTP ${rowsResponse.status}`);

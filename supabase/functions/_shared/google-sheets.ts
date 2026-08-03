@@ -90,6 +90,7 @@ export function normalizeRequestStatus(value: unknown) {
     nao_agendados: 'nao_agendado',
     nao_agendada: 'nao_agendado',
     nao_agendadas: 'nao_agendado',
+    desisntencia: 'desistencia',
     desistencias: 'desistencia',
   };
   return aliases[normalized] || normalized;

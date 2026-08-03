@@ -242,15 +242,18 @@ test('treinamento usa agendamento da coluna M e libera somente a exceção está
   assert.match(html, /Data e Hora do Agendamento/);
 });
 
-test('Desistência é normalizada, estilizada em cinza e excluída dos três indicadores', () => {
+test('Desistência e erro comum de digitação são normalizados e ocultados da operação', () => {
   const shared = read('supabase/functions/_shared/google-sheets.ts');
   const sync = read('supabase/functions/google-sheets-sync/index.ts');
+  const endpoint = read('supabase/functions/google-sheets-dashboard-public/index.ts');
   const css = read('sheets-dashboard.css');
+  assert.match(shared, /desisntencia: 'desistencia'/);
   assert.match(shared, /desistencias: 'desistencia'/);
   assert.match(shared, /normalized === 'desistencia'\) return 'withdrawal'/);
   assert.match(css, /\.status-withdrawal/);
   assert.match(sync, /not_scheduled', 'pending', 'no_contact', 'duplicate', 'other'/);
   assert.doesNotMatch(sync, /\['not_scheduled', 'pending', 'no_contact', 'duplicate', 'other', 'withdrawal'\]/);
+  assert.match(endpoint, /dashboard_status=neq\.withdrawal/);
 });
 
 test('migração adiciona agendamento e ordenação paginada sem liberar dados privados', () => {
