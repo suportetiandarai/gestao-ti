@@ -12,3 +12,6 @@ verify_jwt = false
 
 [functions.google-sheets-intake]
 verify_jwt = false
+
+[functions.timed-monitor]
+verify_jwt = false

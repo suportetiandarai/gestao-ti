@@ -2173,3 +2173,109 @@ body.glpi-panel-mode.glpi-daily-active .glpi-daily-tickets {
         grid-template-columns: 1fr;
     }
 }
+
+/* Monitor TIMED/Vitai integrado ao Dashboard Diário */
+.timed-monitor-panel {
+    display: grid;
+    gap: 14px;
+    border-left: 5px solid var(--glpi-primary);
+}
+
+.timed-monitor-panel.hidden {
+    display: none;
+}
+
+.timed-monitor-head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 14px;
+}
+
+.timed-monitor-head h4 {
+    margin: 2px 0 0 !important;
+}
+
+.timed-monitor-summary {
+    display: grid;
+    grid-template-columns: repeat(5, minmax(130px, 1fr));
+    gap: 10px;
+}
+
+.timed-monitor-summary > div {
+    padding: 10px 12px;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    background: #f8fafc;
+}
+
+.timed-monitor-summary span,
+.timed-monitor-summary strong {
+    display: block;
+}
+
+.timed-monitor-summary span {
+    color: var(--glpi-muted);
+    font-size: 11px;
+    font-weight: 800;
+    text-transform: uppercase;
+}
+
+.timed-monitor-summary strong {
+    margin-top: 5px;
+    color: var(--glpi-primary);
+    font-size: 13px;
+    font-variant-numeric: tabular-nums;
+}
+
+.timed-monitor-history summary {
+    color: var(--glpi-primary);
+    font-size: 13px;
+    font-weight: 800;
+    cursor: pointer;
+}
+
+.timed-monitor-history .table-responsive {
+    margin-top: 10px;
+}
+
+.timed-monitor-history table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.timed-monitor-history th,
+.timed-monitor-history td {
+    padding: 9px;
+    border-bottom: 1px solid #e2e8f0;
+    text-align: center;
+    white-space: nowrap;
+}
+
+.timed-monitor-history th {
+    color: var(--glpi-muted);
+    font-size: 11px;
+    text-transform: uppercase;
+}
+
+.timed-monitor-loading {
+    color: var(--glpi-muted);
+    text-align: center;
+}
+
+@media (max-width: 900px) {
+    .timed-monitor-summary {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+
+@media (max-width: 540px) {
+    .timed-monitor-head {
+        align-items: stretch;
+        flex-direction: column;
+    }
+
+    .timed-monitor-summary {
+        grid-template-columns: 1fr;
+    }
+}
