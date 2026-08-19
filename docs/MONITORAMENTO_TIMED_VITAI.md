@@ -43,10 +43,10 @@ Secrets da Edge Function:
 - `TIMED_MONITOR_URL`: opcional; possui a URL oficial como padrão.
 - `TIMED_MONITOR_TIMEOUT_MS`: opcional; padrão `15000`.
 
-O projeto também precisa manter no Vault os secrets já utilizados pelo scheduler:
+O projeto também precisa manter no Vault os secrets usados pelo scheduler. O monitor não reutiliza a Service Role como credencial HTTP:
 
 - `gestao_ti_project_url`
-- `gestao_ti_service_role_key`
+- `gestao_ti_timed_monitor_key` (segredo aleatório dedicado ao monitor)
 
 Compartilhe a planilha com o `client_email` presente no JSON da Service Account, com permissão de Editor. Não publique nem envie a chave privada.
 
@@ -71,14 +71,14 @@ where jobname = 'gestao-ti-timed-monitor';
 
 ## Teste manual seguro
 
-Use a Service Role somente em um terminal seguro e remova-a ao terminar:
+Use o segredo dedicado somente em um terminal seguro e remova-o ao terminar:
 
 ```powershell
-$headers = @{ Authorization = "Bearer $env:SUPABASE_SERVICE_ROLE_KEY" }
+$headers = @{ Authorization = "Bearer $env:TIMED_MONITOR_CRON_SECRET" }
 Invoke-RestMethod -Method Post `
   -Uri "https://cctygrudsyoowuotlyfo.supabase.co/functions/v1/timed-monitor" `
   -Headers $headers
-Remove-Item Env:SUPABASE_SERVICE_ROLE_KEY
+Remove-Item Env:TIMED_MONITOR_CRON_SECRET
 ```
 
 Consulte o estado sem exibir secrets:
