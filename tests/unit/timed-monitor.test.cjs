@@ -5,6 +5,7 @@ const { join } = require('node:path');
 
 const root = join(__dirname, '..', '..');
 const migration = readFileSync(join(root, 'supabase', 'migrations', '20260818090000_022_timed_vitai_monitor.sql'), 'utf8');
+const authMigration = readFileSync(join(root, 'supabase', 'migrations', '20260819080000_023_timed_monitor_dedicated_auth.sql'), 'utf8');
 const monitorFunction = readFileSync(join(root, 'supabase', 'functions', 'timed-monitor', 'index.ts'), 'utf8');
 const dashboard = readFileSync(join(root, 'glpi-dashboard.js'), 'utf8');
 const html = readFileSync(join(root, 'index.html'), 'utf8');
@@ -128,7 +129,7 @@ test('migration persiste estado, lock, evento único e cron de um minuto', () =>
 });
 
 test('Edge Function valida autorização, timeout e redirecionamento sem polling no navegador', () => {
-  assert.match(monitorFunction, /SUPABASE_SERVICE_ROLE_KEY/);
+  assert.match(monitorFunction, /TIMED_MONITOR_CRON_SECRET/);
   assert.match(monitorFunction, /TIMED_MONITOR_TIMEOUT_MS/);
   assert.match(monitorFunction, /redirect: 'follow'/);
   assert.match(monitorFunction, /\[401, 403\]\.includes/);
@@ -138,6 +139,12 @@ test('Edge Function valida autorização, timeout e redirecionamento sem polling
   assert.doesNotMatch(dashboard, /timed-monitor[^\n]*fetch/);
 });
 
+
+test('cron usa segredo dedicado sem reutilizar a service role como bearer', () => {
+  assert.match(authMigration, /gestao_ti_timed_monitor_key/);
+  assert.match(authMigration, /Authorization','Bearer '\|\|monitor_key/);
+  assert.doesNotMatch(authMigration, /gestao_ti_service_role_key/);
+});
 test('Google Sheets é destino idempotente e falhas permanecem pendentes', () => {
   assert.match(monitorFunction, /1IlfI3FfxAf93uQPX8Pd-DaB76D2acsLqFj3-1P93vjI/);
   assert.match(monitorFunction, /GOOGLE_SERVICE_ACCOUNT_JSON_B64/);

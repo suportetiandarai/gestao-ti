@@ -23,7 +23,7 @@ function json(body: unknown, status = 200) {
 }
 
 function authorized(request: Request) {
-  const expected = env('SUPABASE_SERVICE_ROLE_KEY');
+  const expected = env('TIMED_MONITOR_CRON_SECRET');
   const received = request.headers.get('Authorization') || '';
   return Boolean(expected && received === `Bearer ${expected}`);
 }
