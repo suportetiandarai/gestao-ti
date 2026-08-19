@@ -40,6 +40,8 @@
         menuCollapsedBeforePanel: null,
         publicMode: false,
         dailySnapshot: null,
+        timedMonitor: null,
+        timedDowntimes: [],
         publicSnapshotEtag: '',
         serverTimeOffsetMs: 0,
         serverTimeVerified: false,
@@ -394,6 +396,42 @@
         });
     }
 
+
+    async function loadTimedMonitor() {
+        if (state.publicMode || !window.supabase) {
+            state.timedMonitor = null;
+            state.timedDowntimes = [];
+            return;
+        }
+        const monitorResult = await supabase
+            .from('system_monitors')
+            .select('id,name,current_status,offline_since,last_check_at,last_success_at,last_recovered_at,consecutive_failures,consecutive_successes,last_http_status,last_response_time_ms,updated_at')
+            .eq('name', 'TIMED')
+            .maybeSingle();
+        if (monitorResult.error) {
+            console.warn('Monitor TIMED ainda não está disponível no banco.', monitorResult.error.code || 'erro');
+            state.timedMonitor = null;
+            state.timedDowntimes = [];
+            return;
+        }
+        state.timedMonitor = monitorResult.data || null;
+        if (!state.timedMonitor) {
+            state.timedDowntimes = [];
+            return;
+        }
+        const historyResult = await supabase
+            .from('system_downtimes')
+            .select('id,down_at,recovered_at,duration_seconds,status,sheet_synced')
+            .eq('monitor_id', state.timedMonitor.id)
+            .order('down_at', { ascending: false })
+            .limit(5);
+        if (historyResult.error) {
+            console.warn('Histórico TIMED temporariamente indisponível.', historyResult.error.code || 'erro');
+            state.timedDowntimes = [];
+            return;
+        }
+        state.timedDowntimes = historyResult.data || [];
+    }
     async function loadTickets() {
         state.publicMode = Boolean(window.GESTAO_TI_PUBLIC_DASHBOARD);
         state.publicConfig = readJsonStorage('glpiPublicDashboardConfig', DEFAULT_PUBLIC_CONFIG);
@@ -457,6 +495,8 @@
             state.syncLogs = [{ level: 'erro', message: 'Supabase não configurado. Nenhum dado fictício foi carregado.', created_at: new Date().toISOString() }];
             return;
         }
+
+        await loadTimedMonitor();
 
         try {
             const { data: config } = await supabase.from('glpi_dashboard_settings').select('*').limit(1).maybeSingle();
@@ -669,6 +709,71 @@
             : new Date();
     }
 
+
+    function renderTimedMonitorTimer(reference = synchronizedNow()) {
+        const timer = getField('timed-monitor-current-duration');
+        if (!timer || state.timedMonitor?.current_status !== 'offline') return;
+        const started = parseDate(state.timedMonitor.offline_since);
+        timer.textContent = started
+            ? CORE.formatElapsedTime(Math.max(0, (reference.getTime() - started.getTime()) / 1000))
+            : 'Não disponível';
+    }
+
+    function renderTimedMonitor() {
+        const panel = getField('timed-monitor-panel');
+        if (!panel) return;
+        if (state.publicMode) {
+            panel.classList.add('hidden');
+            return;
+        }
+        panel.classList.remove('hidden');
+        const monitor = state.timedMonitor;
+        if (!monitor) {
+            panel.innerHTML = `
+                <div class="timed-monitor-head">
+                    <div><span class="glpi-eyebrow">Monitoramento de sistema</span><h4>TIMED/Vitai</h4></div>
+                    <span class="glpi-status-badge warning">AGUARDANDO CONFIGURAÇÃO</span>
+                </div>
+                <p class="glpi-muted">A migration e a Edge Function do monitor ainda não foram ativadas.</p>
+            `;
+            return;
+        }
+        const offline = monitor.current_status === 'offline';
+        const online = monitor.current_status === 'online';
+        const statusText = offline ? 'OFFLINE' : online ? 'ONLINE' : 'AGUARDANDO PRIMEIRA VERIFICAÇÃO';
+        const badgeClass = offline ? 'error' : online ? 'ok' : 'warning';
+        const historyRows = state.timedDowntimes.map((event) => `
+            <tr>
+                <td>${esc(formatDate(event.down_at))}</td>
+                <td>${esc(new Intl.DateTimeFormat('pt-BR', { timeStyle: 'medium', timeZone: TZ }).format(parseDate(event.down_at)))}</td>
+                <td>${event.recovered_at ? esc(new Intl.DateTimeFormat('pt-BR', { timeStyle: 'medium', timeZone: TZ }).format(parseDate(event.recovered_at))) : 'Em andamento'}</td>
+                <td>${event.duration_seconds === null || event.duration_seconds === undefined ? 'Em andamento' : esc(CORE.formatElapsedTime(Number(event.duration_seconds)))}</td>
+            </tr>
+        `).join('');
+        panel.innerHTML = `
+            <div class="timed-monitor-head">
+                <div><span class="glpi-eyebrow">Monitoramento de sistema</span><h4>TIMED/Vitai</h4></div>
+                <span class="glpi-status-badge ${badgeClass}">${statusText}</span>
+            </div>
+            <div class="timed-monitor-summary">
+                <div><span>Última verificação</span><strong>${esc(formatDateTime(monitor.last_check_at))}</strong></div>
+                <div><span>Último retorno</span><strong>${esc(formatDateTime(monitor.last_recovered_at))}</strong></div>
+                <div><span>Resposta</span><strong>${monitor.last_response_time_ms === null ? 'Não disponível' : `${esc(monitor.last_response_time_ms)} ms`}</strong></div>
+                ${offline ? `<div><span>Indisponível desde</span><strong>${esc(formatDateTime(monitor.offline_since))}</strong></div>
+                <div><span>Tempo OFF atual</span><strong id="timed-monitor-current-duration">Não disponível</strong></div>` : ''}
+            </div>
+            <details class="timed-monitor-history">
+                <summary>Últimas indisponibilidades</summary>
+                <div class="table-responsive">
+                    <table>
+                        <thead><tr><th>Data</th><th>Queda</th><th>Retorno</th><th>Tempo OFF</th></tr></thead>
+                        <tbody>${historyRows || '<tr><td colspan="4">Nenhuma indisponibilidade registrada.</td></tr>'}</tbody>
+                    </table>
+                </div>
+            </details>
+        `;
+        renderTimedMonitorTimer();
+    }
     function renderDailyTimers(reference = synchronizedNow()) {
         document.querySelectorAll('.glpi-ticket-time[data-ticket-id][data-time-kind]').forEach((element) => {
             const ticket = state.tickets.find((item) => String(item.id) === element.dataset.ticketId);
@@ -713,6 +818,7 @@
             label.textContent = 'SOLUCIONADO';
             element.append(label);
         });
+        renderTimedMonitorTimer(reference);
     }
 
     function dailyCard([labelText, value, hint]) {
@@ -726,6 +832,7 @@
     }
 
     function renderDailyDashboard() {
+        renderTimedMonitor();
         const groupId = 1;
         const snapshot = state.publicMode ? state.dailySnapshot : null;
         if (state.publicMode && !snapshot) {

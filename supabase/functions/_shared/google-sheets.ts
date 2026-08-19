@@ -225,7 +225,10 @@ export async function sha256(value: unknown) {
     .join('');
 }
 
-export async function getGoogleAccessToken(serviceAccountBase64: string) {
+export async function getGoogleAccessToken(
+  serviceAccountBase64: string,
+  scope = 'https://www.googleapis.com/auth/spreadsheets.readonly',
+) {
   const credentials = JSON.parse(new TextDecoder().decode(decodeBase64(serviceAccountBase64)));
   if (credentials.type !== 'service_account' || !credentials.client_email || !credentials.private_key) {
     throw new Error('Credencial Google inválida.');
@@ -234,7 +237,7 @@ export async function getGoogleAccessToken(serviceAccountBase64: string) {
   const header = base64Url(encoder.encode(JSON.stringify({ alg: 'RS256', typ: 'JWT' })));
   const payload = base64Url(encoder.encode(JSON.stringify({
     iss: credentials.client_email,
-    scope: 'https://www.googleapis.com/auth/spreadsheets.readonly',
+    scope,
     aud: 'https://oauth2.googleapis.com/token',
     iat: now,
     exp: now + 3600,
